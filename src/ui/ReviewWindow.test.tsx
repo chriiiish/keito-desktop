@@ -12,6 +12,7 @@ const api = {
   toggleFavourite: vi.fn(),
   setTrayLabel: vi.fn(),
   setHotkey: vi.fn(),
+  setOpenAtLogin: vi.fn(),
   setApiKey: vi.fn(),
   setCompanyId: vi.fn(),
   signOut: vi.fn(),
@@ -49,6 +50,7 @@ const snapshot: Snapshot = {
   workspaceTimezone: "UTC",
   hotkey: "CommandOrControl+Shift+K",
   hotkeyRegistered: true,
+  openAtLogin: false,
   platform: "darwin",
   appVersion: "0.1.0",
   accountId: "co",
@@ -537,6 +539,63 @@ describe("the connection tab", () => {
     render(<ReviewWindow />);
 
     expect(await screen.findByRole("button", { name: "Connect" })).toBeDefined();
+  });
+});
+
+describe("run at startup", () => {
+  const openSettings = async (over: Partial<Snapshot> = {}) => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue({ ...snapshot, ...over } satisfies Snapshot);
+    render(<ReviewWindow />);
+    await user.click(await screen.findByRole("button", { name: "Settings" }));
+    return user;
+  };
+
+  it("is off when the OS reports no login item", async () => {
+    await openSettings();
+
+    expect((screen.getByLabelText("Run at startup") as HTMLInputElement).checked).toBe(false);
+  });
+
+  // The switch reflects what the OS says, not a preference we wrote. Someone can turn the
+  // login item off in System Settings, and the next snapshot has to show that.
+  it("is on when the OS reports one", async () => {
+    await openSettings({ openAtLogin: true });
+
+    expect((screen.getByLabelText("Run at startup") as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("asks to be launched at login", async () => {
+    const user = await openSettings();
+    api.setOpenAtLogin.mockResolvedValue({ ...snapshot, openAtLogin: true } satisfies Snapshot);
+
+    await user.click(screen.getByLabelText("Run at startup"));
+
+    expect(api.setOpenAtLogin).toHaveBeenCalledWith(true);
+  });
+
+  it("and to stop", async () => {
+    const user = await openSettings({ openAtLogin: true });
+    api.setOpenAtLogin.mockResolvedValue(snapshot);
+
+    await user.click(screen.getByLabelText("Run at startup"));
+
+    expect(api.setOpenAtLogin).toHaveBeenCalledWith(false);
+  });
+
+  // Same guard as every other write: two events in one tick must not both fire.
+  it("cannot be double-fired while the write is in flight", async () => {
+    const user = await openSettings();
+    const gate = deferred<Snapshot>();
+    api.setOpenAtLogin.mockReturnValue(gate.promise);
+
+    const toggle = screen.getByLabelText("Run at startup");
+    await user.click(toggle);
+    expect(toggle.hasAttribute("disabled")).toBe(true);
+    await user.click(toggle);
+
+    expect(api.setOpenAtLogin).toHaveBeenCalledTimes(1);
+    gate.resolve(snapshot);
   });
 });
 

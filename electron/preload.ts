@@ -20,6 +20,8 @@ const api = {
   setHidden: (pairIds: string[], hidden: boolean): Promise<Snapshot> =>
     ipcRenderer.invoke("set-hidden", pairIds, hidden),
   setHotkey: (hotkey: string): Promise<Snapshot> => ipcRenderer.invoke("set-hotkey", hotkey),
+  setOpenAtLogin: (openAtLogin: boolean): Promise<Snapshot> =>
+    ipcRenderer.invoke("set-open-at-login", openAtLogin),
   setTrayLabel: (options: {
     fallback: "task" | "project";
     prefix: "none" | "project" | "task";

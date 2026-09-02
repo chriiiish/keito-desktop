@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Pair } from "../core/keito/types.js";
 import { keito } from "./keito-api.js";
 import { AsyncButton } from "./AsyncButton.js";
+import { Toggle } from "./Toggle.js";
 import type { Snapshot } from "../../electron/service.js";
 
 interface ProjectsTabProps {
@@ -202,41 +203,5 @@ export function ProjectsTab({ snapshot, onChange }: ProjectsTabProps): JSX.Eleme
         })}
       </div>
     </section>
-  );
-}
-
-/** A switch that locks itself until the write it triggered comes back. */
-function Toggle({
-  checked,
-  label,
-  onChange,
-}: {
-  checked: boolean;
-  label: string;
-  onChange: (checked: boolean) => Promise<unknown>;
-}): JSX.Element {
-  const [pending, setPending] = useState(false);
-  const inFlight = useRef(false);
-
-  return (
-    <label className={`switch${pending ? " pending" : ""}`}>
-      <input
-        type="checkbox"
-        aria-label={label}
-        aria-busy={pending}
-        checked={checked}
-        disabled={pending}
-        onChange={(event) => {
-          if (inFlight.current) return;
-          inFlight.current = true;
-          setPending(true);
-          void onChange(event.target.checked).finally(() => {
-            inFlight.current = false;
-            setPending(false);
-          });
-        }}
-      />
-      <span className="track" aria-hidden="true" />
-    </label>
   );
 }

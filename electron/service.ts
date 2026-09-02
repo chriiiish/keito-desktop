@@ -30,6 +30,12 @@ export interface Snapshot {
   hotkey: string;
   /** False when the OS refused the accelerator — usually another app already has it. */
   hotkeyRegistered: boolean;
+  /**
+   * Whether the OS is set to launch the app at login. Read back from the OS rather than
+   * stored in preferences.json: the login item can be switched off in System Settings or
+   * Task Manager, and a copy here would go on claiming otherwise.
+   */
+  openAtLogin: boolean;
   /** So the renderer can name modifier keys the way this platform's users expect. */
   platform: string;
   /** Shown on the Contribute tab, so a bug report can say which build it came from. */
@@ -104,6 +110,7 @@ export class AppService {
   #revision = 0;
   #apiKeyHint: string | null = null;
   #hotkeyRegistered = true;
+  #openAtLogin = false;
   #appVersion: string;
 
   private constructor(
@@ -158,6 +165,7 @@ export class AppService {
       workspaceTimezone: prefs.workspaceTimezone,
       hotkey: prefs.hotkey,
       hotkeyRegistered: this.#hotkeyRegistered,
+      openAtLogin: this.#openAtLogin,
       platform: process.platform,
       appVersion: this.#appVersion,
       accountId: prefs.accountId ?? null,
@@ -340,6 +348,15 @@ export class AppService {
   setHotkeyRegistered(registered: boolean): void {
     this.#hotkeyRegistered = registered;
     if (!registered) this.#log.warn(`The shortcut ${this.#prefs.get().hotkey} was refused`);
+  }
+
+  /**
+   * Told by the main process what the OS reports, since only it can ask. Kept here the
+   * same way as the hotkey rather than imported directly, so this file stays free of
+   * Electron and the value on the Snapshot is always one the OS confirmed.
+   */
+  setOpenAtLogin(openAtLogin: boolean): void {
+    this.#openAtLogin = openAtLogin;
   }
 
   /**

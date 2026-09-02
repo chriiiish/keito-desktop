@@ -7,6 +7,7 @@ import { HotkeyRecorder } from "./HotkeyRecorder.js";
 import { TrayLabelSettings } from "./TrayLabelSettings.js";
 import { ContributeTab } from "./ContributeTab.js";
 import { ProjectsTab } from "./ProjectsTab.js";
+import { Toggle } from "./Toggle.js";
 import { useSnapshot } from "./useSnapshot.js";
 import { shiftDate, workspaceDate } from "../core/time/workspace-time.js";
 
@@ -360,6 +361,21 @@ function Settings({
       </p>
       <TrayLabelSettings snapshot={snapshot} onChange={onChange} />
 
+      <h2>Startup</h2>
+      <p className="hint">
+        {snapshot.platform === "darwin"
+          ? "Open Keito Timer when you log in, so the menu bar icon is there before you think to look for it."
+          : "Open Keito Timer when you sign in, so the tray icon is there before you think to look for it."}
+      </p>
+      <div className="setting-row">
+        <span>Run at startup</span>
+        <Toggle
+          checked={snapshot.openAtLogin}
+          label="Run at startup"
+          onChange={(next) => keito.setOpenAtLogin(next).then(onChange)}
+        />
+      </div>
+
       <h2>Workspace timezone</h2>
       <p className="hint">
         Only used when you edit a time by hand. Timers themselves are stamped by Keito.
@@ -392,8 +408,8 @@ function DangerZone({ onChange }: { onChange: (next: Snapshot) => void }): JSX.E
         <>
           <p className="hint">
             This clears your API key, the company id, favourites, hidden categories, the
-            shortcut and the tray label — everything this app has stored. Time already
-            tracked stays in Keito and is not touched.
+            shortcut, the tray label and the run-at-startup setting — everything this app
+            has stored. Time already tracked stays in Keito and is not touched.
           </p>
           <div className="danger-actions">
             <AsyncButton
