@@ -56,14 +56,14 @@
         "dmg"
       ],
       "icon": "build/icon.png",
-      "artifactName": "${productName} ${version} ${arch}.${ext}"
+      "artifactName": "Kieto-Timer-${version}-${arch}.${ext}"
     },
     "win": {
       "target": [
         "nsis"
       ],
       "icon": "build/icon-win.png",
-      "artifactName": "${productName} ${version} Windows.${ext}"
+      "artifactName": "Kieto-Timer-${version}-Windows.${ext}"
     },
     "nsis": {
       "oneClick": false,

@@ -4,15 +4,17 @@
 // "arm64" or "x64" — there is no hook for mapping it to words. So the config asks for the
 // arch token and this renames it afterwards, which keeps one naming scheme for both
 // `npm run package` and CI rather than passing -c overrides on the command line.
+//
+// Dashes throughout, not spaces: GitHub rewrites a space in a release asset name to a
+// full stop, so "Kieto Timer 0.1.0 Apple Silicon.dmg" would reach the release page as
+// "Kieto.Timer.0.1.0.Apple.Silicon.dmg". Dashes survive intact.
 const { rename } = require("node:fs/promises")
 const path = require("node:path")
 
-// Longest-first would matter if one token were a prefix of another; they are not, but the
-// replacement is anchored to the surrounding spaces regardless, so "x64" cannot match
-// inside a version number.
+// Anchored to the leading dash so "-x64" cannot match inside a version number.
 const ARCH_NAMES = [
-  [" arm64", " Apple Silicon"],
-  [" x64", " Intel Mac"],
+  ["-arm64", "-Apple-Silicon"],
+  ["-x64", "-Intel-Mac"],
 ]
 
 exports.default = async function afterAllArtifactBuild(result) {
