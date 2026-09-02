@@ -280,9 +280,15 @@ version, because a glob upload will otherwise ship whatever it finds.
 
 Once the release exists, `record-version` writes that version into `package.json` and
 `package-lock.json` on `main`, so the repository stops disagreeing with what shipped. It
-pushes directly when the `main` ruleset admits the GitHub Actions app as a bypass actor,
-and opens a pull request when it does not — a release that has already happened should
-not be reported as failed because of how a branch rule is configured.
+pushes directly when it can and opens a pull request when it cannot — a release that has
+already happened should not be reported as failed because of how a branch rule is
+configured.
+
+Pushing directly needs a **deploy key**, not the workflow's own token: a ruleset's bypass
+list only offers GitHub Apps installed on the repository, and `github-actions` is not one
+that can be installed, so Actions itself can never be a bypass actor. The `main` ruleset
+admits `DeployKey` instead, and `record-version` checks out over SSH with
+`secrets.RELEASE_DEPLOY_KEY`.
 
 **The download names are literals, not `${productName}`.** `artifactName` spells out
 `Keito-Timer-…` because the product name contains a space and GitHub rewrites a space in a

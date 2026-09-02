@@ -208,14 +208,20 @@ jobs:
       contents: write
       pull-requests: write
     steps:
+      # Checked out over SSH with a deploy key, because that key is what the `main`
+      # ruleset admits as a bypass actor. GitHub Actions itself cannot be one: the bypass
+      # list only offers GitHub Apps installed on the repository, and github-actions is
+      # not installable. Falls back to the default token when the secret is absent, which
+      # is what the pull request path below is for.
       - uses: actions/checkout@v7
         with:
           ref: main
           fetch-depth: 0
+          ssh-key: ${{ secrets.RELEASE_DEPLOY_KEY }}
 
-      # Pushes straight to main when the ruleset lets Actions through, and opens a pull
-      # request when it does not. Both are correct outcomes; what would not be is failing
-      # a release that has already happened because of how a branch rule is configured.
+      # Pushes straight to main when the deploy key is configured and allowed through, and
+      # opens a pull request when it is not. Both are correct outcomes; what would not be
+      # is failing a release that has already happened because of a branch rule.
       - name: Write the version back
         env:
           GH_TOKEN: ${{ github.token }}
@@ -245,7 +251,7 @@ jobs:
             exit 0
           fi
 
-          echo "::notice::Cannot push to main, so opening a pull request instead."
+          echo "::notice::Cannot push to main — is RELEASE_DEPLOY_KEY set and on the ruleset bypass list? Opening a pull request instead."
           branch="chore/version-$VERSION"
           git push --force-with-lease origin "HEAD:refs/heads/$branch"
           gh pr create \
@@ -254,4 +260,4 @@ jobs:
             --title "chore: set the version to $VERSION" \
             --body "$TAG is released. This writes that version back to package.json and package-lock.json, which still said $current.
 
-          Opened by the release workflow because it could not push to main. Note that pull requests opened with GITHUB_TOKEN do not start workflow runs, so the usual checks will not appear here."
+          Opened by the release workflow because it could not push to main directly. Note that pull requests opened with GITHUB_TOKEN do not start workflow runs, so the usual checks will not appear here."
