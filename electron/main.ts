@@ -256,6 +256,14 @@ function registerIpc(): void {
     return service.snapshot();
   });
 
+  // The reset puts the hotkey back to its default, and only this process can tell the OS.
+  // Without the re-register the old accelerator would keep working until a restart.
+  handle("reset-all", async () => {
+    const reset = await service.resetAll();
+    service.setHotkeyRegistered(registerHotkey(reset.hotkey));
+    return service.snapshot();
+  });
+
   // Only ever opens the project's own pages. A renderer must not be able to hand the OS
   // an arbitrary URL, or a file:// one.
   handle("open-external", async (url: string) => {

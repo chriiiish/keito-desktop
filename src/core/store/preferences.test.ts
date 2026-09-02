@@ -151,3 +151,51 @@ describe("concurrent writes", () => {
     expect(written.hidden).toEqual(["p_c:t_c"]);
   });
 });
+
+describe("reset", () => {
+  it("clears everything the user configured, on disk as well as in memory", async () => {
+    const store = await PreferencesStore.open(file);
+    await store.addFavourite("p_acme:t_dev");
+    await store.setHidden("p_bank:t_ops", true);
+    await store.update({
+      accountId: "co_123",
+      hotkey: "CommandOrControl+Alt+J",
+      trayFallback: "project",
+      trayPrefix: "task",
+    });
+
+    await store.reset();
+
+    expect(store.get()).toMatchObject({
+      favourites: [],
+      hidden: [],
+      hotkey: DEFAULT_HOTKEY,
+      trayFallback: "task",
+      trayPrefix: "none",
+    });
+    // Gone entirely rather than present-and-undefined, which is what reaches the file:
+    // JSON.stringify drops an undefined value, so the two would be indistinguishable
+    // after a reopen anyway.
+    expect(store.get().accountId).toBeUndefined();
+    expect("accountId" in store.get()).toBe(false);
+
+    // Reopening proves it reached the file, not just this instance.
+    const reopened = await PreferencesStore.open(file);
+    expect(reopened.get()).toMatchObject({
+      favourites: [],
+      hidden: [],
+      hotkey: DEFAULT_HOTKEY,
+    });
+    expect(reopened.get().accountId).toBeUndefined();
+  });
+
+  it("leaves the store usable afterwards", async () => {
+    const store = await PreferencesStore.open(file);
+    await store.addFavourite("p_acme:t_dev");
+
+    await store.reset();
+    await store.addFavourite("p_new:t_new");
+
+    expect((await PreferencesStore.open(file)).get().favourites).toEqual(["p_new:t_new"]);
+  });
+});

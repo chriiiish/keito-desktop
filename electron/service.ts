@@ -216,6 +216,32 @@ export class AppService {
 
   async signOut(): Promise<Snapshot> {
     await this.#secrets.clear();
+    this.#forgetConnection();
+    await this.#prefs.update({ accountId: undefined });
+    return this.snapshot();
+  }
+
+  /**
+   * Everything the user has configured, gone: the API key, the account id, favourites,
+   * hidden categories, the shortcut, the tray label. Deliberately more than `signOut`,
+   * which keeps preferences so that signing back in lands you where you were.
+   *
+   * The caller re-registers the global shortcut afterwards — the hotkey is back at its
+   * default, and only the main process can tell the OS about that.
+   */
+  async resetAll(): Promise<Snapshot> {
+    this.#log.info("Clearing all configuration at the user's request");
+    await this.#secrets.clear();
+    this.#forgetConnection();
+    await this.#prefs.reset();
+    // The entries table and both windows derive from this; without a bump they would
+    // keep rendering favourites that no longer exist.
+    this.#revision++;
+    return this.snapshot();
+  }
+
+  /** Drops the live connection and everything derived from it. Preferences are untouched. */
+  #forgetConnection(): void {
     this.#client = null;
     this.#switcher = null;
     this.#identity = null;
@@ -226,8 +252,7 @@ export class AppService {
     this.#keyStatus = "missing";
     this.#error = null;
     this.#apiKeyHint = null;
-    await this.#prefs.update({ accountId: undefined });
-    return this.snapshot();
+    this.#startedAtMs = null;
   }
 
   async switchTo(pairId: string, notes?: string): Promise<Snapshot> {

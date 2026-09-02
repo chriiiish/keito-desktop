@@ -15,6 +15,7 @@ const api = {
   setApiKey: vi.fn(),
   setCompanyId: vi.fn(),
   signOut: vi.fn(),
+  resetAll: vi.fn(),
   openLog: vi.fn(),
   openExternal: vi.fn(),
   updateEntry: vi.fn(),
@@ -440,5 +441,97 @@ describe("the connection tab", () => {
     render(<ReviewWindow />);
 
     expect(await screen.findByRole("button", { name: "Connect" })).toBeDefined();
+  });
+});
+
+describe("the danger zone", () => {
+  const openSettings = async () => {
+    const user = userEvent.setup();
+    render(<ReviewWindow />);
+    await user.click(await screen.findByRole("button", { name: "Settings" }));
+    return user;
+  };
+
+  const cleared = {
+    ...snapshot,
+    keyStatus: "missing",
+    apiKeyHint: null,
+    identity: null,
+    favourites: [],
+    accountId: null,
+  } satisfies Snapshot;
+
+  it("sits at the bottom of the settings page under its own heading", async () => {
+    await openSettings();
+
+    expect(screen.getByRole("heading", { name: "Danger Zone" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Clear all configuration…" })).toBeDefined();
+  });
+
+  // The whole point of the two steps: the first click must not destroy anything.
+  it("asks before clearing anything", async () => {
+    const user = await openSettings();
+
+    await user.click(screen.getByRole("button", { name: "Clear all configuration…" }));
+
+    expect(api.resetAll).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Yes, clear everything" })).toBeDefined();
+  });
+
+  it("names what it is about to delete rather than asking to confirm in the abstract", async () => {
+    const user = await openSettings();
+
+    await user.click(screen.getByRole("button", { name: "Clear all configuration…" }));
+
+    const warning = screen.getByText(/hidden categories/);
+    expect(warning.textContent).toMatch(/API key/);
+    expect(warning.textContent).toMatch(/favourites/);
+    expect(warning.textContent).toMatch(/shortcut/);
+  });
+
+  it("clears everything once confirmed", async () => {
+    const user = await openSettings();
+    api.resetAll.mockResolvedValue(cleared);
+
+    await user.click(screen.getByRole("button", { name: "Clear all configuration…" }));
+    await user.click(screen.getByRole("button", { name: "Yes, clear everything" }));
+
+    expect(api.resetAll).toHaveBeenCalledTimes(1);
+  });
+
+  it("routes to the connection tab afterwards, because the key is gone", async () => {
+    const user = await openSettings();
+    api.resetAll.mockResolvedValue(cleared);
+
+    await user.click(screen.getByRole("button", { name: "Clear all configuration…" }));
+    await user.click(screen.getByRole("button", { name: "Yes, clear everything" }));
+
+    expect(await screen.findByRole("button", { name: "Connect" })).toBeDefined();
+  });
+
+  it("backs out on cancel, leaving the configuration alone", async () => {
+    const user = await openSettings();
+
+    await user.click(screen.getByRole("button", { name: "Clear all configuration…" }));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(api.resetAll).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Clear all configuration…" })).toBeDefined();
+  });
+
+  // Two clicks in one tick would otherwise both fire — see AsyncButton's ref guard.
+  it("cannot be double-fired while the reset is in flight", async () => {
+    const user = await openSettings();
+    const gate = deferred<Snapshot>();
+    api.resetAll.mockReturnValue(gate.promise);
+
+    await user.click(screen.getByRole("button", { name: "Clear all configuration…" }));
+    const confirm = screen.getByRole("button", { name: "Yes, clear everything" });
+    await user.click(confirm);
+    expect(confirm.getAttribute("aria-busy")).toBe("true");
+    await user.click(confirm);
+
+    expect(api.resetAll).toHaveBeenCalledTimes(1);
+    gate.resolve(cleared);
   });
 });

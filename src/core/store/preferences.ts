@@ -91,6 +91,17 @@ export class PreferencesStore {
   }
 
   /**
+   * Back to a fresh install. Whole-value, not a patch, so a preference added later is
+   * cleared by having been forgotten rather than by someone remembering to list it here.
+   * The file is rewritten rather than deleted: `open()` tolerates a missing file, but
+   * leaving one behind that says nothing is clearer than leaving none at all.
+   */
+  async reset(): Promise<void> {
+    this.#value = defaults();
+    await this.#flush();
+  }
+
+  /**
    * Serialised, because two writes overlapping would race for the same temporary file:
    * the second `writeFile` would land under the first's `rename` and the loser would fail
    * with ENOENT. Windows is stricter about this than macOS, and starring a category in the

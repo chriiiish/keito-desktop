@@ -188,6 +188,25 @@ button.link.muted:hover { color: var(--danger); }
 .settings form.connect .optional { color: var(--line); }
 .settings code { background: var(--raised); padding: 1px 4px; border-radius: 4px; font-size: 12px; }
 
+/* Set apart by the same bold rule that separates sections elsewhere, so the last thing
+   on the page does not read as one more setting. */
+.danger-zone {
+  margin-top: 28px;
+  padding-top: 18px;
+  border-top: var(--rule-width) solid var(--rule);
+  max-width: 460px;
+}
+.danger-zone h2 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--danger);
+  margin: 0 0 6px;
+}
+.danger-actions { display: flex; align-items: center; gap: 12px; }
+button.danger-confirm { border-color: var(--danger); color: var(--danger); }
+button.danger-confirm:hover { background: color-mix(in srgb, var(--danger) 12%, transparent); border-color: var(--danger); }
+
 /* ── Popover: start form ─────────────────────────────────── */
 .running { align-items: flex-start; }
 .running-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }

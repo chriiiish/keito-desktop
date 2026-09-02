@@ -351,6 +351,53 @@ function Settings({
         Every request is logged with its status and timing. API keys are masked.
       </p>
       <AsyncButton onClick={() => keito.openLog()}>Open log file</AsyncButton>
+
+      <DangerZone onChange={onChange} />
     </section>
+  );
+}
+
+/**
+ * Clearing everything is irreversible and one click away from the log button, so it asks
+ * first. The confirmation is a second step rather than a `window.confirm`: it can say
+ * exactly what is about to go, and it is reachable from the component tests.
+ */
+function DangerZone({ onChange }: { onChange: (next: Snapshot) => void }): JSX.Element {
+  const [confirming, setConfirming] = useState(false);
+
+  return (
+    <div className="danger-zone">
+      <h2>Danger Zone</h2>
+      {confirming ? (
+        <>
+          <p className="hint">
+            This clears your API key, the company id, favourites, hidden categories, the
+            shortcut and the tray label — everything this app has stored. Time already
+            tracked stays in Keito and is not touched.
+          </p>
+          <div className="danger-actions">
+            <AsyncButton
+              className="danger-confirm"
+              onClick={() => keito.resetAll().then(onChange)}
+            >
+              Yes, clear everything
+            </AsyncButton>
+            <button type="button" className="link" onClick={() => setConfirming(false)}>
+              Cancel
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="hint">
+            Removes everything stored on this computer and returns the app to a fresh
+            install. It cannot be undone.
+          </p>
+          <button type="button" className="danger-confirm" onClick={() => setConfirming(true)}>
+            Clear all configuration…
+          </button>
+        </>
+      )}
+    </div>
   );
 }

@@ -10,6 +10,7 @@ const api = {
   setCompanyId: (accountId: string): Promise<Snapshot> =>
     ipcRenderer.invoke("set-company-id", accountId),
   signOut: (): Promise<Snapshot> => ipcRenderer.invoke("sign-out"),
+  resetAll: (): Promise<Snapshot> => ipcRenderer.invoke("reset-all"),
   refresh: (): Promise<Snapshot> => ipcRenderer.invoke("refresh"),
   switchTo: (pairId: string, notes?: string): Promise<Snapshot> =>
     ipcRenderer.invoke("switch-to", pairId, notes),
