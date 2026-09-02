@@ -349,7 +349,7 @@ describe("the contribute tab", () => {
 
     await user.click(screen.getByRole("button", { name: /browse the source/i }));
 
-    expect(api.openExternal).toHaveBeenCalledWith("https://github.com/chriiiish/kieto-desktop");
+    expect(api.openExternal).toHaveBeenCalledWith("https://github.com/chriiiish/keito-desktop");
   });
 
   it("links to issues and pull requests as well", async () => {
@@ -359,7 +359,7 @@ describe("the contribute tab", () => {
     await user.click(screen.getByRole("button", { name: /report a bug/i }));
 
     expect(api.openExternal).toHaveBeenCalledWith(
-      "https://github.com/chriiiish/kieto-desktop/issues",
+      "https://github.com/chriiiish/keito-desktop/issues",
     );
   });
 

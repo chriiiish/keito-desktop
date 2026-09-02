@@ -50,7 +50,7 @@ suite("Keito API contract", () => {
       spentDate: today,
       isRunning: true,
       replaceRunning: true,
-      notes: "kieto-timer contract test — safe to delete",
+      notes: "keito-timer contract test — safe to delete",
     });
     created.push(entry.id);
 
@@ -96,7 +96,7 @@ suite("Keito API contract", () => {
       spentDate: new Date().toISOString().slice(0, 10),
       isRunning: true,
       replaceRunning: true,
-      notes: "kieto-timer contract test — safe to delete",
+      notes: "keito-timer contract test — safe to delete",
     });
     created.push(entry.id);
 

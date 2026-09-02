@@ -2,7 +2,7 @@ import type { Snapshot } from "../../electron/service.js";
 import { AsyncButton } from "./AsyncButton.js";
 import { keito } from "./keito-api.js";
 
-const REPO = "https://github.com/chriiiish/kieto-desktop";
+const REPO = "https://github.com/chriiiish/keito-desktop";
 const COFFEE = "https://buymeacoffee.com/chris.lloyd";
 
 const LINKS: ReadonlyArray<readonly [string, string, string]> = [

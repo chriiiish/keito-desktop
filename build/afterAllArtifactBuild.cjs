@@ -6,8 +6,10 @@
 // `npm run package` and CI rather than passing -c overrides on the command line.
 //
 // Dashes throughout, not spaces: GitHub rewrites a space in a release asset name to a
-// full stop, so "Kieto Timer 0.1.0 Apple Silicon.dmg" would reach the release page as
-// "Kieto.Timer.0.1.0.Apple.Silicon.dmg". Dashes survive intact.
+// full stop, so "Keito Timer 0.1.0 Apple Silicon.dmg" would reach the release page as
+// "Keito.Timer.0.1.0.Apple.Silicon.dmg". Dashes survive intact. That is also why
+// artifactName spells "Keito-Timer" out rather than interpolating ${productName}, which
+// carries a space.
 const { rename } = require("node:fs/promises")
 const path = require("node:path")
 
