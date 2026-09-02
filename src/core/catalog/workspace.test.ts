@@ -50,4 +50,15 @@ describe("loadWorkspace", () => {
     expect(listed.body).toBeUndefined();
     expect(keito.requests.some((r) => r.path === "/projects")).toBe(true);
   });
+
+  it("picks out today's entries from the same fetch the ranking uses", async () => {
+    const keito = keitoWith();
+    keito.seedRunning({ project_id: "p_acme", task_id: "t_dev", spent_date: "2026-09-02" });
+    keito.seedRunning({ project_id: "p_bank", task_id: "t_dev", spent_date: "2026-08-30" });
+    const client = new KeitoClient({ apiKey: "kto_k", accountId: "co_9", fetch: keito.fetch });
+
+    const { today } = await loadWorkspace(client, NOW);
+
+    expect(today.map((entry) => entry.project_id)).toEqual(["p_acme"]);
+  });
 });

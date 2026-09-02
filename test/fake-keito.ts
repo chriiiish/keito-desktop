@@ -107,6 +107,32 @@ export class FakeKeito {
       return this.#json(created, 201);
     }
 
+    const restartMatch = /^\/time_entries\/([^/]+)\/restart$/.exec(path);
+    if (method === "PATCH" && restartMatch) {
+      const entry = this.entries.find((e) => e.id === restartMatch[1]);
+      if (!entry) return this.#json({ message: "Not found" }, 404);
+      if (this.running && this.running.id !== entry.id) {
+        if (body?.replace_running !== true) {
+          // Shape observed from the live API, which returns more than a bare message.
+          return this.#json(
+            {
+              error: "conflict",
+              error_description: "A timer is already running",
+              message: "A timer is already running",
+              running_entry: this.running,
+              running_entry_count: 1,
+            },
+            409,
+          );
+        }
+        this.#stop(this.running);
+      }
+      entry.is_running = true;
+      entry.ended_time = null;
+      entry.timer_started_at = this.#options.now().toISOString();
+      return this.#json(entry, 200);
+    }
+
     const stopMatch = /^\/time_entries\/([^/]+)\/stop$/.exec(path);
     if (method === "PATCH" && stopMatch) {
       const entry = this.entries.find((e) => e.id === stopMatch[1]);

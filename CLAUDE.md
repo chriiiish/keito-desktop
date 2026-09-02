@@ -102,6 +102,9 @@ until a contract test covers it.
   than a bad field, which then crashes somewhere far away.
 - **Entries carry `timer_started_at`**, a real ISO instant. Prefer it over reconstructing a
   start from `spent_date` + `started_time`; that reconstruction is only a fallback.
+- **`PATCH /time_entries/:id/restart` exists** (verified: it answers `409` with a
+  `running_entry` body when a timer is already going, not `404`). Resuming a task uses it
+  so time accumulates on the existing entry rather than creating a duplicate for the day.
 
 ## Testing approach
 
@@ -110,10 +113,14 @@ Tests live only at these seams: `KeitoClient`, `TimerSwitcher`, `buildPicker`,
 round-tripping to a temp dir. The Electron main process, the tray and the hotkey are
 deliberately **not** unit-tested — they're verified by running the app.
 
-`src/ui/Popover.test.tsx` is the one component test (jsdom + Testing Library): the start
-form holds real logic — which category is preselected, the order of the dropdown groups —
-and it is the screen that cannot be checked by reading a Snapshot. Keep component testing
-to that; the rest of the UI stays verify-by-running.
+`src/ui/Popover.test.tsx` is the one component test (jsdom + Testing Library). The popover
+holds real logic — which category is preselected, dropdown grouping and filtering,
+favouriting from inside the list, resuming today's entries — and it is the screen that
+cannot be checked by reading a Snapshot. Keep component testing to that; the rest of the UI
+stays verify-by-running.
+
+`CategoryPicker` is a custom combobox rather than a `<select>` on purpose: native options
+cannot hold a favourite button and cannot be type-filtered across project and task together.
 
 Tests drive the real `KeitoClient` through `FakeKeito`'s `fetch` rather than mocking the
 client. Don't introduce mocks of internal collaborators; extend the fake instead, and add a
@@ -142,6 +149,14 @@ The tray label is `formatTrayLabel` in `src/core/tray/label.ts` — pure, so the
 text is tested rather than eyeballed. The note leads by default because it is what says
 what you are doing; project/task are a prefix and a blank-note fallback, and the fallback
 is never prefixed with itself.
+
+`buildPicker` returns favourites, the top `RECENT_SUGGESTIONS` recents, and every task
+grouped under its project. "All projects" deliberately does **not** exclude what is already
+shown above — it is the browse-by-project view, and a task missing from its own project
+would be worse than a repeat.
+
+`Snapshot.today` comes free from the 30-day fetch `loadWorkspace` already makes for
+ranking; only mutations pay for `#reloadToday()`, one extra request.
 
 `Snapshot.revision` increments on every server-side change. Windows holding their own
 derived data (the entries table) reload when it moves — without that they go stale until

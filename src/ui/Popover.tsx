@@ -1,41 +1,36 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { buildPicker } from "../core/catalog/picker.js";
+import { CategoryPicker } from "./CategoryPicker.js";
 import { Elapsed } from "./Elapsed.js";
+import { TodayList } from "./TodayList.js";
 import { keito } from "./keito-api.js";
 import { useSnapshot } from "./useSnapshot.js";
-
-const SECTION_LABEL = { favourites: "Favourites", recent: "Recent", all: "All categories" } as const;
 
 export function Popover(): JSX.Element {
   const [snapshot, setSnapshot] = useSnapshot();
   const [selectedId, setSelectedId] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
+  const [resuming, setResuming] = useState<string | null>(null);
   const [idle, setIdle] = useState<{ awaySinceMs: number; awaySeconds: number } | null>(null);
   const noteRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => keito.onIdleReturn(setIdle), []);
 
-  const sections = useMemo(
-    () =>
-      snapshot
-        ? buildPicker({
-            catalog: snapshot.catalog,
-            favourites: snapshot.favourites,
-            recents: snapshot.recents,
-            query: "",
-          })
-        : [],
-    [snapshot],
-  );
-
   const running = snapshot?.timer.status === "running" ? snapshot.timer : null;
 
-  // Default to whatever is running, else the first suggestion — usually a favourite.
+  // Default to whatever is running, else the first favourite, recent or category.
+  const firstSuggestion = useMemo(() => {
+    if (!snapshot) return "";
+    const resolves = (id: string) => snapshot.catalog.some((pair) => pair.id === id);
+    return (
+      snapshot.favourites.find(resolves) ?? snapshot.recents.find(resolves) ?? snapshot.catalog[0]?.id ?? ""
+    );
+  }, [snapshot]);
+
   useEffect(() => {
-    if (selectedId || sections.length === 0) return;
-    setSelectedId(running?.pair.id ?? sections[0]?.pairs[0]?.id ?? "");
-  }, [sections, running, selectedId]);
+    if (selectedId || !snapshot) return;
+    setSelectedId(running?.pair.id ?? firstSuggestion);
+  }, [snapshot, running, firstSuggestion, selectedId]);
 
   // The note is the field you actually type in, so it takes focus on open.
   useEffect(() => noteRef.current?.focus(), [snapshot?.keyStatus]);
@@ -67,7 +62,13 @@ export function Popover(): JSX.Element {
     }
   };
 
-  const isFavourite = snapshot.favourites.includes(selectedId);
+  const resume = async (entryId: string) => {
+    setResuming(entryId);
+    const next = await keito.resumeEntry(entryId);
+    setResuming(null);
+    setSnapshot(next);
+    if (!next.error) void keito.closePopover();
+  };
 
   return (
     <div
@@ -127,30 +128,15 @@ export function Popover(): JSX.Element {
         }}
       >
         <label>
-          Category
-          <div className="with-star">
-            <select value={selectedId} onChange={(event) => setSelectedId(event.target.value)}>
-              {sections.map((section) => (
-                <optgroup key={section.section} label={SECTION_LABEL[section.section]}>
-                  {section.pairs.map((pair) => (
-                    <option key={pair.id} value={pair.id}>
-                      {pair.projectName} — {pair.taskName}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-              {sections.length === 0 && <option value="">No categories available</option>}
-            </select>
-            <button
-              type="button"
-              className={`star${isFavourite ? " on" : ""}`}
-              title={isFavourite ? "Remove from favourites" : "Add to favourites"}
-              disabled={!selectedId}
-              onClick={() => void keito.toggleFavourite(selectedId).then(setSnapshot)}
-            >
-              ★
-            </button>
-          </div>
+          <span className="field-label">Category</span>
+          <CategoryPicker
+            catalog={snapshot.catalog}
+            favourites={snapshot.favourites}
+            recents={snapshot.recents}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+            onToggleFavourite={(pairId) => void keito.toggleFavourite(pairId).then(setSnapshot)}
+          />
         </label>
 
         <label>
@@ -168,6 +154,13 @@ export function Popover(): JSX.Element {
           </div>
         </label>
       </form>
+
+      <TodayList
+        entries={snapshot.today}
+        catalog={snapshot.catalog}
+        busyId={resuming}
+        onResume={(entryId) => void resume(entryId)}
+      />
 
       <footer>
         <button className="link" onClick={() => void keito.openWindow()}>

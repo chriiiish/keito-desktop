@@ -16,6 +16,8 @@ export interface Snapshot {
   identity: Identity | null;
   catalog: Pair[];
   recents: string[];
+  /** Entries logged today, newest first — the popover's "already worked on" list. */
+  today: TimeEntry[];
   favourites: string[];
   workspaceTimezone: string;
   hotkey: string;
@@ -65,7 +67,7 @@ export class AppService {
   #client: KeitoClient | null = null;
   #switcher: TimerSwitcher | null = null;
   #identity: Identity | null = null;
-  #workspace: Workspace = { catalog: [], recents: [] };
+  #workspace: Workspace = { catalog: [], recents: [], today: [] };
   #keyStatus: Snapshot["keyStatus"] = "missing";
   #error: string | null = null;
   #startedAtMs: number | null = null;
@@ -109,6 +111,7 @@ export class AppService {
       identity: this.#identity,
       catalog: this.#workspace.catalog,
       recents: this.#workspace.recents,
+      today: this.#workspace.today,
       favourites: [...prefs.favourites],
       workspaceTimezone: prefs.workspaceTimezone,
       hotkey: prefs.hotkey,
@@ -177,7 +180,7 @@ export class AppService {
     this.#client = null;
     this.#switcher = null;
     this.#identity = null;
-    this.#workspace = { catalog: [], recents: [] };
+    this.#workspace = { catalog: [], recents: [], today: [] };
     this.#keyStatus = "missing";
     this.#error = null;
     await this.#prefs.update({ accountId: undefined });
@@ -190,8 +193,37 @@ export class AppService {
     return this.#run(async () => {
       await this.#switcher!.switchTo(pair, notes);
       const state = this.#switcher!.current();
-      this.#startedAtMs = state.status === "running" ? startMsOf(state.entry, () => this.#prefs.get().workspaceTimezone) : Date.now();
+      this.#startedAtMs =
+        state.status === "running"
+          ? startMsOf(state.entry, () => this.#prefs.get().workspaceTimezone)
+          : Date.now();
+      await this.#reloadToday();
       // A new use changes the ranking, so recents are recomputed on the next refresh.
+    });
+  }
+
+  /**
+   * Resumes an entry logged earlier today. Uses Keito's restart endpoint so the time
+   * accumulates on the existing entry instead of creating a second one for the same task.
+   */
+  async resumeEntry(entryId: string): Promise<Snapshot> {
+    const entry = this.#workspace.today.find((candidate) => candidate.id === entryId);
+    const pair = entry
+      ? this.#workspace.catalog.find(
+          (candidate) =>
+            candidate.projectId === entry.project_id && candidate.taskId === entry.task_id,
+        )
+      : undefined;
+    if (!entry || !pair || !this.#switcher) return this.snapshot();
+
+    return this.#run(async () => {
+      await this.#switcher!.restart(entryId, pair);
+      const state = this.#switcher!.current();
+      this.#startedAtMs =
+        state.status === "running"
+          ? startMsOf(state.entry, () => this.#prefs.get().workspaceTimezone)
+          : Date.now();
+      await this.#reloadToday();
     });
   }
 
@@ -200,6 +232,7 @@ export class AppService {
     return this.#run(async () => {
       await this.#switcher!.stop();
       this.#startedAtMs = null;
+      await this.#reloadToday();
     });
   }
 
@@ -246,6 +279,7 @@ export class AppService {
     if (!this.#client) return this.snapshot();
     return this.#run(async () => {
       await this.#client!.updateTimeEntry(id, patch);
+      await this.#reloadToday();
     });
   }
 
@@ -255,6 +289,7 @@ export class AppService {
       await this.#client!.deleteTimeEntry(id);
       // A deleted entry may have been the running one; re-read what Keito now says.
       await this.#switcher?.refresh(this.#workspace.catalog);
+      await this.#reloadToday();
     });
   }
 
@@ -308,6 +343,13 @@ export class AppService {
     if (stored !== identity.accountId) await this.#prefs.update({ accountId: identity.accountId });
 
     await this.refresh();
+  }
+
+  /** One cheap request, so today's list stays honest after a mutation. */
+  async #reloadToday(): Promise<void> {
+    if (!this.#client) return;
+    const day = new Date().toISOString().slice(0, 10);
+    this.#workspace = { ...this.#workspace, today: await this.#client.listTimeEntries({ from: day, to: day }) };
   }
 
   readonly #logRequest = (record: RequestRecord): void => {

@@ -179,3 +179,38 @@ describe("when a switch fails", () => {
     expect(authSwitcher.current()).toEqual({ status: "needs-auth" });
   });
 });
+
+describe("resuming an earlier entry", () => {
+  it("restarts that entry rather than creating a duplicate for the same task", async () => {
+    const earlier = keito.seedRunning({ project_id: "p_acme", task_id: "t_dev" });
+    await switcher.stop();
+
+    await switcher.restart(earlier.id, DEV);
+
+    expect(keito.entries).toHaveLength(1);
+    expect(keito.running?.id).toBe(earlier.id);
+    expect(switcher.current()).toMatchObject({ status: "running", pair: DEV });
+  });
+
+  it("replaces whatever is running, so resuming is one gesture like switching", async () => {
+    const earlier = keito.seedRunning({ project_id: "p_acme", task_id: "t_dev" });
+    await switcher.stop();
+    await switcher.switchTo(QA);
+
+    await switcher.restart(earlier.id, DEV);
+
+    expect(keito.entries.filter((e) => e.is_running)).toHaveLength(1);
+    expect(keito.running?.id).toBe(earlier.id);
+  });
+
+  it("keeps the old timer running when the resume fails", async () => {
+    const earlier = keito.seedRunning({ project_id: "p_acme", task_id: "t_dev" });
+    await switcher.stop();
+    await switcher.switchTo(QA);
+    keito.offline = true;
+
+    await expect(switcher.restart(earlier.id, DEV)).rejects.toBeInstanceOf(KeitoNetworkError);
+
+    expect(switcher.current()).toMatchObject({ status: "running", pair: QA });
+  });
+});

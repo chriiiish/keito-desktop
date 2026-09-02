@@ -59,6 +59,14 @@ export class TimerSwitcher {
     }
   }
 
+  /** Resumes an entry logged earlier today, replacing whatever is running. */
+  async restart(entryId: string, pair: Pair): Promise<void> {
+    const entry = await this.#guard(() =>
+      this.#client.restartTimeEntry(entryId, { replaceRunning: true }),
+    );
+    this.#state = { status: "running", pair, entry };
+  }
+
   async stop(): Promise<void> {
     const state = this.#state;
     if (state.status !== "running") return;

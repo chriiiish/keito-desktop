@@ -188,6 +188,18 @@ export class KeitoClient {
     await this.#request(`/time_entries/${id}`, { method: "DELETE" });
   }
 
+  /**
+   * Resumes an existing entry, so a task picked up again accumulates on the entry it
+   * already has rather than spawning a duplicate. Verified against the live API.
+   */
+  async restartTimeEntry(id: string, options: { replaceRunning?: boolean } = {}): Promise<TimeEntry> {
+    const { body } = await this.#request(`/time_entries/${id}/restart`, {
+      method: "PATCH",
+      body: options.replaceRunning ? { replace_running: true } : {},
+    });
+    return unwrapEntry(body);
+  }
+
   /** Stops a running entry. The server sets the end time. */
   async stopTimeEntry(id: string): Promise<TimeEntry> {
     const { body } = await this.#request(`/time_entries/${id}/stop`, { method: "PATCH", body: {} });

@@ -7,11 +7,14 @@ the running timer is replaced.
 ## What it does
 
 - **Tray popover** with a global hotkey (default `Cmd/Ctrl+Shift+K`): pick a category from
-  the dropdown, type a note, press `⏎` (or the play button).
+  the filterable dropdown, type a note, press `⏎` (or the play button).
+- **Today's entries** listed under the note, each resumable with one click — resuming
+  continues the existing entry rather than logging a second one for the same task.
 - **The running timer shows its note**, and the menu bar label is configurable — by default
   the note, falling back to the task when blank. You can fall back to the project instead,
   and optionally prefix the note with the project or the task.
-- **Favourites first**, then categories you've used recently, then the rest of the workspace.
+- **Favourites first**, then your three most recent, then every project with its tasks
+  beneath it. Filter by typing; star anything from inside the dropdown.
 - **One-call switching.** `POST /time_entries` with `replace_running: true` stops the old
   timer and starts the new one atomically — no window where nothing is being tracked.
 - **Idle detection.** Away for 10+ minutes? On return it offers to trim the idle span.

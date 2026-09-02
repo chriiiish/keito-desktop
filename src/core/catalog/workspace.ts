@@ -1,5 +1,5 @@
 import type { KeitoClient } from "../keito/client.js";
-import type { Pair, Task } from "../keito/types.js";
+import type { Pair, Task, TimeEntry } from "../keito/types.js";
 import { buildCatalog } from "./catalog.js";
 import { RECENTS_WINDOW_DAYS, rankRecents } from "./ranking.js";
 
@@ -7,6 +7,8 @@ export interface Workspace {
   catalog: Pair[];
   /** Pair ids, most relevant first. */
   recents: string[];
+  /** Today's entries, taken from the same fetch the ranking uses — no extra request. */
+  today: TimeEntry[];
 }
 
 const isoDate = (date: Date) => date.toISOString().slice(0, 10);
@@ -28,5 +30,10 @@ export async function loadWorkspace(client: KeitoClient, now: Date): Promise<Wor
   const since = new Date(now.getTime() - RECENTS_WINDOW_DAYS * 86_400_000);
   const entries = await client.listTimeEntries({ from: isoDate(since), to: isoDate(now) });
 
-  return { catalog: buildCatalog(projects, tasksByProjectId), recents: rankRecents(entries, now) };
+  const todayDate = isoDate(now);
+  return {
+    catalog: buildCatalog(projects, tasksByProjectId),
+    recents: rankRecents(entries, now),
+    today: entries.filter((entry) => entry.spent_date === todayDate),
+  };
 }

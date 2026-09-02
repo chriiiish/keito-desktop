@@ -7,7 +7,9 @@
  */
 import { render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import userEvent from "@testing-library/user-event";
 import type { Snapshot } from "../../electron/service.js";
+import type { TimeEntry } from "../core/keito/types.js";
 
 const api = {
   getSnapshot: vi.fn(),
@@ -19,6 +21,7 @@ const api = {
   closePopover: vi.fn(),
   openWindow: vi.fn(),
   resolveIdle: vi.fn(),
+  resumeEntry: vi.fn(),
 };
 vi.stubGlobal("keito", api);
 
@@ -39,6 +42,7 @@ const snapshot: Snapshot = {
   ],
   recents: ["p_bank:t_dev"],
   favourites: ["p_acme:t_qa"],
+  today: [],
   workspaceTimezone: "UTC",
   hotkey: "X",
   accountId: "co_9",
@@ -54,26 +58,72 @@ beforeEach(() => {
   api.getSnapshot.mockResolvedValue(snapshot);
 });
 
+const entry = (id: string, projectId: string, taskId: string, over: Partial<TimeEntry> = {}) => ({
+  id,
+  project_id: projectId,
+  task_id: taskId,
+  spent_date: "2026-09-02",
+  started_time: "09:00",
+  ended_time: "09:30",
+  hours: 0.5,
+  is_running: false,
+  notes: null,
+  ...over,
+});
+
 describe("the start form", () => {
-  it("offers every category in one dropdown, favourites first", async () => {
+  it("preselects the first favourite, so Enter alone starts something sensible", async () => {
     render(<Popover />);
 
-    const select = await screen.findByLabelText(/category/i);
-    const groups = within(select).getAllByRole("group");
+    expect(await screen.findByText("QA")).toBeDefined();
+  });
 
-    expect(groups.map((group) => group.getAttribute("label"))).toEqual([
+  it("groups the dropdown as favourites, recent, then every project", async () => {
+    const user = userEvent.setup();
+    render(<Popover />);
+    await user.click(await screen.findByRole("button", { name: "Category" }));
+
+    const headings = screen.getAllByText(/^(Favourites|Recent|All projects)$/);
+
+    expect(headings.map((node) => node.textContent)).toEqual([
       "Favourites",
       "Recent",
-      "All categories",
+      "All projects",
     ]);
   });
 
-  it("preselects the first suggestion, so Enter alone starts something sensible", async () => {
+  it("lists tasks under their project heading", async () => {
+    const user = userEvent.setup();
     render(<Popover />);
+    await user.click(await screen.findByRole("button", { name: "Category" }));
 
-    const select = (await screen.findByLabelText(/category/i)) as HTMLSelectElement;
+    const list = screen.getByRole("listbox");
 
-    expect(select.value).toBe("p_acme:t_qa"); // the favourite
+    expect(within(list).getByText("Acme Rebuild")).toBeDefined();
+    expect(within(list).getByText("Bank Portal")).toBeDefined();
+  });
+
+  it("filters by a string across project and task", async () => {
+    const user = userEvent.setup();
+    render(<Popover />);
+    await user.click(await screen.findByRole("button", { name: "Category" }));
+    await user.type(screen.getByPlaceholderText(/filter projects and tasks/i), "bank");
+
+    const list = screen.getByRole("listbox");
+
+    expect(within(list).queryByText("Acme Rebuild")).toBeNull();
+    expect(within(list).getByText("Bank Portal")).toBeDefined();
+  });
+
+  it("favourites a category from inside the dropdown", async () => {
+    const user = userEvent.setup();
+    api.toggleFavourite.mockResolvedValue(snapshot);
+    render(<Popover />);
+    await user.click(await screen.findByRole("button", { name: "Category" }));
+
+    await user.click(screen.getAllByLabelText(/^Favourite Bank Portal Development$/)[0]!);
+
+    expect(api.toggleFavourite).toHaveBeenCalledWith("p_bank:t_dev");
   });
 
   it("shows the note on the running timer", async () => {
@@ -111,7 +161,6 @@ describe("the start form", () => {
   });
 
   it("starts the selected category with the typed note", async () => {
-    const { userEvent } = await import("@testing-library/user-event");
     api.switchTo.mockResolvedValue({ ...snapshot, error: null });
     render(<Popover />);
 
@@ -119,5 +168,53 @@ describe("the start form", () => {
     await userEvent.setup().type(note, "Sprint planning{Enter}");
 
     expect(api.switchTo).toHaveBeenCalledWith("p_acme:t_qa", "Sprint planning");
+  });
+});
+
+describe("today's entries", () => {
+  it("says so when nothing has been logged yet", async () => {
+    render(<Popover />);
+
+    expect(await screen.findByText(/nothing logged yet today/i)).toBeDefined();
+  });
+
+  it("lists what has been worked on, labelled by note where there is one", async () => {
+    api.getSnapshot.mockResolvedValue({
+      ...snapshot,
+      today: [
+        entry("te_1", "p_acme", "t_dev", { notes: "Sprint planning" }),
+        entry("te_2", "p_bank", "t_dev"),
+      ],
+    } satisfies Snapshot);
+
+    render(<Popover />);
+
+    expect(await screen.findByText("Sprint planning")).toBeDefined();
+    // No note, so it falls back to the task name.
+    expect(screen.getAllByText("Development").length).toBeGreaterThan(0);
+  });
+
+  it("resumes an entry from its play button", async () => {
+    api.getSnapshot.mockResolvedValue({
+      ...snapshot,
+      today: [entry("te_1", "p_acme", "t_dev", { notes: "Sprint planning" })],
+    } satisfies Snapshot);
+    api.resumeEntry.mockResolvedValue({ ...snapshot, error: null });
+    render(<Popover />);
+
+    await userEvent.setup().click(await screen.findByLabelText(/^Resume Development$/));
+
+    expect(api.resumeEntry).toHaveBeenCalledWith("te_1");
+  });
+
+  it("does not offer to resume the entry that is already running", async () => {
+    api.getSnapshot.mockResolvedValue({
+      ...snapshot,
+      today: [entry("te_1", "p_acme", "t_dev", { is_running: true, ended_time: null })],
+    } satisfies Snapshot);
+
+    render(<Popover />);
+
+    expect((await screen.findByLabelText(/^Resume Development$/)).hasAttribute("disabled")).toBe(true);
   });
 });
