@@ -39,6 +39,7 @@ const snapshot: Snapshot = {
     pair("p_acme:t_dev", "Acme Rebuild", "Development"),
     pair("p_acme:t_qa", "Acme Rebuild", "QA"),
     pair("p_bank:t_dev", "Bank Portal", "Development"),
+    pair("p_bank:t_ops", "Bank Portal", "Ops"),
   ],
   recents: ["p_bank:t_dev"],
   favourites: ["p_acme:t_qa"],
@@ -113,6 +114,27 @@ describe("the start form", () => {
 
     expect(within(list).queryByText("Acme Rebuild")).toBeNull();
     expect(within(list).getByText("Bank Portal")).toBeDefined();
+  });
+
+  it("closes the dropdown when an option is clicked", async () => {
+    const user = userEvent.setup();
+    render(<Popover />);
+    await user.click(await screen.findByRole("button", { name: "Category" }));
+
+    await user.click(within(screen.getByRole("listbox")).getByText("Ops"));
+
+    expect(screen.queryByRole("listbox")).toBeNull();
+  });
+
+  it("closes the dropdown even when the option clicked is the one already selected", async () => {
+    const user = userEvent.setup();
+    render(<Popover />);
+    await user.click(await screen.findByRole("button", { name: "Category" }));
+
+    // "QA" under Acme Rebuild is the preselected favourite.
+    await user.click(within(screen.getByRole("listbox")).getAllByText("QA")[0]!);
+
+    expect(screen.queryByRole("listbox")).toBeNull();
   });
 
   it("favourites a category from inside the dropdown", async () => {

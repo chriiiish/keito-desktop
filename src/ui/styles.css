@@ -169,8 +169,8 @@ input.time { width: 74px; font-variant-numeric: tabular-nums; }
 .running-note { font-size: 12px; color: var(--fg); font-style: italic; }
 .running-note.none { color: var(--muted); font-style: normal; }
 
-.starter { display: flex; flex-direction: column; gap: 10px; padding: 12px; flex: 1; }
-.starter label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.starter { display: flex; flex-direction: column; gap: 10px; padding: 12px 12px 10px; }
+.starter label, .starter .field { display: flex; flex-direction: column; gap: 4px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
 .with-star, .with-play { display: flex; gap: 6px; align-items: stretch; }
 .with-star select, .with-play input { flex: 1; min-width: 0; }
 
@@ -259,7 +259,7 @@ select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 .option.cursor .star.on { color: #ffd479; }
 
 /* ── Today ───────────────────────────────────────────────── */
-.today { border-top: 1px solid var(--line); padding: 8px 12px 4px; max-height: 190px; overflow-y: auto; }
+.today { flex: 1; min-height: 0; border-top: 1px solid var(--line); padding: 8px 12px 4px; overflow-y: auto; }
 .today-heading { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin-bottom: 4px; }
 .today ul { list-style: none; margin: 0; padding: 0; }
 .today li { display: flex; align-items: center; gap: 8px; padding: 4px 0; }

@@ -127,7 +127,9 @@ export function Popover(): JSX.Element {
           void start();
         }}
       >
-        <label>
+        {/* Not a <label>: wrapping the picker in one forwards option clicks to the
+            trigger button, which reopens the menu the moment it closes. */}
+        <div className="field">
           <span className="field-label">Category</span>
           <CategoryPicker
             catalog={snapshot.catalog}
@@ -137,7 +139,7 @@ export function Popover(): JSX.Element {
             onSelect={setSelectedId}
             onToggleFavourite={(pairId) => void keito.toggleFavourite(pairId).then(setSnapshot)}
           />
-        </label>
+        </div>
 
         <label>
           Note
