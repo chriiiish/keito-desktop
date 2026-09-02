@@ -31,3 +31,27 @@ jobs:
       - run: npm test
 
       - run: npm run build
+
+  trivy:
+    name: Trivy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # Scans package-lock.json for known-vulnerable dependencies, the tree for
+      # committed secrets, and the workflows for misconfiguration. No `npm ci`
+      # first: the lockfile is what pins the versions, so installing would tell
+      # Trivy nothing it cannot already read, and this job stays independent of
+      # the build one.
+      - uses: aquasecurity/trivy-action@0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: CRITICAL,HIGH
+          # A vulnerability with no released fix would otherwise block every
+          # future merge with nothing anyone could do to clear it. Drop this to
+          # see them, but expect to need `.trivyignore` for the ones you accept.
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table
