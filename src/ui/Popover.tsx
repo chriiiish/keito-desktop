@@ -82,7 +82,9 @@ export function Popover(): JSX.Element {
           <p>
             {rejected
               ? "Your API key stopped working, so nothing is being tracked."
-              : "Connect your Keito account and start tracking time from the menu bar."}
+              : `Connect your Keito account and start tracking time from the ${
+                  snapshot.platform === "darwin" ? "menu bar" : "tray"
+                }.`}
           </p>
           <button className="primary" onClick={() => void keito.openWindow()}>
             {rejected ? "Fix the connection" : "Get started"}
