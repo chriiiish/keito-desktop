@@ -255,7 +255,7 @@ describe("today's entries", () => {
     expect(api.resumeEntry).toHaveBeenCalledWith("te_1");
   });
 
-  it("does not offer to resume the entry that is already running", async () => {
+  it("offers to stop the running entry rather than resume it", async () => {
     api.getSnapshot.mockResolvedValue({
       ...snapshot,
       today: [entry("te_1", "p_acme", "t_dev", { is_running: true, ended_time: null })],
@@ -263,6 +263,34 @@ describe("today's entries", () => {
 
     render(<Popover />);
 
-    expect((await screen.findByLabelText(/^Resume Development$/)).hasAttribute("disabled")).toBe(true);
+    expect(await screen.findByLabelText(/^Stop Development$/)).toBeDefined();
+    expect(screen.queryByLabelText(/^Resume Development$/)).toBeNull();
+  });
+
+  it("stops the timer from today's list", async () => {
+    api.getSnapshot.mockResolvedValue({
+      ...snapshot,
+      today: [entry("te_1", "p_acme", "t_dev", { is_running: true, ended_time: null })],
+    } satisfies Snapshot);
+    api.stopTimer.mockResolvedValue(snapshot);
+    render(<Popover />);
+
+    await userEvent.setup().click(await screen.findByLabelText(/^Stop Development$/));
+
+    expect(api.stopTimer).toHaveBeenCalled();
+  });
+
+  it("still offers resume on entries that are not running", async () => {
+    api.getSnapshot.mockResolvedValue({
+      ...snapshot,
+      today: [
+        entry("te_1", "p_acme", "t_dev", { is_running: true, ended_time: null }),
+        entry("te_2", "p_bank", "t_ops"),
+      ],
+    } satisfies Snapshot);
+
+    render(<Popover />);
+
+    expect(await screen.findByLabelText(/^Resume Ops$/)).toBeDefined();
   });
 });

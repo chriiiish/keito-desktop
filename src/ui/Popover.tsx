@@ -163,6 +163,7 @@ export function Popover(): JSX.Element {
         catalog={snapshot.catalog}
         busyId={resuming}
         onResume={(entryId) => void resume(entryId)}
+        onStop={() => void keito.stopTimer().then(setSnapshot)}
       />
 
       <footer>
