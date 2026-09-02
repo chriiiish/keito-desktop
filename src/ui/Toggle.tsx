@@ -4,10 +4,13 @@ import { useRef, useState } from "react";
 export function Toggle({
   checked,
   label,
+  disabled = false,
   onChange,
 }: {
   checked: boolean;
   label: string;
+  /** Locked for a reason of the caller's own, on top of the in-flight lock below. */
+  disabled?: boolean;
   onChange: (checked: boolean) => Promise<unknown>;
 }): JSX.Element {
   const [pending, setPending] = useState(false);
@@ -20,7 +23,7 @@ export function Toggle({
         aria-label={label}
         aria-busy={pending}
         checked={checked}
-        disabled={pending}
+        disabled={pending || disabled}
         onChange={(event) => {
           if (inFlight.current) return;
           inFlight.current = true;

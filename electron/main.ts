@@ -224,8 +224,8 @@ function registerHotkey(hotkey: string): boolean {
  * app — System Settings on macOS, Task Manager on Windows — so preferences.json would
  * drift from reality within a fortnight of anyone noticing it exists.
  *
- * In development this reports (and toggles) the login item for the Electron binary that
- * `npm run dev` launches, not for an installed Keito Timer.
+ * In a development run this would report the login item for the Electron binary that
+ * `npm run dev` launches, which is why changing it is refused there.
  */
 function readOpenAtLogin(): boolean {
   try {
@@ -281,8 +281,8 @@ function registerIpc(): void {
     service.setHotkeyRegistered(registerHotkey(reset.hotkey));
     // The login item is this app's doing too, and lives outside preferences.json — a
     // "fresh install" that still launched itself at login would not be one.
-    app.setLoginItemSettings({ openAtLogin: false });
-    service.setOpenAtLogin(readOpenAtLogin());
+    if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: false });
+    service.setOpenAtLogin(readOpenAtLogin(), app.isPackaged);
     return service.snapshot();
   });
 
@@ -290,8 +290,15 @@ function registerIpc(): void {
   // login item can be refused or removed by policy, and reporting the request instead of
   // the result would leave the switch claiming something untrue.
   handle("set-open-at-login", async (openAtLogin: boolean) => {
+    // Refused outright in development: the item would be registered against Electron.app,
+    // which is both useless and hard to find again once the dev session ends. The switch
+    // is disabled there too; this is the half that cannot be clicked around.
+    if (!app.isPackaged) {
+      log.warn("Refusing to change the login item in a development run");
+      return service.snapshot();
+    }
     app.setLoginItemSettings({ openAtLogin });
-    service.setOpenAtLogin(readOpenAtLogin());
+    service.setOpenAtLogin(readOpenAtLogin(), app.isPackaged);
     return service.snapshot();
   });
 
@@ -395,7 +402,7 @@ async function start(): Promise<void> {
   createTray();
   registerIpc();
   service.setHotkeyRegistered(registerHotkey(prefs.get().hotkey));
-  service.setOpenAtLogin(readOpenAtLogin());
+  service.setOpenAtLogin(readOpenAtLogin(), app.isPackaged);
   startMonitors();
 
   started = true;

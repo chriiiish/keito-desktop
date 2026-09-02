@@ -368,13 +368,21 @@ function Settings({
           : "Open Keito Timer when you sign in, so the tray icon is there before you think to look for it."}
       </p>
       <div className="setting-row">
-        <span>Run at startup</span>
+        <span className="setting-label">Run at startup</span>
         <Toggle
           checked={snapshot.openAtLogin}
           label="Run at startup"
+          disabled={!snapshot.canOpenAtLogin}
           onChange={(next) => keito.setOpenAtLogin(next).then(onChange)}
         />
       </div>
+      {!snapshot.canOpenAtLogin && (
+        <p className="hint">
+          Unavailable in a development run: the login item would be registered against the
+          Electron binary rather than Keito Timer, and would say so. Try it from an
+          installed build.
+        </p>
+      )}
 
       <h2>Workspace timezone</h2>
       <p className="hint">

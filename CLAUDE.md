@@ -249,8 +249,12 @@ silently rather than loudly.
   System Settings on macOS, Task Manager on Windows — so a stored copy would start lying
   the first time someone used either. `main.ts` owns the call, the way it owns
   `globalShortcut`, and pushes the result in with `setOpenAtLogin`, which is what keeps
-  `service.ts` free of Electron. In `npm run dev` this toggles the login item for the dev
-  Electron binary, not for an installed Keito Timer.
+  `service.ts` free of Electron. **Only available in a packaged build**: macOS names a
+  login item after the bundle that registered it, and under `npm run dev` that bundle is
+  `Electron.app` — the system notification reads *"Electron"* and the stray item outlives
+  the dev session. There is no renaming it, since Electron's `path` and `name` overrides
+  are Windows-only, so `Snapshot.canOpenAtLogin` is `app.isPackaged` and both the switch
+  and the IPC handler refuse.
 - **`PreferencesStore` serialises its writes.** Two overlapping saves race for the same
   `.tmp` file and the loser fails with `ENOENT`; starring in the popover while toggling in
   the settings window is enough to hit it.

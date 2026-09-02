@@ -51,6 +51,7 @@ const snapshot: Snapshot = {
   hotkey: "CommandOrControl+Shift+K",
   hotkeyRegistered: true,
   openAtLogin: false,
+  canOpenAtLogin: true,
   platform: "darwin",
   appVersion: "0.1.0",
   accountId: "co",
@@ -581,6 +582,20 @@ describe("run at startup", () => {
     await user.click(screen.getByLabelText("Run at startup"));
 
     expect(api.setOpenAtLogin).toHaveBeenCalledWith(false);
+  });
+
+  // macOS names a login item after the bundle that registered it, and in development that
+  // bundle is Electron.app — so the switch would create an item called "Electron" that
+  // outlives the dev session. There is no renaming it; Electron's overrides are win32.
+  it("is unavailable in a development run, and says why", async () => {
+    const user = await openSettings({ canOpenAtLogin: false });
+
+    const toggle = screen.getByLabelText("Run at startup");
+    expect(toggle.hasAttribute("disabled")).toBe(true);
+    expect(screen.getByText(/Electron binary rather than Keito Timer/)).toBeDefined();
+
+    await user.click(toggle);
+    expect(api.setOpenAtLogin).not.toHaveBeenCalled();
   });
 
   // Same guard as every other write: two events in one tick must not both fire.
