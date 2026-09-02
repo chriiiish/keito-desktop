@@ -10,6 +10,8 @@ import { ProjectsTab } from "./ProjectsTab.js";
 import { Toggle } from "./Toggle.js";
 import { useSnapshot } from "./useSnapshot.js";
 import { shiftDate, workspaceDate } from "../core/time/workspace-time.js";
+import { entrySeconds, formatDecimalHours } from "../core/time/elapsed.js";
+import { useNow } from "./useNow.js";
 
 /** The Monday of the week a YYYY-MM-DD date falls in. */
 function weekStart(today: string): string {
@@ -107,6 +109,10 @@ function Entries({ revision, timeZone }: { revision: number; timeZone: string })
 
   useEffect(() => void load(), [load, revision]);
 
+  // The running row's hours climb rather than sitting at "—", which is what a null
+  // `hours` from the API renders as. Ticking only while a timer is actually going.
+  const now = useNow(1000, entries.some((entry) => entry.is_running));
+
   const edit = async (id: string, patch: { notes?: string; startedTime?: string; endedTime?: string }) => {
     try {
       const next = await keito.updateEntry(id, patch);
@@ -170,7 +176,9 @@ function Entries({ revision, timeZone }: { revision: number; timeZone: string })
                   />
                 )}
               </td>
-              <td>{entry.hours?.toFixed(2) ?? "—"}</td>
+              <td className={entry.is_running ? "ticking" : ""}>
+                {formatDecimalHours(entrySeconds(entry, now, timeZone))}
+              </td>
               <td>
                 <input
                   defaultValue={entry.notes ?? ""}

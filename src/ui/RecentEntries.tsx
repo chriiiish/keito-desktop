@@ -1,23 +1,19 @@
 import type { Pair, TimeEntry } from "../core/keito/types.js";
+import { entrySeconds, formatDuration } from "../core/time/elapsed.js";
 import { AsyncButton } from "./AsyncButton.js";
+import { useNow } from "./useNow.js";
 
 interface RecentEntriesProps {
   today: readonly TimeEntry[];
   yesterday: readonly TimeEntry[];
   catalog: readonly Pair[];
+  /** The workspace's zone, for entries whose start is only a wall-clock time. */
+  timeZone: string;
   /** Continues an entry from today, on Keito's restart endpoint. */
   onResume: (entryId: string) => Promise<unknown>;
   /** Starts a fresh entry today from an older one's category and note. */
   onStartAgain: (pairId: string, notes: string | undefined) => Promise<unknown>;
   onStop: () => Promise<unknown>;
-}
-
-/** Decimal hours as h:mm, which is how you actually read a timesheet. */
-function formatHours(entry: TimeEntry): string {
-  const seconds =
-    entry.duration_seconds ?? Math.round((entry.hours ?? 0) * 3600);
-  const minutes = Math.max(0, Math.round(seconds / 60));
-  return `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}`;
 }
 
 /**
@@ -32,10 +28,17 @@ export function RecentEntries({
   today,
   yesterday,
   catalog,
+  timeZone,
   onResume,
   onStartAgain,
   onStop,
 }: RecentEntriesProps): JSX.Element {
+  // A running row is a clock, so it has to move. Every second, so its minute turns over
+  // at the same moment as the header's clock rather than up to a minute later, and only
+  // while something is actually running — one interval for the list, not one per row.
+  const running =
+    today.some((entry) => entry.is_running) || yesterday.some((entry) => entry.is_running);
+  const now = useNow(1000, running);
   const describe = (entry: TimeEntry) => {
     const pair = catalog.find(
       (candidate) => candidate.projectId === entry.project_id && candidate.taskId === entry.task_id,
@@ -68,7 +71,9 @@ export function RecentEntries({
                   {projectName} — {taskName}
                 </span>
               </div>
-              <span className="entry-hours">{formatHours(entry)}</span>
+              <span className={`entry-hours${entry.is_running ? " ticking" : ""}`}>
+                {formatDuration(entrySeconds(entry, now, timeZone))}
+              </span>
               {entry.is_running ? (
                 <AsyncButton
                   className="stop small"

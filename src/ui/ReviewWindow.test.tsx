@@ -246,6 +246,50 @@ describe("collapsing projects", () => {
   });
 });
 
+describe("the hours column while a timer runs", () => {
+  const row = (over: Record<string, unknown> = {}) => ({
+    id: "te_1",
+    project_id: "p_acme",
+    task_id: "t_dev",
+    spent_date: "2026-09-02",
+    started_time: "09:00",
+    ended_time: "09:30",
+    timer_started_at: null,
+    duration_seconds: null,
+    hours: 0.5,
+    is_running: false,
+    notes: null,
+    ...over,
+  });
+
+  // A running entry reports hours: null, which rendered as an em dash — technically not
+  // wrong, and no use at all to someone checking whether the day adds up.
+  it("climbs from the start instead of showing a dash", async () => {
+    api.listEntries.mockResolvedValue([
+      row({
+        is_running: true,
+        ended_time: null,
+        hours: null,
+        timer_started_at: new Date(Date.now() - 90 * 60_000).toISOString(),
+      }),
+    ]);
+
+    render(<ReviewWindow />);
+    await screen.findByText("running");
+
+    expect(screen.getByText("1.50")).toBeDefined();
+  });
+
+  it("leaves a stopped row reading its recorded hours", async () => {
+    api.listEntries.mockResolvedValue([row()]);
+
+    render(<ReviewWindow />);
+    await screen.findByText("0.50");
+
+    expect(screen.queryByText("—")).toBeNull();
+  });
+});
+
 describe("loading time entries", () => {
   it("owns up to the wait while the API responds", async () => {
     const gate = deferred<never[]>();
