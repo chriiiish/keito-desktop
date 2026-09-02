@@ -82,4 +82,20 @@ describe("PreferencesStore", () => {
 
     expect((await PreferencesStore.open(file)).get().accountId).toBeUndefined();
   });
+
+  it("defaults the tray label to the note, falling back to the task", async () => {
+    const store = await PreferencesStore.open(file);
+
+    expect(store.get()).toMatchObject({ trayFallback: "task", trayPrefix: "none" });
+  });
+
+  it("remembers tray label choices", async () => {
+    const store = await PreferencesStore.open(file);
+    await store.update({ trayFallback: "project", trayPrefix: "task" });
+
+    expect((await PreferencesStore.open(file)).get()).toMatchObject({
+      trayFallback: "project",
+      trayPrefix: "task",
+    });
+  });
 });

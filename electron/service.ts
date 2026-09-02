@@ -4,6 +4,7 @@ import { KeitoClient, type RequestRecord } from "../src/core/keito/client.js";
 import { KeitoAuthError, KeitoError, KeitoReadOnlyError } from "../src/core/keito/errors.js";
 import type { Identity, Pair, TimeEntry } from "../src/core/keito/types.js";
 import { PreferencesStore } from "../src/core/store/preferences.js";
+import type { TrayFallback, TrayPrefix } from "../src/core/tray/label.js";
 import { TimerSwitcher, type TimerState } from "../src/core/timer/switcher.js";
 import { formatWorkspaceTime, parseWorkspaceTime } from "../src/core/time/workspace-time.js";
 import type { SecretStore } from "./secrets.js";
@@ -27,8 +28,10 @@ export interface Snapshot {
   revision: number;
   timer:
     | { status: "idle" }
-    | { status: "running"; pair: Pair; entryId: string; startedAtMs: number }
+    | { status: "running"; pair: Pair; entryId: string; startedAtMs: number; note: string | null }
     | { status: "needs-auth" };
+  trayFallback: TrayFallback;
+  trayPrefix: TrayPrefix;
   error: string | null;
 }
 
@@ -110,6 +113,8 @@ export class AppService {
       workspaceTimezone: prefs.workspaceTimezone,
       hotkey: prefs.hotkey,
       accountId: prefs.accountId ?? null,
+      trayFallback: prefs.trayFallback,
+      trayPrefix: prefs.trayPrefix,
       revision: this.#revision,
       timer:
         state.status === "running"
@@ -118,6 +123,7 @@ export class AppService {
               pair: state.pair,
               entryId: state.entry.id,
               startedAtMs: this.#startedAtMs ?? Date.now(),
+              note: state.entry.notes ?? null,
             }
           : { status: state.status },
       error: this.#error,
@@ -201,6 +207,11 @@ export class AppService {
     const isFavourite = this.#prefs.get().favourites.includes(pairId);
     await (isFavourite ? this.#prefs.removeFavourite(pairId) : this.#prefs.addFavourite(pairId));
     this.#revision++;
+    return this.snapshot();
+  }
+
+  async setTrayLabel(options: { fallback: TrayFallback; prefix: TrayPrefix }): Promise<Snapshot> {
+    await this.#prefs.update({ trayFallback: options.fallback, trayPrefix: options.prefix });
     return this.snapshot();
   }
 

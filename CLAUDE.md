@@ -105,10 +105,15 @@ until a contract test covers it.
 
 ## Testing approach
 
-Tests live only at these seams, agreed up front: `KeitoClient`, `TimerSwitcher`,
-`buildPicker`, `rankRecents`, `IdleWatcher`/`shouldAutoStop`, and `PreferencesStore`
-round-tripping to a temp dir. React components, the Electron main process, the tray and the
-hotkey are deliberately **not** unit-tested — they're verified by running the app.
+Tests live only at these seams: `KeitoClient`, `TimerSwitcher`, `buildPicker`,
+`rankRecents`, `IdleWatcher`/`shouldAutoStop`, `formatTrayLabel`, and `PreferencesStore`
+round-tripping to a temp dir. The Electron main process, the tray and the hotkey are
+deliberately **not** unit-tested — they're verified by running the app.
+
+`src/ui/Popover.test.tsx` is the one component test (jsdom + Testing Library): the start
+form holds real logic — which category is preselected, the order of the dropdown groups —
+and it is the screen that cannot be checked by reading a Snapshot. Keep component testing
+to that; the rest of the UI stays verify-by-running.
 
 Tests drive the real `KeitoClient` through `FakeKeito`'s `fetch` rather than mocking the
 client. Don't introduce mocks of internal collaborators; extend the fake instead, and add a
@@ -132,6 +137,11 @@ where the actual reason lives, and losing it makes every failure look identical.
 
 `KeitoNetworkError` means the request never reached Keito; an HTTP error status is
 `KeitoRequestError` or something more specific.
+
+The tray label is `formatTrayLabel` in `src/core/tray/label.ts` — pure, so the menu bar
+text is tested rather than eyeballed. The note leads by default because it is what says
+what you are doing; project/task are a prefix and a blank-note fallback, and the fallback
+is never prefixed with itself.
 
 `Snapshot.revision` increments on every server-side change. Windows holding their own
 derived data (the entries table) reload when it moves — without that they go stale until

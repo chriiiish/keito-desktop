@@ -16,6 +16,10 @@ const api = {
   stopTimer: (): Promise<Snapshot> => ipcRenderer.invoke("stop-timer"),
   toggleFavourite: (pairId: string): Promise<Snapshot> => ipcRenderer.invoke("toggle-favourite", pairId),
   setHotkey: (hotkey: string): Promise<Snapshot> => ipcRenderer.invoke("set-hotkey", hotkey),
+  setTrayLabel: (options: {
+    fallback: "task" | "project";
+    prefix: "none" | "project" | "task";
+  }): Promise<Snapshot> => ipcRenderer.invoke("set-tray-label", options),
   listEntries: (from: string, to: string): Promise<TimeEntry[]> =>
     ipcRenderer.invoke("list-entries", from, to),
   updateEntry: (

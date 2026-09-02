@@ -1,5 +1,6 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
+import type { TrayFallback, TrayPrefix } from "../tray/label.js";
 
 export const DEFAULT_HOTKEY = "CommandOrControl+Shift+K";
 
@@ -17,12 +18,18 @@ export interface Preferences {
    */
   workspaceTimezone: string;
   hotkey: string;
+  /** What the tray shows when the running entry has no note. */
+  trayFallback: TrayFallback;
+  /** What, if anything, precedes the note in the tray. */
+  trayPrefix: TrayPrefix;
 }
 
 const defaults = (): Preferences => ({
   favourites: [],
   workspaceTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   hotkey: DEFAULT_HOTKEY,
+  trayFallback: "task",
+  trayPrefix: "none",
 });
 
 /** Favourites and settings on disk. The API key is not here — that lives in the OS keychain. */

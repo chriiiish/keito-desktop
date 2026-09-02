@@ -13,6 +13,7 @@ import {
 import { join } from "node:path";
 import { PreferencesStore } from "../src/core/store/preferences.js";
 import { IdleWatcher, shouldAutoStop } from "../src/core/timer/idle.js";
+import { formatTrayLabel } from "../src/core/tray/label.js";
 import { AppService, type Snapshot } from "./service.js";
 import { SecretStore } from "./secrets.js";
 import { Logger } from "./logger.js";
@@ -49,9 +50,16 @@ function broadcast(snapshot: Snapshot): void {
 function updateTrayTitle(snapshot: Snapshot): void {
   if (!tray) return;
   if (snapshot.timer.status === "running") {
-    const { pair } = snapshot.timer;
-    tray.setToolTip(`${pair.projectName} — ${pair.taskName}`);
-    if (process.platform === "darwin") tray.setTitle(` ${pair.taskName}`);
+    const { pair, note } = snapshot.timer;
+    const label = formatTrayLabel(
+      { note, projectName: pair.projectName, taskName: pair.taskName },
+      { fallback: snapshot.trayFallback, prefix: snapshot.trayPrefix },
+    );
+    // The tooltip has room for the full context the short label had to drop.
+    tray.setToolTip(
+      [`${pair.projectName} — ${pair.taskName}`, note?.trim()].filter(Boolean).join("\n"),
+    );
+    if (process.platform === "darwin") tray.setTitle(` ${label}`);
   } else {
     tray.setToolTip("Keito Timer — nothing running");
     if (process.platform === "darwin") tray.setTitle("");
@@ -179,6 +187,10 @@ function registerIpc(): void {
   handle("delete-entry", async (id: string) => service.deleteEntry(id));
   handle("resolve-idle", async (keep: boolean, awaySinceMs: number) =>
     keep ? service.snapshot() : service.discardIdleSince(new Date(awaySinceMs)),
+  );
+
+  handle("set-tray-label", async (options: Parameters<AppService["setTrayLabel"]>[0]) =>
+    service.setTrayLabel(options),
   );
 
   handle("set-hotkey", async (hotkey: string) => {

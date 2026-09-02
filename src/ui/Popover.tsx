@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { buildPicker } from "../core/catalog/picker.js";
-import type { Pair } from "../core/keito/types.js";
 import { Elapsed } from "./Elapsed.js";
 import { keito } from "./keito-api.js";
 import { useSnapshot } from "./useSnapshot.js";
@@ -9,14 +8,12 @@ const SECTION_LABEL = { favourites: "Favourites", recent: "Recent", all: "All ca
 
 export function Popover(): JSX.Element {
   const [snapshot, setSnapshot] = useSnapshot();
-  const [query, setQuery] = useState("");
-  const [notes, setNotes] = useState("");
-  const [cursor, setCursor] = useState(0);
+  const [selectedId, setSelectedId] = useState("");
+  const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [idle, setIdle] = useState<{ awaySinceMs: number; awaySeconds: number } | null>(null);
-  const searchRef = useRef<HTMLInputElement>(null);
+  const noteRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => searchRef.current?.focus(), []);
   useEffect(() => keito.onIdleReturn(setIdle), []);
 
   const sections = useMemo(
@@ -26,14 +23,22 @@ export function Popover(): JSX.Element {
             catalog: snapshot.catalog,
             favourites: snapshot.favourites,
             recents: snapshot.recents,
-            query,
+            query: "",
           })
         : [],
-    [snapshot, query],
+    [snapshot],
   );
 
-  const flat = useMemo(() => sections.flatMap((section) => section.pairs), [sections]);
-  useEffect(() => setCursor(0), [query]);
+  const running = snapshot?.timer.status === "running" ? snapshot.timer : null;
+
+  // Default to whatever is running, else the first suggestion — usually a favourite.
+  useEffect(() => {
+    if (selectedId || sections.length === 0) return;
+    setSelectedId(running?.pair.id ?? sections[0]?.pairs[0]?.id ?? "");
+  }, [sections, running, selectedId]);
+
+  // The note is the field you actually type in, so it takes focus on open.
+  useEffect(() => noteRef.current?.focus(), [snapshot?.keyStatus]);
 
   if (!snapshot) return <div className="popover loading">Loading…</div>;
 
@@ -50,43 +55,45 @@ export function Popover(): JSX.Element {
     );
   }
 
-  const start = async (pair: Pair) => {
+  const start = async () => {
+    if (!selectedId || busy) return;
     setBusy(true);
-    const next = await keito.switchTo(pair.id, notes.trim() || undefined);
+    const next = await keito.switchTo(selectedId, note.trim() || undefined);
     setBusy(false);
     setSnapshot(next);
-    setNotes("");
-    setQuery("");
-    if (!next.error) void keito.closePopover();
-  };
-
-  const onKeyDown = (event: React.KeyboardEvent) => {
-    if (event.key === "ArrowDown") {
-      event.preventDefault();
-      setCursor((c) => Math.min(c + 1, flat.length - 1));
-    } else if (event.key === "ArrowUp") {
-      event.preventDefault();
-      setCursor((c) => Math.max(c - 1, 0));
-    } else if (event.key === "Enter") {
-      event.preventDefault();
-      const pair = flat[cursor];
-      if (pair && !busy) void start(pair);
-    } else if (event.key === "Escape") {
+    if (!next.error) {
+      setNote("");
       void keito.closePopover();
     }
   };
 
+  const isFavourite = snapshot.favourites.includes(selectedId);
+
   return (
-    <div className="popover" onKeyDown={onKeyDown}>
+    <div
+      className="popover"
+      onKeyDown={(event) => {
+        if (event.key === "Escape") void keito.closePopover();
+      }}
+    >
       <header className="running">
-        {snapshot.timer.status === "running" ? (
+        {running ? (
           <>
             <div className="running-what">
-              <strong>{snapshot.timer.pair.taskName}</strong>
-              <span>{snapshot.timer.pair.projectName}</span>
+              <strong>{running.pair.taskName}</strong>
+              <span>{running.pair.projectName}</span>
+              {running.note?.trim() ? (
+                <span className="running-note" title={running.note}>
+                  {running.note}
+                </span>
+              ) : (
+                <span className="running-note none">No note</span>
+              )}
             </div>
-            <Elapsed startedAtMs={snapshot.timer.startedAtMs} />
-            <button onClick={() => void keito.stopTimer().then(setSnapshot)}>Stop</button>
+            <div className="running-right">
+              <Elapsed startedAtMs={running.startedAtMs} />
+              <button onClick={() => void keito.stopTimer().then(setSnapshot)}>Stop</button>
+            </div>
           </>
         ) : (
           <span className="running-what idle">Nothing running</span>
@@ -112,62 +119,61 @@ export function Popover(): JSX.Element {
 
       {snapshot.error && <div className="error">{snapshot.error}</div>}
 
-      <input
-        ref={searchRef}
-        className="search"
-        placeholder="Search projects and tasks…"
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-      />
+      <form
+        className="starter"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void start();
+        }}
+      >
+        <label>
+          Category
+          <div className="with-star">
+            <select value={selectedId} onChange={(event) => setSelectedId(event.target.value)}>
+              {sections.map((section) => (
+                <optgroup key={section.section} label={SECTION_LABEL[section.section]}>
+                  {section.pairs.map((pair) => (
+                    <option key={pair.id} value={pair.id}>
+                      {pair.projectName} — {pair.taskName}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+              {sections.length === 0 && <option value="">No categories available</option>}
+            </select>
+            <button
+              type="button"
+              className={`star${isFavourite ? " on" : ""}`}
+              title={isFavourite ? "Remove from favourites" : "Add to favourites"}
+              disabled={!selectedId}
+              onClick={() => void keito.toggleFavourite(selectedId).then(setSnapshot)}
+            >
+              ★
+            </button>
+          </div>
+        </label>
 
-      <ul className="results">
-        {sections.map((section) => (
-          <li key={section.section}>
-            <div className="section-label">{SECTION_LABEL[section.section]}</div>
-            <ul>
-              {section.pairs.map((pair) => {
-                const index = flat.indexOf(pair);
-                return (
-                  <li
-                    key={pair.id}
-                    className={`row${index === cursor ? " cursor" : ""}`}
-                    onMouseEnter={() => setCursor(index)}
-                    onClick={() => void start(pair)}
-                  >
-                    <div className="row-text">
-                      <strong>{pair.taskName}</strong>
-                      <span>{pair.projectName}</span>
-                    </div>
-                    <button
-                      className={`star${snapshot.favourites.includes(pair.id) ? " on" : ""}`}
-                      title="Favourite"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        void keito.toggleFavourite(pair.id).then(setSnapshot);
-                      }}
-                    >
-                      ★
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </li>
-        ))}
-        {flat.length === 0 && <li className="empty">No categories match “{query}”.</li>}
-      </ul>
+        <label>
+          Note
+          <div className="with-play">
+            <input
+              ref={noteRef}
+              placeholder="What are you working on?"
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+            />
+            <button type="submit" className="play" title="Start timer" disabled={!selectedId || busy}>
+              ▶
+            </button>
+          </div>
+        </label>
+      </form>
 
-      <input
-        className="notes"
-        placeholder="Notes (optional)"
-        value={notes}
-        onChange={(event) => setNotes(event.target.value)}
-      />
       <footer>
         <button className="link" onClick={() => void keito.openWindow()}>
           Entries &amp; settings
         </button>
-        <span className="hint">↑↓ to move · ⏎ to start · esc to close</span>
+        <span className="hint">⏎ to start · esc to close</span>
       </footer>
     </div>
   );
