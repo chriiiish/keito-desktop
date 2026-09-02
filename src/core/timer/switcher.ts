@@ -21,8 +21,6 @@ export class TimerSwitcher {
   #client: KeitoClient;
   #now: () => Date;
   #state: TimerState = { status: "idle" };
-  /** ETag of the running entry, so stop() can satisfy If-Match. */
-  #etag: string | null = null;
 
   constructor(options: TimerSwitcherOptions) {
     this.#client = options.client;
@@ -36,7 +34,7 @@ export class TimerSwitcher {
   async switchTo(pair: Pair, notes?: string): Promise<void> {
     // On failure the previous state stands: a switch that never reached Keito must not
     // stop the clock on work that is still happening.
-    const { entry, etag } = await this.#guard(() =>
+    const entry = await this.#guard(() =>
       this.#client.createTimeEntry({
         projectId: pair.projectId,
         taskId: pair.taskId,
@@ -49,7 +47,6 @@ export class TimerSwitcher {
       }),
     );
     this.#state = { status: "running", pair, entry };
-    this.#etag = etag;
   }
 
   /** Runs a call, downgrading the whole session to needs-auth if the key is refused. */
@@ -67,12 +64,8 @@ export class TimerSwitcher {
     if (state.status !== "running") return;
 
     // A timer we adopted from another client has no ETag yet; read it to get one.
-    await this.#guard(async () => {
-      const etag = this.#etag ?? (await this.#client.getTimeEntry(state.entry.id)).etag;
-      await this.#client.stopTimeEntry(state.entry.id, etag ?? "");
-    });
+    await this.#guard(() => this.#client.stopTimeEntry(state.entry.id));
     this.#state = { status: "idle" };
-    this.#etag = null;
   }
 
   /**
@@ -83,7 +76,6 @@ export class TimerSwitcher {
     const [running] = await this.#guard(() => this.#client.listTimeEntries({ isRunning: true }));
     if (!running) {
       this.#state = { status: "idle" };
-      this.#etag = null;
       return;
     }
 

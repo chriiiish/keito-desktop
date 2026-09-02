@@ -1,7 +1,10 @@
 /**
  * An in-memory Keito, exposed as a `fetch` implementation so tests drive the real
- * KeitoClient rather than a mock of it. Honours the behaviours we depend on:
- * single running timer, 409 without `replace_running`, ETag/If-Match, 401.
+ * KeitoClient rather than a mock of it.
+ *
+ * Shapes here were verified against the live API, not taken from the docs, which differ:
+ * there is no GET /time_entries/:id (405), no ETags, no If-Match requirement, and single
+ * entries come back unwrapped rather than under a `time_entry` key.
  */
 import { KEITO_BASE_URL } from "../src/core/keito/client.js";
 
@@ -12,6 +15,8 @@ export interface FakeEntry {
   spent_date: string;
   started_time: string | null;
   ended_time: string | null;
+  /** ISO instant the timer began — the real API provides this; HH:mm alone cannot. */
+  timer_started_at: string | null;
   hours: number | null;
   is_running: boolean;
   notes: string | null;
@@ -36,7 +41,6 @@ export class FakeKeito {
     rejectAuth: boolean;
   };
   #seq = 0;
-  #version = new Map<string, number>();
 
   constructor(options: FakeKeitoOptions = {}) {
     this.#options = {
@@ -100,17 +104,15 @@ export class FakeKeito {
         this.#stop(this.running);
       }
       const created = this.#create(body, wantsRunning);
-      return this.#json({ time_entry: created }, 201, created.id);
+      return this.#json(created, 201);
     }
 
     const stopMatch = /^\/time_entries\/([^/]+)\/stop$/.exec(path);
     if (method === "PATCH" && stopMatch) {
       const entry = this.entries.find((e) => e.id === stopMatch[1]);
       if (!entry) return this.#json({ message: "Not found" }, 404);
-      const precondition = this.#checkIfMatch(entry.id, headers);
-      if (precondition) return precondition;
       this.#stop(entry);
-      return this.#json({ time_entry: entry }, 200, entry.id);
+      return this.#json(entry, 200);
     }
 
     const idMatch = /^\/time_entries\/([^/]+)$/.exec(path);
@@ -118,28 +120,19 @@ export class FakeKeito {
       const index = this.entries.findIndex((e) => e.id === idMatch[1]);
       if (index === -1) return this.#json({ message: "Not found" }, 404);
       const entry = this.entries[index]!;
-      if (method === "GET") return this.#json({ time_entry: entry }, 200, entry.id);
-      const precondition = this.#checkIfMatch(entry.id, headers);
-      if (precondition) return precondition;
+      // The live API has no single-entry GET; it answers 405.
+      if (method === "GET") return this.#json({ message: "Method Not Allowed" }, 405);
       if (method === "DELETE") {
         this.entries.splice(index, 1);
         return new Response(null, { status: 204 });
       }
       if (method === "PATCH") {
         Object.assign(entry, body);
-        this.#version.set(entry.id, (this.#version.get(entry.id) ?? 0) + 1);
-        return this.#json({ time_entry: entry }, 200, entry.id);
+        return this.#json(entry, 200);
       }
     }
 
     return this.#json({ message: `Unhandled ${method} ${path}` }, 404);
-  }
-
-  #checkIfMatch(id: string, headers: Headers): Response | undefined {
-    const ifMatch = headers.get("If-Match");
-    if (!ifMatch) return this.#json({ message: "If-Match required" }, 428);
-    if (ifMatch !== this.#etag(id)) return this.#json({ message: "Stale" }, 412);
-    return undefined;
   }
 
   #create(body: any, running: boolean): FakeEntry {
@@ -151,29 +144,26 @@ export class FakeKeito {
       spent_date: body.spent_date ?? now.toISOString().slice(0, 10),
       started_time: body.started_time ?? (running ? now.toISOString().slice(11, 16) : null),
       ended_time: body.ended_time ?? null,
+      timer_started_at: running ? now.toISOString() : null,
       hours: running ? null : (body.hours ?? null),
       is_running: running,
       notes: body.notes ?? null,
       source: body.source ?? null,
     };
     this.entries.push(entry);
-    this.#version.set(entry.id, 1);
     return entry;
   }
 
   #stop(entry: FakeEntry): void {
     entry.is_running = false;
     entry.ended_time = this.#options.now().toISOString().slice(11, 16);
-    this.#version.set(entry.id, (this.#version.get(entry.id) ?? 0) + 1);
   }
 
-  #etag(id: string): string {
-    return `"v${this.#version.get(id) ?? 0}"`;
-  }
-
-  #json(body: unknown, status = 200, etagFor?: string): Response {
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (etagFor) headers.ETag = this.#etag(etagFor);
-    return new Response(JSON.stringify(body), { status, headers });
+  /** The live API sends no ETag on any response. */
+  #json(body: unknown, status = 200): Response {
+    return new Response(JSON.stringify(body), {
+      status,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 }

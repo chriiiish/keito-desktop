@@ -37,6 +37,12 @@ export interface TimeEntry {
   spent_date: string;
   started_time: string | null;
   ended_time: string | null;
+  /**
+   * ISO instant the timer began. The live API provides this; prefer it over reconstructing
+   * a start from spent_date plus an HH:mm wall-clock string.
+   */
+  timer_started_at?: string | null;
+  duration_seconds?: number | null;
   hours: number | null;
   is_running: boolean;
   notes: string | null;

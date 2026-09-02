@@ -111,13 +111,14 @@ describe("stopping the timer", () => {
     expect(switcher.current()).toEqual({ status: "idle" });
   });
 
-  it("sends the entry's ETag as If-Match, which Keito requires for mutations", async () => {
+  it("stops through the dedicated endpoint, letting the server set the end time", async () => {
     await switcher.switchTo(DEV);
 
     await switcher.stop();
 
     const stop = keito.requests.find((r) => r.path.endsWith("/stop"))!;
-    expect(stop.headers.get("If-Match")).toBe('"v1"');
+    expect(stop.method).toBe("PATCH");
+    expect(stop.body).toEqual({});
   });
 
   it("does nothing when there is no timer to stop", async () => {
@@ -136,7 +137,7 @@ describe("picking up a timer started elsewhere", () => {
     expect(switcher.current()).toMatchObject({ status: "running", pair: QA });
   });
 
-  it("can stop a timer it adopted, fetching the ETag it never saw", async () => {
+  it("can stop a timer it adopted, without a prior read", async () => {
     keito.seedRunning({ project_id: "p_acme", task_id: "t_qa" });
     await switcher.refresh([DEV, QA]);
 
@@ -144,6 +145,8 @@ describe("picking up a timer started elsewhere", () => {
 
     expect(keito.running).toBeUndefined();
     expect(switcher.current()).toEqual({ status: "idle" });
+    // The live API has no GET /time_entries/:id — it answers 405.
+    expect(keito.requests.some((r) => /^\/time_entries\/[^/]+$/.test(r.path))).toBe(false);
   });
 
   it("goes idle when Keito says nothing is running", async () => {

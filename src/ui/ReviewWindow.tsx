@@ -31,13 +31,18 @@ export function ReviewWindow(): JSX.Element {
       {snapshot.keyStatus !== "ready" || tab === "settings" ? (
         <Settings snapshot={snapshot} onChange={setSnapshot} />
       ) : (
-        <Entries />
+        <Entries revision={snapshot.revision} />
       )}
     </div>
   );
 }
 
-function Entries(): JSX.Element {
+/**
+ * `revision` moves whenever anything changed server-side — a timer started from the
+ * popover, a stop, a delete. Reloading on it is what keeps this table from going stale
+ * until it happens to be remounted.
+ */
+function Entries({ revision }: { revision: number }): JSX.Element {
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [range, setRange] = useState<"today" | "week">("today");
   const [error, setError] = useState<string | null>(null);
@@ -45,15 +50,20 @@ function Entries(): JSX.Element {
   const load = useCallback(async () => {
     const today = new Date();
     const from = range === "today" ? isoDate(today) : isoDate(weekStart(today));
-    setEntries(await keito.listEntries(from, isoDate(today)));
+    try {
+      setEntries(await keito.listEntries(from, isoDate(today)));
+      setError(null);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    }
   }, [range]);
 
-  useEffect(() => void load(), [load]);
+  useEffect(() => void load(), [load, revision]);
 
   const edit = async (id: string, patch: { notes?: string; startedTime?: string; endedTime?: string }) => {
     try {
-      await keito.updateEntry(id, patch);
-      setError(null);
+      const next = await keito.updateEntry(id, patch);
+      setError(next.error);
       await load();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
@@ -123,7 +133,13 @@ function Entries(): JSX.Element {
                 <button
                   className="link danger"
                   onClick={async () => {
-                    await keito.deleteEntry(entry.id);
+                    // Never leave a failed delete looking like a successful one.
+                    try {
+                      const next = await keito.deleteEntry(entry.id);
+                      setError(next.error);
+                    } catch (cause) {
+                      setError(cause instanceof Error ? cause.message : String(cause));
+                    }
                     await load();
                   }}
                 >

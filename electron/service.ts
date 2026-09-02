@@ -20,11 +20,35 @@ export interface Snapshot {
   hotkey: string;
   /** The company id sent as Keito-Account-Id, once known. */
   accountId: string | null;
+  /**
+   * Bumped whenever anything server-side changed. Windows holding their own derived data
+   * (the entries table) reload when this moves, rather than going stale until remounted.
+   */
+  revision: number;
   timer:
     | { status: "idle" }
     | { status: "running"; pair: Pair; entryId: string; startedAtMs: number }
     | { status: "needs-auth" };
   error: string | null;
+}
+
+/**
+ * When a timer began, in epoch ms. The live API supplies `timer_started_at` as a real
+ * instant; the spent_date + HH:mm reconstruction is only a fallback for entries without it.
+ */
+function startMsOf(entry: TimeEntry, timeZone: () => string): number {
+  if (entry.timer_started_at) {
+    const parsed = Date.parse(entry.timer_started_at);
+    if (!Number.isNaN(parsed)) return parsed;
+  }
+  if (entry.started_time) {
+    try {
+      return parseWorkspaceTime(entry.spent_date, entry.started_time, timeZone()).getTime();
+    } catch {
+      // Falls through to "now", which is wrong but harmless: the clock just restarts.
+    }
+  }
+  return Date.now();
 }
 
 /**
@@ -42,6 +66,7 @@ export class AppService {
   #keyStatus: Snapshot["keyStatus"] = "missing";
   #error: string | null = null;
   #startedAtMs: number | null = null;
+  #revision = 0;
 
   private constructor(prefs: PreferencesStore, secrets: SecretStore, log: Logger) {
     this.#prefs = prefs;
@@ -85,6 +110,7 @@ export class AppService {
       workspaceTimezone: prefs.workspaceTimezone,
       hotkey: prefs.hotkey,
       accountId: prefs.accountId ?? null,
+      revision: this.#revision,
       timer:
         state.status === "running"
           ? {
@@ -157,7 +183,8 @@ export class AppService {
     if (!pair || !this.#switcher) return this.snapshot();
     return this.#run(async () => {
       await this.#switcher!.switchTo(pair, notes);
-      this.#startedAtMs = Date.now();
+      const state = this.#switcher!.current();
+      this.#startedAtMs = state.status === "running" ? startMsOf(state.entry, () => this.#prefs.get().workspaceTimezone) : Date.now();
       // A new use changes the ranking, so recents are recomputed on the next refresh.
     });
   }
@@ -173,6 +200,7 @@ export class AppService {
   async toggleFavourite(pairId: string): Promise<Snapshot> {
     const isFavourite = this.#prefs.get().favourites.includes(pairId);
     await (isFavourite ? this.#prefs.removeFavourite(pairId) : this.#prefs.addFavourite(pairId));
+    this.#revision++;
     return this.snapshot();
   }
 
@@ -189,8 +217,7 @@ export class AppService {
       await this.#switcher!.refresh(this.#workspace.catalog);
       const after = this.#switcher!.current();
       if (after.status === "running" && before.status !== "running") {
-        // Adopted a timer started elsewhere; we only know the date and HH:mm it began.
-        this.#startedAtMs = this.#adoptedStartMs(after.entry);
+        this.#startedAtMs = startMsOf(after.entry, () => this.#prefs.get().workspaceTimezone);
       }
     });
   }
@@ -204,16 +231,20 @@ export class AppService {
   async updateEntry(
     id: string,
     patch: { notes?: string; startedTime?: string; endedTime?: string },
-  ): Promise<TimeEntry | null> {
-    if (!this.#client) return null;
-    const { etag } = await this.#client.getTimeEntry(id);
-    return this.#client.updateTimeEntry(id, patch, etag ?? "");
+  ): Promise<Snapshot> {
+    if (!this.#client) return this.snapshot();
+    return this.#run(async () => {
+      await this.#client!.updateTimeEntry(id, patch);
+    });
   }
 
-  async deleteEntry(id: string): Promise<void> {
-    if (!this.#client) return;
-    const { etag } = await this.#client.getTimeEntry(id);
-    await this.#client.deleteTimeEntry(id, etag ?? "");
+  async deleteEntry(id: string): Promise<Snapshot> {
+    if (!this.#client) return this.snapshot();
+    return this.#run(async () => {
+      await this.#client!.deleteTimeEntry(id);
+      // A deleted entry may have been the running one; re-read what Keito now says.
+      await this.#switcher?.refresh(this.#workspace.catalog);
+    });
   }
 
   /** Trims the running entry back to when the user went idle, then stops it. */
@@ -223,12 +254,9 @@ export class AppService {
 
     const zone = this.#prefs.get().workspaceTimezone;
     return this.#run(async () => {
-      const { etag } = await this.#client!.getTimeEntry(state.entry.id);
-      await this.#client!.updateTimeEntry(
-        state.entry.id,
-        { endedTime: formatWorkspaceTime(awaySince, zone) },
-        etag ?? "",
-      );
+      await this.#client!.updateTimeEntry(state.entry.id, {
+        endedTime: formatWorkspaceTime(awaySince, zone),
+      });
       await this.#switcher!.refresh(this.#workspace.catalog);
       this.#startedAtMs = null;
     });
@@ -277,21 +305,11 @@ export class AppService {
     else this.#log.warn(line, record.error ? { error: record.error } : undefined);
   };
 
-  /** Reconstructs an adopted timer's start from its spent_date and HH:mm start. */
-  #adoptedStartMs(entry: TimeEntry): number {
-    if (!entry.started_time) return Date.now();
-    try {
-      const zone = this.#prefs.get().workspaceTimezone;
-      return parseWorkspaceTime(entry.spent_date, entry.started_time, zone).getTime();
-    } catch {
-      return Date.now();
-    }
-  }
-
   /** Runs an action, capturing the failure for the UI instead of crashing the app. */
   async #run(action: () => Promise<void>): Promise<Snapshot> {
     try {
       await action();
+      this.#revision++;
       this.#error = null;
     } catch (error) {
       if (error instanceof KeitoAuthError) this.#keyStatus = "rejected";

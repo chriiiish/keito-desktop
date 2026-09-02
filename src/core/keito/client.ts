@@ -55,10 +55,13 @@ export interface KeitoClientOptions {
   onRequest?: (record: RequestRecord) => void;
 }
 
-/** An entity plus the ETag Keito handed back, needed as If-Match on the next mutation. */
-export interface Versioned<T> {
-  entry: T;
-  etag: string | null;
+/**
+ * Single entries come back unwrapped from the live API, though the docs describe a
+ * `time_entry` wrapper. Accept either rather than crash on the difference.
+ */
+function unwrapEntry(body: unknown): TimeEntry {
+  const wrapped = body as { time_entry?: TimeEntry };
+  return wrapped?.time_entry ?? (body as TimeEntry);
 }
 
 export interface CreateTimeEntryInput {
@@ -123,7 +126,7 @@ export class KeitoClient {
    * Creates a time entry. For a running timer pass `isRunning` and no hours: the server
    * sets the start time, so the client never converts a timezone.
    */
-  async createTimeEntry(input: CreateTimeEntryInput): Promise<Versioned<TimeEntry>> {
+  async createTimeEntry(input: CreateTimeEntryInput): Promise<TimeEntry> {
     const body: Record<string, unknown> = {
       project_id: input.projectId,
       task_id: input.taskId,
@@ -134,12 +137,12 @@ export class KeitoClient {
     if (input.replaceRunning) body["replace_running"] = true;
     if (input.notes) body["notes"] = input.notes;
 
-    const { body: created, etag } = await this.#request("/time_entries", {
+    const { body: created } = await this.#request("/time_entries", {
       method: "POST",
       body,
       ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}),
     });
-    return { entry: (created as { time_entry: TimeEntry }).time_entry, etag };
+    return unwrapEntry(created);
   }
 
   async listProjects(): Promise<Project[]> {
@@ -163,19 +166,11 @@ export class KeitoClient {
 
     const { body } = await this.#request(`/time_entries${query}`);
     const entries = (body as { time_entries: TimeEntry[] }).time_entries;
-    // A read tells us the current ETag for each entry; remember it so a later stop or
-    // patch can satisfy Keito's If-Match requirement without an extra round trip.
     return entries;
   }
 
-  /** Reads one entry, primarily to obtain its current ETag before a mutation. */
-  async getTimeEntry(id: string): Promise<Versioned<TimeEntry>> {
-    const { body, etag } = await this.#request(`/time_entries/${id}`);
-    return { entry: (body as { time_entry: TimeEntry }).time_entry, etag };
-  }
-
-  /** Applies a correction to an entry. `etag` comes from the read the edit was based on. */
-  async updateTimeEntry(id: string, patch: UpdateTimeEntryInput, etag: string): Promise<TimeEntry> {
+  /** Applies a correction to an entry. */
+  async updateTimeEntry(id: string, patch: UpdateTimeEntryInput): Promise<TimeEntry> {
     const body: Record<string, unknown> = {};
     if (patch.notes !== undefined) body["notes"] = patch.notes;
     if (patch.startedTime !== undefined) body["started_time"] = patch.startedTime;
@@ -185,34 +180,28 @@ export class KeitoClient {
     const { body: updated } = await this.#request(`/time_entries/${id}`, {
       method: "PATCH",
       body,
-      ifMatch: etag,
     });
-    return (updated as { time_entry: TimeEntry }).time_entry;
+    return unwrapEntry(updated);
   }
 
-  async deleteTimeEntry(id: string, etag: string): Promise<void> {
-    await this.#request(`/time_entries/${id}`, { method: "DELETE", ifMatch: etag });
+  async deleteTimeEntry(id: string): Promise<void> {
+    await this.#request(`/time_entries/${id}`, { method: "DELETE" });
   }
 
   /** Stops a running entry. The server sets the end time. */
-  async stopTimeEntry(id: string, etag: string): Promise<TimeEntry> {
-    const { body } = await this.#request(`/time_entries/${id}/stop`, {
-      method: "PATCH",
-      body: {},
-      ifMatch: etag,
-    });
-    return (body as { time_entry: TimeEntry }).time_entry;
+  async stopTimeEntry(id: string): Promise<TimeEntry> {
+    const { body } = await this.#request(`/time_entries/${id}/stop`, { method: "PATCH", body: {} });
+    return unwrapEntry(body);
   }
 
   async #request(
     path: string,
-    options: { method?: string; body?: unknown; idempotencyKey?: string; ifMatch?: string } = {},
-  ): Promise<{ body: unknown; etag: string | null }> {
+    options: { method?: string; body?: unknown; idempotencyKey?: string } = {},
+  ): Promise<{ body: unknown }> {
     const headers = new Headers({ Authorization: `Bearer ${this.#apiKey}` });
     if (this.#accountId) headers.set("Keito-Account-Id", this.#accountId);
     if (options.body !== undefined) headers.set("Content-Type", "application/json");
     if (options.idempotencyKey) headers.set("Idempotency-Key", options.idempotencyKey);
-    if (options.ifMatch) headers.set("If-Match", options.ifMatch);
 
     const method = options.method ?? "GET";
     const startedAt = Date.now();
@@ -256,19 +245,12 @@ export class KeitoClient {
       if (response.status === 409) {
         throw new KeitoConflictError(`A timer is already running in Keito${suffix}`, context);
       }
-      if (response.status === 412 || response.status === 428) {
-        throw new KeitoConflictError(
-          `This entry changed in Keito since it was loaded. Reload and try again${suffix}`,
-          context,
-        );
-      }
       throw new KeitoRequestError(`Keito returned ${response.status} for ${path}${suffix}`, context);
     }
 
     report({ ok: true, status: response.status });
 
-    const etag = response.headers.get("ETag");
     const body = response.status === 204 ? undefined : await response.json();
-    return { body, etag };
+    return { body };
   }
 }

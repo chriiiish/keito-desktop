@@ -23,10 +23,7 @@ const client = new KeitoClient({
 const created: string[] = [];
 
 afterAll(async () => {
-  for (const id of created) {
-    const { etag } = await client.getTimeEntry(id);
-    await client.deleteTimeEntry(id, etag ?? "");
-  }
+  for (const id of created) await client.deleteTimeEntry(id);
 });
 
 suite("Keito API contract", () => {
@@ -35,6 +32,20 @@ suite("Keito API contract", () => {
 
     expect(identity.userId).toBeTruthy();
     expect(identity.accountId).toBeTruthy();
+  });
+
+  it("has no single-entry GET endpoint, so nothing may depend on one", async () => {
+    const [existing] = await client.listTimeEntries({});
+    if (!existing) return;
+
+    const response = await fetch(`https://app.keito.ai/api/v2/time_entries/${existing.id}`, {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Keito-Account-Id": process.env["KEITO_ACCOUNT_ID"] ?? "",
+      },
+    });
+
+    expect(response.status).toBe(405);
   });
 
   it("returns a catalog of (project, task) pairs", async () => {
@@ -53,7 +64,7 @@ suite("Keito API contract", () => {
     const { catalog } = await loadWorkspace(client, new Date());
     const pair = catalog[0]!;
 
-    const { entry, etag } = await client.createTimeEntry({
+    const entry = await client.createTimeEntry({
       projectId: pair.projectId,
       taskId: pair.taskId,
       spentDate: new Date().toISOString().slice(0, 10),
@@ -63,12 +74,14 @@ suite("Keito API contract", () => {
     });
     created.push(entry.id);
 
+    // The crash that motivated this assertion: the create response is NOT wrapped in
+    // `time_entry`, so an unwrapping mistake here yields undefined, not a bad field.
+    expect(entry?.id).toBeTruthy();
     expect(entry.is_running).toBe(true);
     expect(entry.started_time).toMatch(/^\d{2}:\d{2}$/);
-    // The API is documented to return an ETag; if this ever goes null, stop() breaks.
-    expect(etag).not.toBeNull();
+    expect(entry.timer_started_at).toBeTruthy();
 
-    const stopped = await client.stopTimeEntry(entry.id, etag!);
+    const stopped = await client.stopTimeEntry(entry.id);
     expect(stopped.is_running).toBe(false);
   });
 });

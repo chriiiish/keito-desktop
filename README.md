@@ -46,6 +46,9 @@ written to `preferences.json`.
   The workspace-timezone setting only renders and parses manual edits.
 - **`src/core/` imports nothing from Electron** and does no I/O it isn't handed. That's what
   keeps the test suite a fast in-process loop.
+- **The fake mirrors the API as observed, not as documented.** Several documented
+  behaviours — a single-entry GET, ETags, `If-Match`, a `time_entry` response wrapper —
+  do not exist. `npm run test:contract` is what keeps the two in step.
 
 ## Commands
 

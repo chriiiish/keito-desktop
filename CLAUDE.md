@@ -70,6 +70,11 @@ recents are both lists of those ids.
 These are properties of the Keito API, not choices — changing code that depends on them will
 break against the real server even while the fake keeps passing.
 
+**Several were verified against the live API only after the docs proved wrong.** Where this
+file and `keito.ai/docs` disagree, this file won `test/fake-keito.ts` mirrors observed
+behaviour, not documented behaviour. Treat any new doc-derived assumption as unverified
+until a contract test covers it.
+
 - **Auth is two headers**: `Authorization: Bearer kto_…` and `Keito-Account-Id`. There is no
   OAuth flow; both are entered by the user. **The company id cannot be auto-discovered** —
   verified against the live API, `/users/me` without the header answers
@@ -88,8 +93,15 @@ break against the real server even while the fake keeps passing.
   through `PATCH /:id/stop`. Keito exchanges `HH:mm` in *workspace* timezone, not ISO, so
   letting the server stamp both ends keeps timezone conversion out of the switching path
   entirely. `src/core/time/workspace-time.ts` exists only for manual edits in the window.
-- **Mutations require `If-Match`** with an ETag from a read. `TimerSwitcher` caches the ETag
-  from the create; a timer adopted via `refresh()` has none, so `stop()` re-reads to get one.
+- **There is no `GET /time_entries/:id`** — it answers `405`. Nothing may depend on reading
+  a single entry; `PATCH` and `DELETE` go straight at the id.
+- **No ETags, no `If-Match`.** The docs describe both; the live API sends neither and
+  requires neither. An earlier version built a whole ETag layer on that and it was fiction.
+- **Single entries come back unwrapped**, not under a `time_entry` key, though the docs show
+  the wrapper. `unwrapEntry()` accepts either. Getting this wrong yields `undefined` rather
+  than a bad field, which then crashes somewhere far away.
+- **Entries carry `timer_started_at`**, a real ISO instant. Prefer it over reconstructing a
+  start from `spent_date` + `started_time`; that reconstruction is only a fallback.
 
 ## Testing approach
 
@@ -120,6 +132,10 @@ where the actual reason lives, and losing it makes every failure look identical.
 
 `KeitoNetworkError` means the request never reached Keito; an HTTP error status is
 `KeitoRequestError` or something more specific.
+
+`Snapshot.revision` increments on every server-side change. Windows holding their own
+derived data (the entries table) reload when it moves — without that they go stale until
+remounted.
 
 ## Failure model
 

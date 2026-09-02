@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { FakeKeito } from "../../../test/fake-keito.js";
 import { KeitoClient } from "./client.js";
-import { KeitoConflictError } from "./errors.js";
 
 const NOW = new Date("2026-09-02T09:30:00Z");
 let keito: FakeKeito;
@@ -22,32 +21,43 @@ describe("reviewing and correcting entries", () => {
     expect(entries.map((e) => e.project_id)).toEqual(["p_a"]);
   });
 
-  it("corrects the notes and times on an entry, proving the edit with If-Match", async () => {
+  it("corrects the notes and times on an entry in one call", async () => {
     const seeded = keito.seedRunning({ project_id: "p_a", task_id: "t_a" });
-    const { etag } = await client.getTimeEntry(seeded.id);
 
-    const updated = await client.updateTimeEntry(
-      seeded.id,
-      { notes: "Actually the standup", startedTime: "09:00", endedTime: "09:25" },
-      etag!,
-    );
+    const updated = await client.updateTimeEntry(seeded.id, {
+      notes: "Actually the standup",
+      startedTime: "09:00",
+      endedTime: "09:25",
+    });
 
-    expect(updated).toMatchObject({ notes: "Actually the standup", started_time: "09:00", ended_time: "09:25" });
+    expect(updated).toMatchObject({
+      notes: "Actually the standup",
+      started_time: "09:00",
+      ended_time: "09:25",
+    });
   });
 
-  it("refuses an edit built on a stale read rather than clobbering someone else's change", async () => {
+  it("edits without a prior read, because there is no single-entry GET endpoint", async () => {
     const seeded = keito.seedRunning({ project_id: "p_a", task_id: "t_a" });
 
-    await expect(
-      client.updateTimeEntry(seeded.id, { notes: "late" }, '"v0"'),
-    ).rejects.toBeInstanceOf(KeitoConflictError);
+    await client.updateTimeEntry(seeded.id, { notes: "no read first" });
+
+    expect(keito.requests.filter((r) => r.method === "GET")).toHaveLength(0);
+  });
+
+  it("reads an entry back unwrapped, as the live API returns it", async () => {
+    const seeded = keito.seedRunning({ project_id: "p_a", task_id: "t_a" });
+
+    const updated = await client.updateTimeEntry(seeded.id, { notes: "x" });
+
+    // Not `{ time_entry: { ... } }` — the entry itself.
+    expect(updated.id).toBe(seeded.id);
   });
 
   it("deletes an entry logged by mistake", async () => {
     const seeded = keito.seedRunning({ project_id: "p_a", task_id: "t_a" });
-    const { etag } = await client.getTimeEntry(seeded.id);
 
-    await client.deleteTimeEntry(seeded.id, etag!);
+    await client.deleteTimeEntry(seeded.id);
 
     expect(keito.entries).toHaveLength(0);
   });
