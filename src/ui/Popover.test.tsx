@@ -47,6 +47,7 @@ const snapshot: Snapshot = {
   favourites: ["p_acme:t_qa"],
   hidden: [],
   today: [],
+  yesterday: [],
   workspaceTimezone: "UTC",
   hotkey: "CommandOrControl+Shift+K",
   hotkeyRegistered: true,
@@ -480,5 +481,89 @@ describe("today's entries", () => {
     render(<Popover />);
 
     expect(await screen.findByLabelText(/^Resume Ops$/)).toBeDefined();
+  });
+});
+
+/**
+ * Yesterday's rows cannot use the restart endpoint: it continues the entry it is given,
+ * which would file today's work under yesterday's date.
+ */
+describe("yesterday's entries", () => {
+  const yesterdayEntry = (over: Partial<TimeEntry> = {}) =>
+    entry("te_y", "p_bank", "t_ops", { spent_date: "2026-09-01", notes: "Migration", ...over });
+
+  const withYesterday = (over: Partial<Snapshot> = {}) =>
+    ({ ...snapshot, yesterday: [yesterdayEntry()], ...over }) satisfies Snapshot;
+
+  it("lists them under their own heading", async () => {
+    api.getSnapshot.mockResolvedValue(withYesterday());
+
+    render(<Popover />);
+
+    expect(await screen.findByText("Yesterday")).toBeDefined();
+    expect(screen.getByText("Migration")).toBeDefined();
+  });
+
+  it("leaves the heading out when there is nothing behind you", async () => {
+    render(<Popover />);
+    await screen.findByText("Today");
+
+    expect(screen.queryByText("Yesterday")).toBeNull();
+  });
+
+  it("starts a new entry today rather than restarting yesterday's", async () => {
+    api.getSnapshot.mockResolvedValue(withYesterday());
+    api.switchTo.mockResolvedValue(snapshot);
+    render(<Popover />);
+
+    await userEvent.setup().click(await screen.findByLabelText(/^Start Ops again today$/));
+
+    expect(api.switchTo).toHaveBeenCalledWith("p_bank:t_ops", "Migration");
+    expect(api.resumeEntry).not.toHaveBeenCalled();
+  });
+
+  it("carries no note across when the old entry had none", async () => {
+    api.getSnapshot.mockResolvedValue(withYesterday({ yesterday: [yesterdayEntry({ notes: null })] }));
+    api.switchTo.mockResolvedValue(snapshot);
+    render(<Popover />);
+
+    await userEvent.setup().click(await screen.findByLabelText(/^Start Ops again today$/));
+
+    expect(api.switchTo).toHaveBeenCalledWith("p_bank:t_ops", undefined);
+  });
+
+  it("closes the popover once the new timer is running", async () => {
+    api.getSnapshot.mockResolvedValue(withYesterday());
+    api.switchTo.mockResolvedValue(snapshot);
+    render(<Popover />);
+
+    await userEvent.setup().click(await screen.findByLabelText(/^Start Ops again today$/));
+
+    expect(api.closePopover).toHaveBeenCalled();
+  });
+
+  // Today's rows keep the restart endpoint, so a day still holds one row per task.
+  it("leaves today's rows resuming the entry they already have", async () => {
+    api.getSnapshot.mockResolvedValue(withYesterday({ today: [entry("te_t", "p_acme", "t_dev")] }));
+    api.resumeEntry.mockResolvedValue(snapshot);
+    render(<Popover />);
+
+    await userEvent.setup().click(await screen.findByLabelText(/^Resume Development$/));
+
+    expect(api.resumeEntry).toHaveBeenCalledWith("te_t");
+    expect(api.switchTo).not.toHaveBeenCalled();
+  });
+
+  it("cannot start one whose project has since been archived", async () => {
+    api.getSnapshot.mockResolvedValue(
+      withYesterday({
+        yesterday: [entry("te_gone", "p_gone", "t_gone", { spent_date: "2026-09-01" })],
+      }),
+    );
+
+    render(<Popover />);
+
+    const play = await screen.findByLabelText(/^Start Unknown task again today$/);
+    expect(play.hasAttribute("disabled")).toBe(true);
   });
 });

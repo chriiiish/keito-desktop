@@ -69,6 +69,51 @@ describe("loadEntries", () => {
     expect(result.running?.id).toBe("te_1");
   });
 
+  it("separates yesterday from today without a second request", async () => {
+    const keito = keitoWith();
+    keito.seedRunning({ project_id: "p_acme", task_id: "t_dev", spent_date: "2026-09-02" });
+    keito.entries.push({
+      ...keito.entries[0]!,
+      id: "te_yesterday",
+      spent_date: "2026-09-01",
+      is_running: false,
+    });
+    keito.entries.push({
+      ...keito.entries[0]!,
+      id: "te_older",
+      spent_date: "2026-08-31",
+      is_running: false,
+    });
+
+    const result = await loadEntries(clientFor(keito), NOW, "UTC");
+
+    expect(keito.requests).toHaveLength(1);
+    expect(result.today.map((entry) => entry.id)).toEqual(["te_1"]);
+    expect(result.yesterday.map((entry) => entry.id)).toEqual(["te_yesterday"]);
+  });
+
+  it("moves the yesterday boundary with the workspace calendar, not a UTC clock", async () => {
+    const keito = keitoWith();
+    keito.entries.push({
+      ...keito.entries[0]!,
+      id: "te_1st",
+      spent_date: "2026-09-01",
+      is_running: false,
+    });
+
+    // 22:00 UTC on the 1st is already the 2nd in Sydney, so the 1st is yesterday there —
+    // while Los Angeles is still on the 1st, making it today.
+    const early = new Date("2026-09-01T22:00:00Z");
+
+    const sydney = await loadEntries(clientFor(keito), early, "Australia/Sydney");
+    expect(sydney.yesterday.map((entry) => entry.id)).toContain("te_1st");
+    expect(sydney.today.map((entry) => entry.id)).not.toContain("te_1st");
+
+    const la = await loadEntries(clientFor(keito), early, "America/Los_Angeles");
+    expect(la.today.map((entry) => entry.id)).toContain("te_1st");
+    expect(la.yesterday.map((entry) => entry.id)).not.toContain("te_1st");
+  });
+
   it("reads today from the workspace's calendar, not UTC's", async () => {
     // 21:30 in Sydney on the 2nd is still 11:30 UTC on the 2nd — but at 09:30 UTC it is
     // already the evening of the 2nd there, while Los Angeles is on the 1st.

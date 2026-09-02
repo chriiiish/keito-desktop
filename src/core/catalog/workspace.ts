@@ -9,6 +9,11 @@ export interface EntriesSnapshot {
   recents: string[];
   /** Today's entries, newest first. */
   today: TimeEntry[];
+  /**
+   * Yesterday's, on the same terms. Free: the 30-day window fetched for ranking already
+   * contains them, so showing them costs no extra request.
+   */
+  yesterday: TimeEntry[];
   /** The one running entry, if any — no separate request needed to find it. */
   running: TimeEntry | null;
 }
@@ -53,9 +58,14 @@ export async function loadEntries(
     to: today,
   });
 
+  // Yesterday by the workspace calendar too, so the boundary moves with `today` rather
+  // than sitting a fixed 24 hours behind a UTC clock.
+  const previous = shiftDate(today, -1);
+
   return {
     recents: rankRecents(entries, today),
     today: entries.filter((entry) => entry.spent_date === today),
+    yesterday: entries.filter((entry) => entry.spent_date === previous),
     running: entries.find((entry) => entry.is_running) ?? null,
   };
 }
