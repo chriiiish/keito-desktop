@@ -271,12 +271,24 @@ silently rather than loudly.
 
 ## Releases
 
-**The tag decides the version.** `version` in `package.json` is a placeholder: the release
-workflow resolves `vX.Y.Z` to `X.Y.Z` and stamps it with `npm pkg set version` after
-`npm ci`, so bumping the file by hand is not part of cutting a release. It was the other
-way round once, and v0.1.1 shipped three files named 0.1.0 — visible only on the download
-page, after the fact. A step now fails the build if an artifact's name does not carry the
-released version, because a glob upload will otherwise ship whatever it finds.
+**The tag decides the version, and the release writes it back.** The workflow resolves
+`vX.Y.Z` to `X.Y.Z` and stamps it with `npm pkg set version` after `npm ci`, so bumping
+the file by hand is not part of cutting a release. It was the other way round once, and
+v0.1.1 shipped three files named 0.1.0 — visible only on the download page, after the
+fact. A step now fails the build if an artifact's name does not carry the released
+version, because a glob upload will otherwise ship whatever it finds.
+
+Once the release exists, `record-version` writes that version into `package.json` and
+`package-lock.json` on `main`, so the repository stops disagreeing with what shipped.
+
+That push needs a **deploy key**, not the workflow's own token: a ruleset's bypass list
+only offers GitHub Apps installed on the repository, and `github-actions` is not one that
+can be installed, so Actions itself can never be a bypass actor and no app id will do.
+The `main` ruleset admits `DeployKey` instead, and the job checks out over SSH with
+`secrets.RELEASE_DEPLOY_KEY`. If that key is missing from the secrets or from the bypass
+list the job fails loudly rather than routing around it — the release is already
+published by then, and a version silently left unrecorded is the thing this job exists to
+prevent.
 
 **The download names are literals, not `${productName}`.** `artifactName` spells out
 `Keito-Timer-…` because the product name contains a space and GitHub rewrites a space in a

@@ -196,3 +196,63 @@ jobs:
           files: |
             dist/*.dmg
             dist/*.exe
+
+  # The build stamps the version into the artifacts, but the repository still said 0.1.0
+  # afterwards — so `main` never matched anything that had shipped. This writes it back.
+  record-version:
+    name: Record the released version
+    needs: [meta, release]
+    if: always() && needs.release.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      # Checked out over SSH with a deploy key, because that key is what the `main`
+      # ruleset admits as a bypass actor. GitHub Actions itself cannot be one: the bypass
+      # list only offers GitHub Apps installed on the repository, and github-actions is
+      # not installable, which is why no app id will do here.
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+          ssh-key: ${{ secrets.RELEASE_DEPLOY_KEY }}
+
+      # Pinned to the same version the build uses. `npm version` rewrites
+      # package-lock.json, and a different npm major can rewrite it in its own format —
+      # so an unpinned toolchain would eventually commit a lockfile reformat to main,
+      # unreviewed, under a message that says it only set the version.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Write the version back
+        env:
+          VERSION: ${{ needs.meta.outputs.version }}
+          TAG: ${{ needs.meta.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          current=$(node -p "require('./package.json').version")
+          if [ "$current" = "$VERSION" ]; then
+            echo "package.json is already $VERSION — nothing to write back."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # `npm version` rather than `npm pkg set`: it writes the lockfile too, and
+          # leaving those two disagreeing is its own small mess.
+          npm version --no-git-tag-version "$VERSION"
+          git add package.json package-lock.json
+          git commit -m "chore: set the version to $VERSION" \
+                     -m "$TAG is released, so this is what package.json should say."
+
+          # No fallback. A refused push means the deploy key is missing from the secrets
+          # or from the ruleset's bypass list, and both are worth fixing rather than
+          # papering over — the release itself is already published either way.
+          if ! git push origin HEAD:main; then
+            echo "::error::Could not push $VERSION to main. Check that RELEASE_DEPLOY_KEY is set and that Deploy keys are on the bypass list of the main ruleset."
+            exit 1
+          fi
+          echo "Wrote $VERSION back to main."
