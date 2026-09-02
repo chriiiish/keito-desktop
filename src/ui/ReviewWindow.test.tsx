@@ -543,6 +543,78 @@ describe("the connection tab", () => {
   });
 });
 
+describe("the connection tab before it works", () => {
+  const disconnected = {
+    ...snapshot,
+    keyStatus: "missing",
+    identity: null,
+    apiKeyHint: null,
+    accountId: null,
+  } satisfies Snapshot;
+
+  const open = async (over: Partial<Snapshot> = {}) => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue({ ...disconnected, ...over } satisfies Snapshot);
+    render(<ReviewWindow />);
+    await screen.findByRole("button", { name: "Connect" });
+    return user;
+  };
+
+  // Most people setting this up cannot issue themselves a key, so the instructions have
+  // to name who can rather than only describing the field.
+  it("says who to ask and what to ask for", async () => {
+    await open();
+
+    const steps = screen.getByRole("list");
+    expect(steps.textContent).toMatch(/administrator/i);
+    expect(steps.textContent).toMatch(/write-enabled/i);
+    expect(steps.textContent).toMatch(/Company ID/i);
+  });
+
+  // Both failures look like a typo otherwise: a read-only key is refused only when a
+  // timer starts, and a missing company id arrives as a server error.
+  it("warns that a read-only key will not do", async () => {
+    await open();
+
+    expect(screen.getByRole("list").textContent).toMatch(/read-only/i);
+    expect(screen.getByText(/cannot be looked up for you/i)).toBeDefined();
+  });
+
+  it("offers to run at startup while someone is here anyway", async () => {
+    await open();
+
+    expect(screen.getByText(/Don’t forget you can start Keito Timer when you log in/)).toBeDefined();
+    expect(screen.getByLabelText("Run at startup")).toBeDefined();
+  });
+
+  it("sets it from there", async () => {
+    const user = await open();
+    api.setOpenAtLogin.mockResolvedValue({ ...disconnected, openAtLogin: true } satisfies Snapshot);
+
+    await user.click(screen.getByLabelText("Run at startup"));
+
+    expect(api.setOpenAtLogin).toHaveBeenCalledWith(true);
+  });
+
+  // Nudging towards a switch that cannot move is worse than staying quiet.
+  it("stays quiet when the login item is unavailable", async () => {
+    await open({ canOpenAtLogin: false });
+
+    expect(screen.queryByText(/Don’t forget you can start Keito Timer/)).toBeNull();
+    expect(screen.queryByLabelText("Run at startup")).toBeNull();
+  });
+
+  it("drops both once the key works", async () => {
+    const user = userEvent.setup();
+    render(<ReviewWindow />);
+    await user.click(await screen.findByRole("button", { name: "Keito Connection" }));
+
+    expect(screen.getByText("You’re connected!")).toBeDefined();
+    expect(screen.queryByRole("list")).toBeNull();
+    expect(screen.queryByText(/Don’t forget you can start Keito Timer/)).toBeNull();
+  });
+});
+
 describe("run at startup", () => {
   const openSettings = async (over: Partial<Snapshot> = {}) => {
     const user = userEvent.setup();

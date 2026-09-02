@@ -278,12 +278,30 @@ function Connection({
           </span>
         </p>
       ) : (
-        <p className="hint">
-          Paste a <strong>full-access integration key</strong> from Keito (Settings →
-          Integrations) and your <strong>Company ID</strong>. Both are required — Keito sends
-          the company id on every request, so it cannot be detected for you. A personal
-          read-only sync key will not work: it cannot create time entries.
-        </p>
+        /* Most people setting this up cannot issue themselves a key, so the first step is
+           naming who can. The constraints are spelled out because both failures look like
+           a typo otherwise: a read-only key is rejected only when it is used, and a
+           missing company id reads as a server error. */
+        <div className="connect-steps">
+          <h2>Getting connected</h2>
+          <ol>
+            <li>
+              Ask your Keito administrator for a <strong>write-enabled integration key</strong>{" "}
+              and your <strong>Company ID</strong>. If you administer Keito yourself, both are
+              under <strong>Settings → Integrations</strong>.
+            </li>
+            <li>
+              Check the key is <strong>full access</strong>, not a personal read-only sync
+              key. A read-only key can see your time but cannot record any, so it fails at
+              the first timer rather than here.
+            </li>
+            <li>Paste both below and press Connect.</li>
+          </ol>
+          <p className="hint">
+            The company id is not optional and cannot be looked up for you — Keito wants it
+            on every request, including the one that would tell us what it is.
+          </p>
+        </div>
       )}
 
       <form
@@ -321,6 +339,24 @@ function Connection({
           )}
         </div>
       </form>
+
+      {/* Worth saying once, here, where someone is setting the app up for the first time:
+          a tray app you have to remember to launch is one you stop using. Hidden entirely
+          when the login item is unavailable — nudging towards a switch that cannot move
+          would be worse than staying quiet. */}
+      {!connected && snapshot.canOpenAtLogin && (
+        <div className="setting-row startup-nudge">
+          <span className="setting-label">
+            Don’t forget you can start Keito Timer when you log in. You can change this in
+            Settings later.
+          </span>
+          <Toggle
+            checked={snapshot.openAtLogin}
+            label="Run at startup"
+            onChange={(next) => keito.setOpenAtLogin(next).then(onChange)}
+          />
+        </div>
+      )}
 
       {snapshot.error && (
         <div className="error">
