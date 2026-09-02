@@ -130,6 +130,10 @@ colour; add a token so light and dark stay in step.
 
 `CategoryPicker` is a custom combobox rather than a `<select>` on purpose: native options
 cannot hold a favourite button and cannot be type-filtered across project and task together.
+Losing the native keyboard behaviour means reimplementing it: an arrow on the closed
+trigger opens the list one step from the current selection, the highlight is tracked with
+`aria-activedescendant` on the filter input rather than by moving focus, Enter picks and
+then hands focus to the note, and Escape closes and returns focus to the trigger.
 
 **Every control that calls the API goes through `AsyncButton` / `useAsyncAction`** (or the
 `Toggle` in `ProjectsTab`), which disables itself and shows a spinner until the call

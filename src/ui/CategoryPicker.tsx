@@ -17,6 +17,9 @@ interface CategoryPickerProps {
  * A filterable category dropdown. Native <select> can't do this: options can't hold a
  * favourite button, and there is no way to type-filter across project and task together.
  */
+/** Stable per-option DOM id, for aria-activedescendant. */
+const optionId = (pairId: string) => `category-option-${pairId.replace(/[^\w-]/g, "_")}`;
+
 export function CategoryPicker({
   catalog,
   favourites,
@@ -31,6 +34,8 @@ export function CategoryPicker({
   const [cursor, setCursor] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
   const filterRef = useRef<HTMLInputElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const cursorRef = useRef<HTMLLIElement>(null);
 
   const result = useMemo(
     () => buildPicker({ catalog, favourites, recents, hidden, query }),
@@ -46,6 +51,12 @@ export function CategoryPicker({
   const selected = catalog.find((pair) => pair.id === selectedId);
 
   useEffect(() => setCursor(0), [query]);
+
+  // Keep the highlighted row visible when arrowing past the edge of the menu.
+  useEffect(() => {
+    // Optional call: jsdom, and some embedded runtimes, do not implement it.
+    cursorRef.current?.scrollIntoView?.({ block: "nearest" });
+  }, [cursor, open]);
   useEffect(() => {
     if (open) filterRef.current?.focus();
     else setQuery("");
@@ -66,7 +77,27 @@ export function CategoryPicker({
     setOpen(false);
   };
 
+  /** Opens with the highlight already on `index`, so arrows continue from there. */
+  const openAt = (index: number) => {
+    setCursor(Math.max(0, Math.min(index, flat.length - 1)));
+    setOpen(true);
+  };
+
+  const selectedIndex = () => {
+    const index = flat.findIndex((pair) => pair.id === selectedId);
+    return index >= 0 ? index : 0;
+  };
+
   const onKeyDown = (event: React.KeyboardEvent) => {
+    // Closed: an arrow opens the list, moving one step from whatever is selected.
+    if (!open) {
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        openAt(selectedIndex() + (event.key === "ArrowDown" ? 1 : -1));
+      }
+      return;
+    }
+
     if (event.key === "ArrowDown") {
       event.preventDefault();
       setCursor((c) => Math.min(c + 1, flat.length - 1));
@@ -82,6 +113,7 @@ export function CategoryPicker({
     } else if (event.key === "Escape") {
       event.stopPropagation();
       setOpen(false);
+      triggerRef.current?.focus();
     }
   };
 
@@ -90,6 +122,8 @@ export function CategoryPicker({
     return (
       <li
         key={pair.id}
+        id={optionId(pair.id)}
+        ref={index === cursor ? cursorRef : undefined}
         role="option"
         aria-selected={pair.id === selectedId}
         className={`option${index === cursor ? " cursor" : ""}`}
@@ -114,12 +148,13 @@ export function CategoryPicker({
   return (
     <div className="picker" ref={rootRef} onKeyDown={onKeyDown}>
       <button
+        ref={triggerRef}
         type="button"
         className="picker-trigger"
         aria-label="Category"
         aria-haspopup="listbox"
         aria-expanded={open}
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => (open ? setOpen(false) : openAt(selectedIndex()))}
       >
         <span className="picker-value">
           {selected ? (
@@ -142,10 +177,14 @@ export function CategoryPicker({
             ref={filterRef}
             className="picker-filter"
             placeholder="Filter projects and tasks…"
+            role="combobox"
+            aria-expanded
+            aria-controls="category-listbox"
+            aria-activedescendant={flat[cursor] ? optionId(flat[cursor]!.id) : undefined}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
-          <ul role="listbox" className="picker-list">
+          <ul role="listbox" id="category-listbox" className="picker-list">
             {result.favourites.length > 0 && (
               <>
                 <li className="group-heading">Favourites</li>

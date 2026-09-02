@@ -317,6 +317,71 @@ describe("while an action is in flight", () => {
   });
 });
 
+describe("keyboard use of the category picker", () => {
+  const openWithArrow = async () => {
+    const user = userEvent.setup();
+    render(<Popover />);
+    (await screen.findByRole("button", { name: "Category" })).focus();
+    await user.keyboard("{ArrowDown}");
+    return user;
+  };
+
+  it("opens on the down arrow when the trigger has focus", async () => {
+    await openWithArrow();
+
+    expect(screen.getByRole("listbox")).toBeDefined();
+  });
+
+  it("opens on the up arrow too", async () => {
+    const user = userEvent.setup();
+    render(<Popover />);
+    (await screen.findByRole("button", { name: "Category" })).focus();
+
+    await user.keyboard("{ArrowUp}");
+
+    expect(screen.getByRole("listbox")).toBeDefined();
+  });
+
+  it("moves the highlight with the arrow keys", async () => {
+    const user = await openWithArrow();
+    const filter = screen.getByPlaceholderText(/filter projects and tasks/i);
+    const first = filter.getAttribute("aria-activedescendant");
+
+    await user.keyboard("{ArrowDown}");
+
+    expect(filter.getAttribute("aria-activedescendant")).not.toBe(first);
+  });
+
+  it("selects the highlighted option with Enter", async () => {
+    const user = await openWithArrow();
+    const highlighted = screen
+      .getByPlaceholderText(/filter projects and tasks/i)
+      .getAttribute("aria-activedescendant");
+
+    await user.keyboard("{Enter}");
+
+    expect(screen.queryByRole("listbox")).toBeNull();
+    expect(screen.getByRole("button", { name: "Category" }).getAttribute("aria-activedescendant")).toBeNull();
+    expect(highlighted).toBeTruthy();
+  });
+
+  it("hands focus to the note once a category is chosen", async () => {
+    const user = await openWithArrow();
+
+    await user.keyboard("{Enter}");
+
+    expect(document.activeElement).toBe(screen.getByPlaceholderText(/what are you working on/i));
+  });
+
+  it("does not start a timer when Enter is used to pick a category", async () => {
+    const user = await openWithArrow();
+
+    await user.keyboard("{Enter}");
+
+    expect(api.switchTo).not.toHaveBeenCalled();
+  });
+});
+
 describe("hidden categories", () => {
   it("leaves a switched-off category out of the dropdown", async () => {
     const user = userEvent.setup();

@@ -150,7 +150,11 @@ export function Popover(): JSX.Element {
             recents={snapshot.recents}
             hidden={snapshot.hidden}
             selectedId={selectedId}
-            onSelect={setSelectedId}
+            onSelect={(pairId) => {
+              setSelectedId(pairId);
+              // Picking a category is followed by writing a note, so go straight there.
+              focusNote();
+            }}
             onToggleFavourite={(pairId) => keito.toggleFavourite(pairId).then(setSnapshot)}
           />
         </div>
