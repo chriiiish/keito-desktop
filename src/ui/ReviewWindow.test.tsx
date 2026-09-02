@@ -290,6 +290,56 @@ describe("the hours column while a timer runs", () => {
   });
 });
 
+describe("the window title", () => {
+  const show = async (over: Partial<Snapshot> = {}) => {
+    // Set deliberately wrong first, so a passing assertion cannot be a leftover from the
+    // previous test in this document.
+    document.title = "not set";
+    api.getSnapshot.mockResolvedValue({ ...snapshot, ...over } satisfies Snapshot);
+    render(<ReviewWindow />);
+    await screen.findByRole("navigation");
+  };
+
+  it("names the workspace once connected", async () => {
+    await show();
+
+    expect(document.title).toBe("Keito Timer - Acme");
+  });
+
+  it("stays plain until a key works", async () => {
+    await show({ keyStatus: "missing", identity: null });
+
+    expect(document.title).toBe("Keito Timer");
+  });
+
+  // A rejected key still carries the identity from when it worked; naming a workspace the
+  // app can no longer reach would be a small lie in the one place always on screen.
+  it("drops the name again when the key stops working", async () => {
+    await show({ keyStatus: "rejected" });
+
+    expect(document.title).toBe("Keito Timer");
+  });
+
+  it("does not trail a separator when there is no workspace name", async () => {
+    await show({ identity: { userId: "u", name: "Chris", accountId: "co", accountName: "  " } });
+
+    expect(document.title).toBe("Keito Timer");
+  });
+
+  it("follows the workspace when the snapshot changes", async () => {
+    const user = userEvent.setup();
+    await show({ keyStatus: "missing", identity: null, apiKeyHint: null, accountId: null });
+    expect(document.title).toBe("Keito Timer");
+
+    api.setApiKey.mockResolvedValue(snapshot);
+    await user.type(screen.getByLabelText("API key"), "kto_new");
+    await user.type(screen.getByLabelText("Company ID"), "co_123");
+    await user.click(screen.getByRole("button", { name: "Connect" }));
+
+    expect(document.title).toBe("Keito Timer - Acme");
+  });
+});
+
 describe("loading time entries", () => {
   it("owns up to the wait while the API responds", async () => {
     const gate = deferred<never[]>();
