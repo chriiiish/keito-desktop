@@ -286,24 +286,31 @@ function Connection({
           <p className="welcome-lead">Two things and you’re tracking time.</p>
 
           <ol className="welcome-steps">
-            {snapshot.canOpenAtLogin && (
-              <li>
-                <div className="setting-row">
-                  <span className="setting-label">
-                    <strong>
-                      Start Keito Timer when you{" "}
-                      {snapshot.platform === "darwin" ? "log in" : "sign in"}
-                    </strong>
-                    <span className="hint">You can change this in Settings later.</span>
+            {/* Shown even when the login item is unavailable, disabled and with the
+                reason — the same way Settings handles it. Hiding the step instead reads
+                as a missing feature, and a welcome that silently drops a step in some
+                builds is a welcome nobody can trust to be complete. */}
+            <li>
+              <div className="setting-row">
+                <span className="setting-label">
+                  <strong>
+                    Start Keito Timer when you{" "}
+                    {snapshot.platform === "darwin" ? "log in" : "sign in"}
+                  </strong>
+                  <span className="hint">
+                    {snapshot.canOpenAtLogin
+                      ? "You can change this in Settings later."
+                      : "Available once Keito Timer is installed — this is a development build."}
                   </span>
-                  <Toggle
-                    checked={snapshot.openAtLogin}
-                    label="Run at startup"
-                    onChange={(next) => keito.setOpenAtLogin(next).then(onChange)}
-                  />
-                </div>
-              </li>
-            )}
+                </span>
+                <Toggle
+                  checked={snapshot.openAtLogin}
+                  label="Run at startup"
+                  disabled={!snapshot.canOpenAtLogin}
+                  onChange={(next) => keito.setOpenAtLogin(next).then(onChange)}
+                />
+              </div>
+            </li>
             <li>
               <strong>Connect to Keito</strong>
               <span className="hint">

@@ -615,12 +615,24 @@ describe("the connection tab before it works", () => {
     expect(api.setOpenAtLogin).toHaveBeenCalledWith(true);
   });
 
-  // Nudging towards a switch that cannot move is worse than staying quiet.
-  it("stays quiet when the login item is unavailable", async () => {
+  // Hiding the step instead reads as a missing feature — which is exactly how it was
+  // reported. Settings shows the same switch disabled with a reason; so does this.
+  it("keeps the step when the login item is unavailable, disabled and explained", async () => {
+    const user = await open({ canOpenAtLogin: false });
+
+    const toggle = screen.getByLabelText("Run at startup");
+    expect(screen.getByText(/Start Keito Timer when you (log|sign) in/)).toBeDefined();
+    expect(toggle.hasAttribute("disabled")).toBe(true);
+    expect(screen.getByText(/development build/i)).toBeDefined();
+
+    await user.click(toggle);
+    expect(api.setOpenAtLogin).not.toHaveBeenCalled();
+  });
+
+  it("still numbers both steps when it cannot be offered", async () => {
     await open({ canOpenAtLogin: false });
 
-    expect(screen.queryByText(/Start Keito Timer when you (log|sign) in/)).toBeNull();
-    expect(screen.queryByLabelText("Run at startup")).toBeNull();
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
   });
 
   it("drops both once the key works", async () => {
