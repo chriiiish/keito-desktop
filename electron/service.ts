@@ -5,7 +5,7 @@ import { KeitoAuthError, KeitoError, KeitoReadOnlyError } from "../src/core/keit
 import type { Identity, Pair, TimeEntry } from "../src/core/keito/types.js";
 import { PreferencesStore } from "../src/core/store/preferences.js";
 import type { TrayFallback, TrayPrefix } from "../src/core/tray/label.js";
-import { TimerSwitcher, type TimerState } from "../src/core/timer/switcher.js";
+import { Timer, type TimerState } from "../src/core/timer/timer.js";
 import { formatWorkspaceTime, parseWorkspaceTime } from "../src/core/time/workspace-time.js";
 import type { SecretStore } from "./secrets.js";
 import type { Logger } from "./logger.js";
@@ -94,7 +94,7 @@ function startMsOf(entry: TimeEntry, timeZone: () => string): number {
 }
 
 /**
- * Ties the tested core to the OS: holds the client, the switcher and the stores, and
+ * Ties the tested core to the OS: holds the client, the timer and the stores, and
  * renders a single Snapshot the UI can draw without further round trips.
  */
 export class AppService {
@@ -102,7 +102,7 @@ export class AppService {
   #secrets: SecretStore;
   #log: Logger;
   #client: KeitoClient | null = null;
-  #switcher: TimerSwitcher | null = null;
+  #timer: Timer | null = null;
   #identity: Identity | null = null;
   #catalog: Pair[] = [];
   #catalogLoadedAt = 0;
@@ -158,7 +158,7 @@ export class AppService {
 
   snapshot(): Snapshot {
     const prefs = this.#prefs.get();
-    const state: TimerState = this.#switcher?.current() ?? { status: "idle" };
+    const state: TimerState = this.#timer?.current() ?? { status: "idle" };
     return {
       keyStatus: this.#keyStatus,
       identity: this.#identity,
@@ -265,7 +265,7 @@ export class AppService {
   /** Drops the live connection and everything derived from it. Preferences are untouched. */
   #forgetConnection(): void {
     this.#client = null;
-    this.#switcher = null;
+    this.#timer = null;
     this.#identity = null;
     this.#catalog = [];
     this.#catalogLoadedAt = 0;
@@ -280,10 +280,10 @@ export class AppService {
 
   async switchTo(pairId: string, notes?: string): Promise<Snapshot> {
     const pair = this.#catalog.find((candidate) => candidate.id === pairId);
-    if (!pair || !this.#switcher) return this.snapshot();
+    if (!pair || !this.#timer) return this.snapshot();
     return this.#run(async () => {
-      await this.#switcher!.switchTo(pair, notes);
-      const state = this.#switcher!.current();
+      await this.#timer!.switchTo(pair, notes);
+      const state = this.#timer!.current();
       this.#startedAtMs =
         state.status === "running"
           ? startMsOf(state.entry, () => this.#prefs.get().workspaceTimezone)
@@ -305,11 +305,11 @@ export class AppService {
             candidate.projectId === entry.project_id && candidate.taskId === entry.task_id,
         )
       : undefined;
-    if (!entry || !pair || !this.#switcher) return this.snapshot();
+    if (!entry || !pair || !this.#timer) return this.snapshot();
 
     return this.#run(async () => {
-      await this.#switcher!.restart(entryId, pair);
-      const state = this.#switcher!.current();
+      await this.#timer!.restart(entryId, pair);
+      const state = this.#timer!.current();
       this.#startedAtMs =
         state.status === "running"
           ? startMsOf(state.entry, () => this.#prefs.get().workspaceTimezone)
@@ -319,9 +319,9 @@ export class AppService {
   }
 
   async stopTimer(): Promise<Snapshot> {
-    if (!this.#switcher) return this.snapshot();
+    if (!this.#timer) return this.snapshot();
     return this.#run(async () => {
-      await this.#switcher!.stop();
+      await this.#timer!.stop();
       this.#startedAtMs = null;
       await this.#reloadEntries();
     });
@@ -377,7 +377,7 @@ export class AppService {
    * projects and tasks change far more slowly than the popover is opened.
    */
   async refresh(options: { force?: boolean } = {}): Promise<Snapshot> {
-    if (!this.#client || !this.#switcher) return this.snapshot();
+    if (!this.#client || !this.#timer) return this.snapshot();
     return this.#run(async () => {
       const now = new Date();
 
@@ -404,9 +404,9 @@ export class AppService {
       this.#today = today;
       this.#yesterday = yesterday;
 
-      const before = this.#switcher!.current();
-      this.#switcher!.adopt(running, this.#catalog);
-      const after = this.#switcher!.current();
+      const before = this.#timer!.current();
+      this.#timer!.adopt(running, this.#catalog);
+      const after = this.#timer!.current();
       if (after.status === "running" && before.status !== "running") {
         this.#startedAtMs = startMsOf(after.entry, () => this.#prefs.get().workspaceTimezone);
       }
@@ -435,14 +435,14 @@ export class AppService {
     return this.#run(async () => {
       await this.#client!.deleteTimeEntry(id);
       // A deleted entry may have been the running one; re-read what Keito now says.
-      await this.#switcher?.refresh(this.#catalog);
+      await this.#timer?.refresh(this.#catalog);
       await this.#reloadEntries();
     });
   }
 
   /** Trims the running entry back to when the user went idle, then stops it. */
   async discardIdleSince(awaySince: Date): Promise<Snapshot> {
-    const state = this.#switcher?.current();
+    const state = this.#timer?.current();
     if (!state || state.status !== "running" || !this.#client) return this.snapshot();
 
     const zone = this.#prefs.get().workspaceTimezone;
@@ -450,7 +450,7 @@ export class AppService {
       await this.#client!.updateTimeEntry(state.entry.id, {
         endedTime: formatWorkspaceTime(awaySince, zone),
       });
-      await this.#switcher!.refresh(this.#catalog);
+      await this.#timer!.refresh(this.#catalog);
       this.#startedAtMs = null;
     });
   }
@@ -482,7 +482,7 @@ export class AppService {
       fetch,
       onRequest: this.#logRequest,
     });
-    this.#switcher = new TimerSwitcher({
+    this.#timer = new Timer({
       client: this.#client,
       now: () => new Date(),
       timeZone: () => this.#prefs.get().workspaceTimezone,

@@ -30,7 +30,7 @@ function pairFor(entry: TimeEntry, catalog: readonly Pair[]): Pair {
   };
 }
 
-export interface TimerSwitcherOptions {
+export interface TimerOptions {
   client: KeitoClient;
   now: () => Date;
   /** The workspace's timezone, read afresh each time — the setting can change. */
@@ -41,13 +41,13 @@ export interface TimerSwitcherOptions {
  * Owns "what am I timing right now". Keito is the source of truth; this holds the last
  * answer the server gave so the tray can render it without a round trip.
  */
-export class TimerSwitcher {
+export class Timer {
   #client: KeitoClient;
   #now: () => Date;
   #timeZone: () => string;
   #state: TimerState = { status: "idle" };
 
-  constructor(options: TimerSwitcherOptions) {
+  constructor(options: TimerOptions) {
     this.#client = options.client;
     this.#now = options.now;
     this.#timeZone = options.timeZone;

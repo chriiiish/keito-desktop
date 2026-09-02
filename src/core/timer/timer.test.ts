@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { FakeKeito } from "../../../test/fake-keito.js";
 import { KeitoClient } from "../keito/client.js";
-import { TimerSwitcher } from "./switcher.js";
+import { Timer } from "./timer.js";
 import { KeitoAuthError, KeitoConflictError, KeitoNetworkError } from "../keito/errors.js";
 import type { Pair } from "../keito/types.js";
 
@@ -17,11 +17,11 @@ const DEV: Pair = {
 const QA: Pair = { ...DEV, id: "p_acme:t_qa", taskId: "t_qa", taskName: "QA" };
 
 let keito: FakeKeito;
-let switcher: TimerSwitcher;
+let timer: Timer;
 
 beforeEach(() => {
   keito = new FakeKeito({ now: () => NOW });
-  switcher = new TimerSwitcher({
+  timer = new Timer({
     client: new KeitoClient({ apiKey: "kto_k", accountId: "co_9", fetch: keito.fetch }),
     now: () => NOW,
     timeZone: () => "UTC",
@@ -30,7 +30,7 @@ beforeEach(() => {
 
 describe("starting a timer", () => {
   it("creates a running entry against the chosen pair, tagged as coming from the desktop app", async () => {
-    await switcher.switchTo(DEV);
+    await timer.switchTo(DEV);
 
     expect(keito.entries).toHaveLength(1);
     const [entry] = keito.entries;
@@ -47,7 +47,7 @@ describe("starting a timer", () => {
   it("dates the entry by the workspace's calendar, not UTC's", async () => {
     // 09:30 UTC is already the 2nd in Sydney and still the 1st in Los Angeles. Dating
     // from the instant alone would file the work on the wrong day in both places.
-    const sydney = new TimerSwitcher({
+    const sydney = new Timer({
       client: new KeitoClient({ apiKey: "kto_k", accountId: "co_9", fetch: keito.fetch }),
       now: () => new Date("2026-09-01T22:00:00Z"),
       timeZone: () => "Australia/Sydney",
@@ -55,7 +55,7 @@ describe("starting a timer", () => {
     await sydney.switchTo(DEV);
     expect(keito.entries.at(-1)!.spent_date).toBe("2026-09-02");
 
-    const losAngeles = new TimerSwitcher({
+    const losAngeles = new Timer({
       client: new KeitoClient({ apiKey: "kto_k", accountId: "co_9", fetch: keito.fetch }),
       now: () => new Date("2026-09-02T02:00:00Z"),
       timeZone: () => "America/Los_Angeles",
@@ -65,7 +65,7 @@ describe("starting a timer", () => {
   });
 
   it("lets the server set the start time, so no timezone conversion happens on the hot path", async () => {
-    await switcher.switchTo(DEV);
+    await timer.switchTo(DEV);
 
     const post = keito.requests.find((r) => r.method === "POST")!;
     expect(post.body).not.toHaveProperty("started_time");
@@ -73,13 +73,13 @@ describe("starting a timer", () => {
   });
 
   it("reports the running pair so the tray can show what is being timed", async () => {
-    await switcher.switchTo(DEV);
+    await timer.switchTo(DEV);
 
-    expect(switcher.current()).toMatchObject({ status: "running", pair: DEV });
+    expect(timer.current()).toMatchObject({ status: "running", pair: DEV });
   });
 
   it("attaches notes when given, and omits them when not", async () => {
-    await switcher.switchTo(QA, "Regression sweep");
+    await timer.switchTo(QA, "Regression sweep");
 
     expect(keito.entries[0]!.notes).toBe("Regression sweep");
   });
@@ -89,7 +89,7 @@ describe("switching while a timer is already running", () => {
   it("stops the old timer and starts the new one in a single request", async () => {
     keito.seedRunning({ project_id: "p_acme", task_id: "t_dev" });
 
-    await switcher.switchTo(QA);
+    await timer.switchTo(QA);
 
     expect(keito.requests.filter((r) => r.method !== "GET")).toHaveLength(1);
     expect(keito.entries.map((e) => [e.task_id, e.is_running])).toEqual([
@@ -101,7 +101,7 @@ describe("switching while a timer is already running", () => {
   it("closes out the previous entry rather than leaving two timers running", async () => {
     keito.seedRunning({ project_id: "p_acme", task_id: "t_dev" });
 
-    await switcher.switchTo(QA);
+    await timer.switchTo(QA);
 
     expect(keito.entries.filter((e) => e.is_running)).toHaveLength(1);
     expect(keito.entries[0]!.ended_time).toBe("09:30");
@@ -124,18 +124,18 @@ describe("switching while a timer is already running", () => {
 
 describe("stopping the timer", () => {
   it("stops the entry it started and goes idle", async () => {
-    await switcher.switchTo(DEV);
+    await timer.switchTo(DEV);
 
-    await switcher.stop();
+    await timer.stop();
 
     expect(keito.running).toBeUndefined();
-    expect(switcher.current()).toEqual({ status: "idle" });
+    expect(timer.current()).toEqual({ status: "idle" });
   });
 
   it("stops through the dedicated endpoint, letting the server set the end time", async () => {
-    await switcher.switchTo(DEV);
+    await timer.switchTo(DEV);
 
-    await switcher.stop();
+    await timer.stop();
 
     const stop = keito.requests.find((r) => r.path.endsWith("/stop"))!;
     expect(stop.method).toBe("PATCH");
@@ -143,7 +143,7 @@ describe("stopping the timer", () => {
   });
 
   it("does nothing when there is no timer to stop", async () => {
-    await switcher.stop();
+    await timer.stop();
 
     expect(keito.requests.filter((r) => r.method !== "GET")).toHaveLength(0);
   });
@@ -153,19 +153,19 @@ describe("picking up a timer started elsewhere", () => {
   it("adopts a timer running in the web app, matching it back to its pair", async () => {
     keito.seedRunning({ project_id: "p_acme", task_id: "t_qa" });
 
-    await switcher.refresh([DEV, QA]);
+    await timer.refresh([DEV, QA]);
 
-    expect(switcher.current()).toMatchObject({ status: "running", pair: QA });
+    expect(timer.current()).toMatchObject({ status: "running", pair: QA });
   });
 
   it("can stop a timer it adopted, without a prior read", async () => {
     keito.seedRunning({ project_id: "p_acme", task_id: "t_qa" });
-    await switcher.refresh([DEV, QA]);
+    await timer.refresh([DEV, QA]);
 
-    await switcher.stop();
+    await timer.stop();
 
     expect(keito.running).toBeUndefined();
-    expect(switcher.current()).toEqual({ status: "idle" });
+    expect(timer.current()).toEqual({ status: "idle" });
     // The live API has no GET /time_entries/:id — it answers 405.
     expect(keito.requests.some((r) => /^\/time_entries\/[^/]+$/.test(r.path))).toBe(false);
   });
@@ -174,14 +174,14 @@ describe("picking up a timer started elsewhere", () => {
     const seeded = keito.seedRunning({ project_id: "p_acme", task_id: "t_qa" });
     const before = keito.requests.length;
 
-    switcher.adopt(seeded as never, [DEV, QA]);
+    timer.adopt(seeded as never, [DEV, QA]);
 
-    expect(switcher.current()).toMatchObject({ status: "running", pair: QA });
+    expect(timer.current()).toMatchObject({ status: "running", pair: QA });
     expect(keito.requests).toHaveLength(before);
   });
 
   it("keeps showing a timer whose project has left the catalog, using the names on the entry", () => {
-    switcher.adopt(
+    timer.adopt(
       {
         id: "te_x",
         project_id: "p_archived",
@@ -198,62 +198,62 @@ describe("picking up a timer started elsewhere", () => {
       [DEV, QA],
     );
 
-    expect(switcher.current()).toMatchObject({
+    expect(timer.current()).toMatchObject({
       status: "running",
       pair: { projectName: "Archived Project", taskName: "Old Task" },
     });
   });
 
   it("goes idle when Keito says nothing is running", async () => {
-    await switcher.refresh([DEV, QA]);
+    await timer.refresh([DEV, QA]);
 
-    expect(switcher.current()).toEqual({ status: "idle" });
+    expect(timer.current()).toEqual({ status: "idle" });
   });
 });
 
 describe("when a switch fails", () => {
   it("keeps the old timer running rather than silently losing tracked time", async () => {
-    await switcher.switchTo(DEV);
+    await timer.switchTo(DEV);
     keito.offline = true;
 
-    await expect(switcher.switchTo(QA)).rejects.toBeInstanceOf(KeitoNetworkError);
+    await expect(timer.switchTo(QA)).rejects.toBeInstanceOf(KeitoNetworkError);
 
-    expect(switcher.current()).toMatchObject({ status: "running", pair: DEV });
+    expect(timer.current()).toMatchObject({ status: "running", pair: DEV });
     expect(keito.running!.task_id).toBe("t_dev");
   });
 
   it("reports a rejected key as needing auth, so the UI can open settings", async () => {
     const rejecting = new FakeKeito({ now: () => NOW, rejectAuth: true });
-    const authSwitcher = new TimerSwitcher({
+    const authTimer = new Timer({
       client: new KeitoClient({ apiKey: "kto_stale", accountId: "co_9", fetch: rejecting.fetch }),
       now: () => NOW,
       timeZone: () => "UTC",
     });
 
-    await expect(authSwitcher.switchTo(DEV)).rejects.toBeInstanceOf(KeitoAuthError);
+    await expect(authTimer.switchTo(DEV)).rejects.toBeInstanceOf(KeitoAuthError);
 
-    expect(authSwitcher.current()).toEqual({ status: "needs-auth" });
+    expect(authTimer.current()).toEqual({ status: "needs-auth" });
   });
 });
 
 describe("resuming an earlier entry", () => {
   it("restarts that entry rather than creating a duplicate for the same task", async () => {
     const earlier = keito.seedRunning({ project_id: "p_acme", task_id: "t_dev" });
-    await switcher.stop();
+    await timer.stop();
 
-    await switcher.restart(earlier.id, DEV);
+    await timer.restart(earlier.id, DEV);
 
     expect(keito.entries).toHaveLength(1);
     expect(keito.running?.id).toBe(earlier.id);
-    expect(switcher.current()).toMatchObject({ status: "running", pair: DEV });
+    expect(timer.current()).toMatchObject({ status: "running", pair: DEV });
   });
 
   it("replaces whatever is running, so resuming is one gesture like switching", async () => {
     const earlier = keito.seedRunning({ project_id: "p_acme", task_id: "t_dev" });
-    await switcher.stop();
-    await switcher.switchTo(QA);
+    await timer.stop();
+    await timer.switchTo(QA);
 
-    await switcher.restart(earlier.id, DEV);
+    await timer.restart(earlier.id, DEV);
 
     expect(keito.entries.filter((e) => e.is_running)).toHaveLength(1);
     expect(keito.running?.id).toBe(earlier.id);
@@ -261,12 +261,12 @@ describe("resuming an earlier entry", () => {
 
   it("keeps the old timer running when the resume fails", async () => {
     const earlier = keito.seedRunning({ project_id: "p_acme", task_id: "t_dev" });
-    await switcher.stop();
-    await switcher.switchTo(QA);
+    await timer.stop();
+    await timer.switchTo(QA);
     keito.offline = true;
 
-    await expect(switcher.restart(earlier.id, DEV)).rejects.toBeInstanceOf(KeitoNetworkError);
+    await expect(timer.restart(earlier.id, DEV)).rejects.toBeInstanceOf(KeitoNetworkError);
 
-    expect(switcher.current()).toMatchObject({ status: "running", pair: QA });
+    expect(timer.current()).toMatchObject({ status: "running", pair: QA });
   });
 });

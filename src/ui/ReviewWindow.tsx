@@ -381,7 +381,7 @@ function Settings({
   return (
     <section className="settings">
       <h2>Shortcut</h2>
-      <p className="hint">Press this anywhere to open the switcher.</p>
+      <p className="hint">Press this anywhere to open the timer.</p>
       <HotkeyRecorder
         hotkey={snapshot.hotkey}
         platform={snapshot.platform}

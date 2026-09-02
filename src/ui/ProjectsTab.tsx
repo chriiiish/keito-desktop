@@ -11,7 +11,7 @@ interface ProjectsTabProps {
 }
 
 /**
- * Which categories appear in the switcher, and which are pinned to the top of it.
+ * Which categories appear in the timer, and which are pinned to the top of it.
  * Everything is shown by default; this is for silencing the long tail of a big workspace.
  *
  * A category that is favourited or recently used is always shown regardless — switching
@@ -104,7 +104,7 @@ export function ProjectsTab({ snapshot, onChange }: ProjectsTabProps): JSX.Eleme
     <section className="settings">
       <h2>Favourites</h2>
       {favouritePairs.length === 0 ? (
-        <p className="hint">Star a task below to pin it to the top of the switcher.</p>
+        <p className="hint">Star a task below to pin it to the top of the timer.</p>
       ) : (
         <ul className="favourites">
           {favouritePairs.map((pair) => (
@@ -118,7 +118,7 @@ export function ProjectsTab({ snapshot, onChange }: ProjectsTabProps): JSX.Eleme
         </ul>
       )}
 
-      <h2>Projects in the switcher</h2>
+      <h2>Projects in the timer</h2>
       <p className="hint">
         Everything is shown by default. Switch off what you never track against. Favourites
         and anything you have used in the last 30 days stay visible regardless.

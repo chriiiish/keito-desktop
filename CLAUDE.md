@@ -16,7 +16,7 @@ npm run package              # ad-hoc signed .dmg + .exe into release/
 Run a single test file or a single test:
 
 ```sh
-npx vitest run src/core/timer/switcher.test.ts
+npx vitest run src/core/timer/timer.test.ts
 npx vitest run -t "stops the old timer and starts the new one"
 ```
 
@@ -81,7 +81,7 @@ The popover window is **hidden and shown, never recreated**, so the renderer doe
 remount between openings. Anything that must happen on every open — putting the caret in
 the note field — needs the `popover-shown` event from `main.ts`, not a mount effect.
 
-`AppService` holds the client, switcher and stores, and exposes a single `Snapshot` object
+`AppService` holds the client, timer and stores, and exposes a single `Snapshot` object
 that both windows render without further round trips. Every IPC handler returns a Snapshot;
 `main.ts` broadcasts it to both windows automatically. New UI state belongs on `Snapshot`,
 not in a new IPC channel.
@@ -129,7 +129,7 @@ until a contract test covers it.
   only way to produce one — `new Date().toISOString().slice(0, 10)` is wrong for most of
   the world for part of every day (08:00 in Sydney is still yesterday in UTC; 18:00 in
   California is already tomorrow), and it files the work on the wrong day silently.
-  `TimerSwitcher`, `loadEntries` and the entries window all take the zone for this reason.
+  `Timer`, `loadEntries` and the entries window all take the zone for this reason.
   The suite cannot catch a regression here on its own: the fake echoes whatever
   `spent_date` it is sent, so tests written in UTC pass either way. `rankRecents` takes
   today as a `YYYY-MM-DD` string rather than a `Date` so the comparison cannot drift.
@@ -152,7 +152,7 @@ until a contract test covers it.
 
 ## Testing approach
 
-Tests live only at these seams: `KeitoClient`, `TimerSwitcher`, `buildPicker`,
+Tests live only at these seams: `KeitoClient`, `Timer`, `buildPicker`,
 `rankRecents`, `IdleWatcher`/`shouldAutoStop`, `formatTrayLabel`, and `PreferencesStore`
 round-tripping to a temp dir. The Electron main process, the tray and the hotkey are
 deliberately **not** unit-tested — they're verified by running the app.
@@ -206,7 +206,7 @@ Startup is **3 requests**; a popover open is normally **1**. Keep it that way.
   `project.tasks` directly.
 - **List responses include running entries.** There is no separate `?is_running=true`
   lookup; `loadEntries` picks the running entry out of the window it already fetched, and
-  `TimerSwitcher.adopt()` takes it without touching the network. `refresh()` still does its
+  `Timer.adopt()` takes it without touching the network. `refresh()` still does its
   own call for callers that have no entries to hand.
 - **The catalog is cached for `CATALOG_TTL_MS`.** Projects and tasks change far more slowly
   than the popover is opened. A failed reload keeps the previous catalog rather than
