@@ -253,6 +253,31 @@ silently rather than loudly.
   "damaged" dmg. Ad-hoc is not notarised: the first launch is still refused, but
   recoverably. Setting `CSC_LINK`/`CSC_NAME` stands the hook down.
 
+## Releases
+
+**The tag decides the version.** `version` in `package.json` is a placeholder: the release
+workflow resolves `vX.Y.Z` to `X.Y.Z` and stamps it with `npm pkg set version` after
+`npm ci`, so bumping the file by hand is not part of cutting a release. It was the other
+way round once, and v0.1.1 shipped three files named 0.1.0 — visible only on the download
+page, after the fact. A step now fails the build if an artifact's name does not carry the
+released version, because a glob upload will otherwise ship whatever it finds.
+
+**The download names are literals, not `${productName}`.** `artifactName` spells out
+`Keito-Timer-…` because the product name contains a space and GitHub rewrites a space in a
+release asset to a full stop. `${arch}` is only ever `arm64` or `x64`, so
+`build/afterAllArtifactBuild.cjs` maps those to *Apple-Silicon* and *Intel-Mac* — in a
+hook, so `npm run package` and CI produce the same names.
+
+**"Source code (zip)" cannot be removed.** GitHub attaches it and the tarball to every
+release from the tag itself. They are not assets the workflow uploads, no API deletes
+them, and there is no setting. The release notes therefore lead with the three installers,
+linked by name, and say the archives are not needed.
+
+**The Trivy gate covers what ships, not what builds.** Trivy skips `devDependencies` by
+default, and the build toolchain carries HIGH/CRITICAL findings of its own that `npm audit`
+will show. Add `include-dev-deps: true` to see them — and expect to have to upgrade
+electron-builder before the gate is green again.
+
 ## Diagnostics
 
 `electron/logger.ts` appends to `app.getPath("logs")/keito-timer.log` (rotated at 512KB),
