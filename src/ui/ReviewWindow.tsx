@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { TimeEntry } from "../core/keito/types.js";
 import type { Snapshot } from "../../electron/service.js";
 import { keito } from "./keito-api.js";
@@ -29,6 +29,21 @@ const TABS: ReadonlyArray<readonly [Tab, string]> = [
 export function ReviewWindow(): JSX.Element {
   const [snapshot, setSnapshot] = useSnapshot();
   const [tab, setTab] = useState<Tab>("entries");
+
+  /**
+   * Connecting opens the entries table, whatever the tabs were last clicked.
+   *
+   * Until a key works every tab renders the connection form, but the click is
+   * still recorded — so a new user who poked at the tabs while setting up would
+   * land on whichever one they poked, usually Contribute. The first thing to
+   * see after connecting is the work you have logged.
+   */
+  const ready = snapshot?.keyStatus === "ready";
+  const wasReady = useRef(ready);
+  useEffect(() => {
+    if (ready && !wasReady.current) setTab("entries");
+    wasReady.current = ready;
+  }, [ready]);
 
   if (!snapshot) return <div className="window loading">Loading…</div>;
 

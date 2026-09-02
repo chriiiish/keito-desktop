@@ -535,3 +535,59 @@ describe("the danger zone", () => {
     gate.resolve(cleared);
   });
 });
+
+describe("connecting", () => {
+  const disconnected = {
+    ...snapshot,
+    keyStatus: "missing",
+    identity: null,
+    apiKeyHint: null,
+    accountId: null,
+  } satisfies Snapshot;
+
+  const connect = async () => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(disconnected);
+    api.setApiKey.mockResolvedValue(snapshot);
+    render(<ReviewWindow />);
+    await screen.findByRole("button", { name: "Connect" });
+    return user;
+  };
+
+  const fillAndSubmit = async (user: ReturnType<typeof userEvent.setup>) => {
+    await user.type(screen.getByLabelText("API key"), "kto_new");
+    await user.type(screen.getByLabelText("Company ID"), "co_123");
+    await user.click(screen.getByRole("button", { name: "Connect" }));
+  };
+
+  it("opens on Time Entries once a key is accepted", async () => {
+    const user = await connect();
+
+    await fillAndSubmit(user);
+
+    expect(await screen.findByText(/nothing logged today/i)).toBeDefined();
+  });
+
+  // Every tab shows the connection form until a key works, but the click was
+  // still recorded — so whatever a new user poked at while setting up became
+  // the page they landed on afterwards.
+  it("still opens on Time Entries when another tab was clicked while disconnected", async () => {
+    const user = await connect();
+    await user.click(screen.getByRole("button", { name: "Contribute" }));
+
+    await fillAndSubmit(user);
+
+    expect(await screen.findByText(/nothing logged today/i)).toBeDefined();
+    expect(screen.queryByText(/free and open source/i)).toBeNull();
+  });
+
+  it("leaves the tabs alone once connected", async () => {
+    const user = await connect();
+    await fillAndSubmit(user);
+    await screen.findByText(/nothing logged today/i);
+
+    await user.click(screen.getByRole("button", { name: "Settings" }));
+
+    expect(screen.getByRole("heading", { name: "Danger Zone" })).toBeDefined();
+  });
+});
