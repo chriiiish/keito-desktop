@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AsyncButton, Spinner, useAsyncAction } from "./AsyncButton.js";
 import { CategoryPicker } from "./CategoryPicker.js";
 import { Elapsed } from "./Elapsed.js";
-import { TodayList } from "./TodayList.js";
+import { RecentEntries } from "./RecentEntries.js";
 import { keito } from "./keito-api.js";
 import { useSnapshot } from "./useSnapshot.js";
 
@@ -54,6 +54,16 @@ export function Popover(): JSX.Element {
 
   const resume = async (entryId: string) => {
     const next = await keito.resumeEntry(entryId);
+    setSnapshot(next);
+    if (!next.error) void keito.closePopover();
+  };
+
+  /**
+   * Yesterday's rows start a new entry dated today rather than restarting the old one,
+   * which would file today's work under yesterday's date.
+   */
+  const startAgain = async (pairId: string, notes: string | undefined) => {
+    const next = await keito.switchTo(pairId, notes);
     setSnapshot(next);
     if (!next.error) void keito.closePopover();
   };
@@ -182,10 +192,12 @@ export function Popover(): JSX.Element {
         </label>
       </form>
 
-      <TodayList
-        entries={snapshot.today}
+      <RecentEntries
+        today={snapshot.today}
+        yesterday={snapshot.yesterday}
         catalog={snapshot.catalog}
         onResume={resume}
+        onStartAgain={startAgain}
         onStop={() => keito.stopTimer().then(setSnapshot)}
       />
 

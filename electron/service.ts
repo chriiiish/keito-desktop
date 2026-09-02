@@ -18,6 +18,11 @@ export interface Snapshot {
   recents: string[];
   /** Entries logged today, newest first — the popover's "already worked on" list. */
   today: TimeEntry[];
+  /**
+   * Yesterday's, for the popover's second list. Free from the window already fetched for
+   * ranking, so it costs no extra request.
+   */
+  yesterday: TimeEntry[];
   favourites: string[];
   /** Pair ids switched off in settings; favourites and recents override this. */
   hidden: string[];
@@ -92,6 +97,7 @@ export class AppService {
   #catalogLoadedAt = 0;
   #recents: string[] = [];
   #today: TimeEntry[] = [];
+  #yesterday: TimeEntry[] = [];
   #keyStatus: Snapshot["keyStatus"] = "missing";
   #error: string | null = null;
   #startedAtMs: number | null = null;
@@ -146,6 +152,7 @@ export class AppService {
       catalog: this.#catalog,
       recents: this.#recents,
       today: this.#today,
+      yesterday: this.#yesterday,
       favourites: [...prefs.favourites],
       hidden: [...prefs.hidden],
       workspaceTimezone: prefs.workspaceTimezone,
@@ -249,6 +256,7 @@ export class AppService {
     this.#catalogLoadedAt = 0;
     this.#recents = [];
     this.#today = [];
+    this.#yesterday = [];
     this.#keyStatus = "missing";
     this.#error = null;
     this.#apiKeyHint = null;
@@ -357,13 +365,14 @@ export class AppService {
         }
       }
 
-      const { recents, today, running } = await loadEntries(
+      const { recents, today, yesterday, running } = await loadEntries(
         this.#client!,
         now,
         this.#prefs.get().workspaceTimezone,
       );
       this.#recents = recents;
       this.#today = today;
+      this.#yesterday = yesterday;
 
       const before = this.#switcher!.current();
       this.#switcher!.adopt(running, this.#catalog);
@@ -467,13 +476,14 @@ export class AppService {
    */
   async #reloadEntries(): Promise<void> {
     if (!this.#client) return;
-    const { recents, today } = await loadEntries(
+    const { recents, today, yesterday } = await loadEntries(
       this.#client,
       new Date(),
       this.#prefs.get().workspaceTimezone,
     );
     this.#recents = recents;
     this.#today = today;
+    this.#yesterday = yesterday;
   }
 
   readonly #logRequest = (record: RequestRecord): void => {

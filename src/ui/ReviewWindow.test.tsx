@@ -45,6 +45,7 @@ const snapshot: Snapshot = {
   favourites: [],
   hidden: [],
   today: [],
+  yesterday: [],
   workspaceTimezone: "UTC",
   hotkey: "CommandOrControl+Shift+K",
   hotkeyRegistered: true,

@@ -145,6 +145,10 @@ until a contract test covers it.
 - **`PATCH /time_entries/:id/restart` exists** (verified: it answers `409` with a
   `running_entry` body when a timer is already going, not `404`). Resuming a task uses it
   so time accumulates on the existing entry rather than creating a duplicate for the day.
+  **It restarts the entry it is given, on that entry's `spent_date`** — so it is only ever
+  right for *today's* rows. The popover's Yesterday list therefore does not use it: its
+  play button copies the category and note onto a new entry via `switchTo`, dated today.
+  Pointing both lists at the same call would quietly file today's work under yesterday.
 
 ## Testing approach
 
@@ -317,8 +321,11 @@ someone notices. A hidden pair is still shown if it is a favourite or appears an
 off must never hide what you are actually working on; the preference is still recorded and
 takes effect once that stops being true.
 
-`Snapshot.today` comes free from the 30-day fetch `loadWorkspace` already makes for
-ranking; only mutations pay for `#reloadToday()`, one extra request.
+`Snapshot.today` and `Snapshot.yesterday` both come free from the 30-day fetch
+`loadEntries` already makes for ranking; only mutations pay for
+`AppService.#reloadEntries()`, one extra request. Both are sliced by *workspace*
+calendar date, so the Yesterday boundary moves with the workspace rather than sitting
+24 hours behind a UTC clock.
 
 `Snapshot.revision` increments on every server-side change. Windows holding their own
 derived data (the entries table) reload when it moves — without that they go stale until
