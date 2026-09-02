@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { TimeEntry } from "../core/keito/types.js";
 import type { Snapshot } from "../../electron/service.js";
 import { keito } from "./keito-api.js";
@@ -37,13 +37,18 @@ export function ReviewWindow(): JSX.Element {
    * still recorded — so a new user who poked at the tabs while setting up would
    * land on whichever one they poked, usually Contribute. The first thing to
    * see after connecting is the work you have logged.
+   *
+   * Adjusted during render rather than in an effect. An effect runs *after* the commit,
+   * so the first render with a working key would still use the old tab — mounting, say,
+   * the Contribute tab for a frame before replacing it. Setting state during render makes
+   * React re-run this function before it commits anything, so that frame never exists.
    */
   const ready = snapshot?.keyStatus === "ready";
-  const wasReady = useRef(ready);
-  useEffect(() => {
-    if (ready && !wasReady.current) setTab("entries");
-    wasReady.current = ready;
-  }, [ready]);
+  const [wasReady, setWasReady] = useState(ready);
+  if (ready !== wasReady) {
+    setWasReady(ready);
+    if (ready) setTab("entries");
+  }
 
   if (!snapshot) return <div className="window loading">Loading…</div>;
 
