@@ -297,9 +297,10 @@ off must never hide what you are actually working on; the preference is still re
 takes effect once that stops being true.
 
 `Snapshot.today` and `Snapshot.yesterday` both come free from the 30-day fetch
-`loadWorkspace` already makes for ranking; only mutations pay for `#reloadToday()`, one
-extra request. Both are sliced by *workspace* calendar date, so the Yesterday boundary
-moves with the workspace rather than sitting 24 hours behind a UTC clock.
+`loadEntries` already makes for ranking; only mutations pay for
+`AppService.#reloadEntries()`, one extra request. Both are sliced by *workspace*
+calendar date, so the Yesterday boundary moves with the workspace rather than sitting
+24 hours behind a UTC clock.
 
 `Snapshot.revision` increments on every server-side change. Windows holding their own
 derived data (the entries table) reload when it moves — without that they go stale until

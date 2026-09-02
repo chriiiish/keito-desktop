@@ -84,9 +84,14 @@ export function RecentEntries({
                   title="Start this again today"
                   aria-label={`Start ${taskName} again today`}
                   // An entry whose project or task has since been archived resolves to no
-                  // pair, and there is nothing to start it against.
+                  // pair, and there is nothing to start it against. Guarded in the handler
+                  // as well as by `disabled`, so the two cannot drift apart: the disabled
+                  // attribute is a UI affordance, not a guarantee the call is safe.
                   disabled={!pair}
-                  onClick={() => onStartAgain(pair!.id, entry.notes?.trim() || undefined)}
+                  onClick={async () => {
+                    if (!pair) return;
+                    await onStartAgain(pair.id, entry.notes?.trim() || undefined);
+                  }}
                 >
                   {/* Fast-forward rather than play, because the button does something
                       different: it carries the work forward onto today instead of
