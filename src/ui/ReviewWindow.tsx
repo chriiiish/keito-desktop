@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import type { TimeEntry } from "../core/keito/types.js";
+import type { Snapshot } from "../../electron/service.js";
 import { formatTrayLabel } from "../core/tray/label.js";
 import { keito } from "./keito-api.js";
-import { VisibleCategories } from "./VisibleCategories.js";
+import { AsyncButton, Spinner, useAsyncAction } from "./AsyncButton.js";
+import { ProjectsTab } from "./ProjectsTab.js";
 import { useSnapshot } from "./useSnapshot.js";
 
 const isoDate = (date: Date) => date.toISOString().slice(0, 10);
 
 /** A live example of the menu bar label, using the running timer when there is one. */
-function trayPreview(snapshot: NonNullable<ReturnType<typeof useSnapshot>[0]>): string {
+function trayPreview(snapshot: Snapshot): string {
   const running = snapshot.timer.status === "running" ? snapshot.timer : null;
   return formatTrayLabel(
     {
@@ -27,11 +29,12 @@ function weekStart(today: Date): Date {
   return date;
 }
 
-type Tab = "entries" | "visibility" | "settings";
+type Tab = "entries" | "projects" | "connection" | "settings";
 
 const TABS: ReadonlyArray<readonly [Tab, string]> = [
-  ["entries", "Entries"],
-  ["visibility", "Visible Projects"],
+  ["entries", "Time Entries"],
+  ["projects", "Projects"],
+  ["connection", "Keito Connection"],
   ["settings", "Settings"],
 ];
 
@@ -41,8 +44,8 @@ export function ReviewWindow(): JSX.Element {
 
   if (!snapshot) return <div className="window loading">Loading…</div>;
 
-  // Nothing but Settings can do anything useful without a working key.
-  const active: Tab = snapshot.keyStatus === "ready" ? tab : "settings";
+  // Nothing else can do anything useful until the connection works.
+  const active: Tab = snapshot.keyStatus === "ready" ? tab : "connection";
 
   return (
     <div className="window">
@@ -55,16 +58,8 @@ export function ReviewWindow(): JSX.Element {
       </nav>
 
       {active === "entries" && <Entries revision={snapshot.revision} />}
-      {active === "visibility" && (
-        <section className="settings">
-          <h2>Categories in the dropdown</h2>
-          <p className="hint">
-            Everything is shown by default. Switch off what you never track against.
-            Favourites and anything you have used in the last 30 days stay visible regardless.
-          </p>
-          <VisibleCategories snapshot={snapshot} onChange={setSnapshot} />
-        </section>
-      )}
+      {active === "projects" && <ProjectsTab snapshot={snapshot} onChange={setSnapshot} />}
+      {active === "connection" && <Connection snapshot={snapshot} onChange={setSnapshot} />}
       {active === "settings" && <Settings snapshot={snapshot} onChange={setSnapshot} />}
     </div>
   );
@@ -112,9 +107,9 @@ function Entries({ revision }: { revision: number }): JSX.Element {
         <button className={range === "week" ? "on" : ""} onClick={() => setRange("week")}>
           This week
         </button>
-        <button className="link" onClick={() => void load()}>
+        <AsyncButton className="link" onClick={load}>
           Reload
-        </button>
+        </AsyncButton>
       </div>
 
       {error && <div className="error">{error}</div>}
@@ -163,7 +158,7 @@ function Entries({ revision }: { revision: number }): JSX.Element {
                 />
               </td>
               <td>
-                <button
+                <AsyncButton
                   className="link danger"
                   onClick={async () => {
                     // Never leave a failed delete looking like a successful one.
@@ -177,7 +172,7 @@ function Entries({ revision }: { revision: number }): JSX.Element {
                   }}
                 >
                   Delete
-                </button>
+                </AsyncButton>
               </td>
             </tr>
           ))}
@@ -191,39 +186,6 @@ function Entries({ revision }: { revision: number }): JSX.Element {
         </tbody>
       </table>
     </section>
-  );
-}
-
-/** Edits the company id in place, reconnecting on commit. */
-function CompanyIdField({
-  current,
-  onChange,
-}: {
-  current: string | null;
-  onChange: (next: NonNullable<ReturnType<typeof useSnapshot>[0]>) => void;
-}): JSX.Element {
-  const [value, setValue] = useState(current ?? "");
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => setValue(current ?? ""), [current]);
-
-  const dirty = value.trim() !== (current ?? "");
-
-  return (
-    <form
-      className="connect inline"
-      onSubmit={async (event) => {
-        event.preventDefault();
-        setSaving(true);
-        onChange(await keito.setCompanyId(value));
-        setSaving(false);
-      }}
-    >
-      <input value={value} placeholder="co_…" onChange={(event) => setValue(event.target.value)} />
-      <button type="submit" disabled={!dirty || !value.trim() || saving}>
-        {saving ? "Checking…" : "Apply"}
-      </button>
-    </form>
   );
 }
 
@@ -253,51 +215,62 @@ function TimeCell({
   );
 }
 
-function Settings({
+function Connection({
   snapshot,
   onChange,
 }: {
-  snapshot: NonNullable<ReturnType<typeof useSnapshot>[0]>;
-  onChange: (next: NonNullable<ReturnType<typeof useSnapshot>[0]>) => void;
+  snapshot: Snapshot;
+  onChange: (next: Snapshot) => void;
 }): JSX.Element {
-  const [key, setKey] = useState("");
-  const [companyId, setCompanyId] = useState("");
-  const [saving, setSaving] = useState(false);
+  const connected = snapshot.keyStatus === "ready";
+  // Pre-filled with the masked key when one is stored. Left untouched, it means "keep it";
+  // the real key never reaches this process.
+  const [key, setKey] = useState(snapshot.apiKeyHint ?? "");
+  const [companyId, setCompanyId] = useState(snapshot.accountId ?? "");
+  useEffect(() => setKey(snapshot.apiKeyHint ?? ""), [snapshot.apiKeyHint]);
+  useEffect(() => setCompanyId(snapshot.accountId ?? ""), [snapshot.accountId]);
+
+  const keyChanged = key !== (snapshot.apiKeyHint ?? "");
+  const companyChanged = companyId.trim() !== (snapshot.accountId ?? "");
+  const canSave = keyChanged ? key.trim() !== "" && companyId.trim() !== "" : companyChanged;
+
+  const [saving, save] = useAsyncAction(async () => {
+    onChange(
+      keyChanged
+        ? await keito.setApiKey(key.trim(), companyId.trim())
+        : await keito.setCompanyId(companyId.trim()),
+    );
+  });
 
   return (
-    <section className="settings">
-      <h2>Connection</h2>
-      {snapshot.keyStatus === "ready" ? (
+    <section className="settings connection">
+      {connected ? (
         <p className="connected">
-          Connected as <strong>{snapshot.identity?.name}</strong> — {snapshot.identity?.accountName}
-          <button className="link danger" onClick={() => void keito.signOut().then(onChange)}>
-            Disconnect
-          </button>
+          <strong>You’re connected!</strong>
+          <span className="muted">
+            {snapshot.identity?.name} · {snapshot.identity?.accountName}
+          </span>
         </p>
       ) : (
         <p className="hint">
-          Paste a <strong>full-access integration key</strong> from Keito (Settings → Integrations)
-          and your <strong>Company ID</strong>. Both are required — Keito sends the company id on
-          every request, so it cannot be detected for you. A personal read-only sync key will not
-          work: it cannot create time entries.
+          Paste a <strong>full-access integration key</strong> from Keito (Settings →
+          Integrations) and your <strong>Company ID</strong>. Both are required — Keito sends
+          the company id on every request, so it cannot be detected for you. A personal
+          read-only sync key will not work: it cannot create time entries.
         </p>
       )}
 
       <form
         className="connect"
-        onSubmit={async (event) => {
+        onSubmit={(event) => {
           event.preventDefault();
-          setSaving(true);
-          onChange(await keito.setApiKey(key, companyId));
-          setSaving(false);
-          setKey("");
-          setCompanyId("");
+          save();
         }}
       >
         <label>
           API key
           <input
-            type="password"
+            type={keyChanged ? "password" : "text"}
             placeholder="kto_…"
             value={key}
             onChange={(event) => setKey(event.target.value)}
@@ -306,14 +279,21 @@ function Settings({
         <label>
           Company ID
           <input
-            placeholder="Required — from your Keito account settings"
+            placeholder="From your Keito account settings"
             value={companyId}
             onChange={(event) => setCompanyId(event.target.value)}
           />
         </label>
-        <button type="submit" disabled={!key.trim() || !companyId.trim() || saving}>
-          {saving ? "Checking…" : "Connect"}
-        </button>
+        <div className="connect-actions">
+          <button type="submit" aria-busy={saving} disabled={!canSave || saving}>
+            {saving ? <Spinner /> : connected ? "Update" : "Connect"}
+          </button>
+          {connected && (
+            <AsyncButton className="link muted" onClick={() => keito.signOut().then(onChange)}>
+              Disconnect
+            </AsyncButton>
+          )}
+        </div>
       </form>
 
       {snapshot.error && (
@@ -324,18 +304,19 @@ function Settings({
           </button>
         </div>
       )}
+    </section>
+  );
+}
 
-      {snapshot.keyStatus === "ready" && (
-        <>
-          <h2>Company ID</h2>
-          <p className="hint">
-            Sent as the <code>Keito-Account-Id</code> header on every request. Change it to point
-            the app at a different company on the same key.
-          </p>
-          <CompanyIdField current={snapshot.accountId} onChange={onChange} />
-        </>
-      )}
-
+function Settings({
+  snapshot,
+  onChange,
+}: {
+  snapshot: Snapshot;
+  onChange: (next: Snapshot) => void;
+}): JSX.Element {
+  return (
+    <section className="settings">
       <h2>Shortcut</h2>
       <p className="hint">Press this anywhere to open the switcher.</p>
       <input
@@ -383,36 +364,17 @@ function Settings({
         Now showing: <code>{trayPreview(snapshot)}</code>
       </p>
 
-      <h2>Favourites</h2>
-      {snapshot.favourites.length === 0 ? (
-        <p className="hint">Star a category in the switcher to pin it to the top.</p>
-      ) : (
-        <ul className="favourites">
-          {snapshot.favourites.map((id) => {
-            const pair = snapshot.catalog.find((candidate) => candidate.id === id);
-            return (
-              <li key={id}>
-                {pair ? `${pair.projectName} — ${pair.taskName}` : <em>{id} (no longer available)</em>}
-                <button className="link danger" onClick={() => void keito.toggleFavourite(id).then(onChange)}>
-                  Remove
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-
-      <h2>Diagnostics</h2>
-      <p className="hint">
-        Every request is logged with its status and timing. API keys are masked.
-      </p>
-      <button onClick={() => void keito.openLog()}>Open log file</button>
-
       <h2>Workspace timezone</h2>
       <p className="hint">
         Only used when you edit a time by hand. Timers themselves are stamped by Keito.
       </p>
       <input value={snapshot.workspaceTimezone} readOnly />
+
+      <h2>Diagnostics</h2>
+      <p className="hint">
+        Every request is logged with its status and timing. API keys are masked.
+      </p>
+      <AsyncButton onClick={() => keito.openLog()}>Open log file</AsyncButton>
     </section>
   );
 }

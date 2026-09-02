@@ -25,6 +25,8 @@ export interface Snapshot {
   hotkey: string;
   /** The company id sent as Keito-Account-Id, once known. */
   accountId: string | null;
+  /** A masked stand-in for the stored key, so settings can show one without exposing it. */
+  apiKeyHint: string | null;
   /**
    * Bumped whenever anything server-side changed. Windows holding their own derived data
    * (the entries table) reload when this moves, rather than going stale until remounted.
@@ -37,6 +39,14 @@ export interface Snapshot {
   trayFallback: TrayFallback;
   trayPrefix: TrayPrefix;
   error: string | null;
+}
+
+/**
+ * Enough of the key to recognise it, and not enough to use it. The plaintext key never
+ * leaves the main process — the renderer only ever sees this.
+ */
+function maskKey(key: string): string {
+  return `kto_${"•".repeat(8)}${key.slice(-4)}`;
 }
 
 /** Projects and tasks change rarely; the popover is opened constantly. */
@@ -80,6 +90,7 @@ export class AppService {
   #error: string | null = null;
   #startedAtMs: number | null = null;
   #revision = 0;
+  #apiKeyHint: string | null = null;
 
   private constructor(prefs: PreferencesStore, secrets: SecretStore, log: Logger) {
     this.#prefs = prefs;
@@ -125,6 +136,7 @@ export class AppService {
       workspaceTimezone: prefs.workspaceTimezone,
       hotkey: prefs.hotkey,
       accountId: prefs.accountId ?? null,
+      apiKeyHint: this.#apiKeyHint,
       trayFallback: prefs.trayFallback,
       trayPrefix: prefs.trayPrefix,
       revision: this.#revision,
@@ -195,6 +207,7 @@ export class AppService {
     this.#today = [];
     this.#keyStatus = "missing";
     this.#error = null;
+    this.#apiKeyHint = null;
     await this.#prefs.update({ accountId: undefined });
     return this.snapshot();
   }
@@ -380,6 +393,7 @@ export class AppService {
     this.#switcher = new TimerSwitcher({ client: this.#client, now: () => new Date() });
     this.#identity = identity;
     this.#keyStatus = "ready";
+    this.#apiKeyHint = maskKey(key);
 
     if (options.persist) await this.#secrets.write(key);
     if (stored !== identity.accountId) await this.#prefs.update({ accountId: identity.accountId });

@@ -1,12 +1,11 @@
-import type { TimeEntry } from "../core/keito/types.js";
-import type { Pair } from "../core/keito/types.js";
+import type { Pair, TimeEntry } from "../core/keito/types.js";
+import { AsyncButton } from "./AsyncButton.js";
 
 interface TodayListProps {
   entries: readonly TimeEntry[];
   catalog: readonly Pair[];
-  busyId: string | null;
-  onResume: (entryId: string) => void;
-  onStop: () => void;
+  onResume: (entryId: string) => Promise<unknown>;
+  onStop: () => Promise<unknown>;
 }
 
 /** Decimal hours as h:mm, which is how you actually read a timesheet. */
@@ -21,13 +20,7 @@ function formatHours(entry: TimeEntry): string {
  * What you have already worked on today, each resumable in one click. Resuming continues
  * the existing entry rather than creating a second one for the same task.
  */
-export function TodayList({
-  entries,
-  catalog,
-  busyId,
-  onResume,
-  onStop,
-}: TodayListProps): JSX.Element {
+export function TodayList({ entries, catalog, onResume, onStop }: TodayListProps): JSX.Element {
   const named = entries.map((entry) => {
     const pair = catalog.find(
       (candidate) => candidate.projectId === entry.project_id && candidate.taskId === entry.task_id,
@@ -56,27 +49,23 @@ export function TodayList({
               </div>
               <span className="today-hours">{formatHours(entry)}</span>
               {entry.is_running ? (
-                <button
-                  type="button"
+                <AsyncButton
                   className="stop small"
                   title="Stop this timer"
                   aria-label={`Stop ${taskName}`}
-                  disabled={busyId !== null}
                   onClick={onStop}
                 >
                   ■
-                </button>
+                </AsyncButton>
               ) : (
-                <button
-                  type="button"
+                <AsyncButton
                   className="play small"
                   title="Resume this entry"
                   aria-label={`Resume ${taskName}`}
-                  disabled={busyId !== null}
                   onClick={() => onResume(entry.id)}
                 >
-                  {busyId === entry.id ? "…" : "▶"}
-                </button>
+                  ▶
+                </AsyncButton>
               )}
             </li>
           ))}

@@ -127,6 +127,20 @@ colour; add a token so light and dark stay in step.
 `CategoryPicker` is a custom combobox rather than a `<select>` on purpose: native options
 cannot hold a favourite button and cannot be type-filtered across project and task together.
 
+**Every control that calls the API goes through `AsyncButton` / `useAsyncAction`** (or the
+`Toggle` in `ProjectsTab`), which disables itself and shows a spinner until the call
+settles. The re-entry guard is a **ref, not state**: two events in the same tick would both
+read a stale `pending` and both fire. Adding a bare `<button onClick={() => keito.x()}>` is
+a regression — it can be double-fired.
+
+The window has four tabs: Time Entries, Projects (favourites + visibility), Keito
+Connection, Settings (preferences only). Without a working key everything falls back to
+Keito Connection.
+
+The renderer never receives the API key. `Snapshot.apiKeyHint` is a masked stand-in
+(`kto_••••••••abcd`); the connection form pre-fills it, and a value still equal to the hint
+means "keep the existing key", routing the save to `setCompanyId` instead of `setApiKey`.
+
 Tests drive the real `KeitoClient` through `FakeKeito`'s `fetch` rather than mocking the
 client. Don't introduce mocks of internal collaborators; extend the fake instead, and add a
 contract test when the behaviour being faked is one the real API decides.

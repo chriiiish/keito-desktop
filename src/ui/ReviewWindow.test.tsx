@@ -13,6 +13,7 @@ const api = {
   setTrayLabel: vi.fn(),
   setHotkey: vi.fn(),
   setApiKey: vi.fn(),
+  setCompanyId: vi.fn(),
   signOut: vi.fn(),
   openLog: vi.fn(),
   updateEntry: vi.fn(),
@@ -38,6 +39,7 @@ const snapshot: Snapshot = {
   workspaceTimezone: "UTC",
   hotkey: "X",
   accountId: "co",
+  apiKeyHint: "kto_••••••••abcd",
   trayFallback: "task",
   trayPrefix: "none",
   revision: 1,
@@ -58,8 +60,9 @@ describe("the review window", () => {
     const tabs = within(await screen.findByRole("navigation")).getAllByRole("button");
 
     expect(tabs.map((tab) => tab.textContent)).toEqual([
-      "Entries",
-      "Visible Projects",
+      "Time Entries",
+      "Projects",
+      "Keito Connection",
       "Settings",
     ]);
   });
@@ -68,7 +71,7 @@ describe("the review window", () => {
     const user = userEvent.setup();
     render(<ReviewWindow />);
 
-    await user.click(await screen.findByRole("button", { name: "Visible Projects" }));
+    await user.click(await screen.findByRole("button", { name: "Projects" }));
 
     expect(screen.getByLabelText("Acme Rebuild Development")).toBeDefined();
     expect(screen.getByLabelText("All tasks in Bank Portal")).toBeDefined();
@@ -78,27 +81,167 @@ describe("the review window", () => {
     const user = userEvent.setup();
     api.setHidden.mockResolvedValue(snapshot);
     render(<ReviewWindow />);
-    await user.click(await screen.findByRole("button", { name: "Visible Projects" }));
+    await user.click(await screen.findByRole("button", { name: "Projects" }));
 
     await user.click(screen.getByLabelText("Acme Rebuild Development"));
 
     expect(api.setHidden).toHaveBeenCalledWith(["p_acme:t_dev"], true);
   });
 
-  it("no longer keeps visibility inside Settings", async () => {
+  it("keeps Settings to preferences, with no visibility or connection fields", async () => {
     const user = userEvent.setup();
     render(<ReviewWindow />);
 
     await user.click(await screen.findByRole("button", { name: "Settings" }));
 
     expect(screen.queryByLabelText("Acme Rebuild Development")).toBeNull();
+    expect(screen.queryByPlaceholderText("kto_…")).toBeNull();
   });
 
-  it("forces Settings when there is no working key, since nothing else can work", async () => {
-    api.getSnapshot.mockResolvedValue({ ...snapshot, keyStatus: "missing" } satisfies Snapshot);
+  it("favourites a task from the Projects tab", async () => {
+    const user = userEvent.setup();
+    api.toggleFavourite.mockResolvedValue(snapshot);
+    render(<ReviewWindow />);
+    await user.click(await screen.findByRole("button", { name: "Projects" }));
+
+    await user.click(screen.getAllByLabelText("Favourite Bank Portal Ops")[0]!);
+
+    expect(api.toggleFavourite).toHaveBeenCalledWith("p_bank:t_ops");
+  });
+
+  it("labels an always-shown task simply Favourite or Recent", async () => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue({
+      ...snapshot,
+      favourites: ["p_acme:t_dev"],
+      recents: ["p_bank:t_ops"],
+    } satisfies Snapshot);
+    render(<ReviewWindow />);
+    await user.click(await screen.findByRole("button", { name: "Projects" }));
+
+    expect(screen.getByText("Favourite")).toBeDefined();
+    expect(screen.getByText("Recent")).toBeDefined();
+  });
+
+  it("lists favourites on the Projects tab", async () => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue({ ...snapshot, favourites: ["p_acme:t_dev"] } satisfies Snapshot);
+    render(<ReviewWindow />);
+
+    await user.click(await screen.findByRole("button", { name: "Projects" }));
+
+    expect(screen.getByText("Acme Rebuild — Development")).toBeDefined();
+  });
+});
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((r) => (resolve = r));
+  return { promise, resolve };
+}
+
+describe("while a settings action is in flight", () => {
+  it("saves the connection only once however many times Enter or the button fires", async () => {
+    const user = userEvent.setup();
+    const gate = deferred<Snapshot>();
+    api.setCompanyId.mockReturnValue(gate.promise);
+    render(<ReviewWindow />);
+    await user.click(await screen.findByRole("button", { name: "Keito Connection" }));
+    await user.clear(screen.getByLabelText("Company ID"));
+    await user.type(screen.getByLabelText("Company ID"), "co_other");
+
+    await user.keyboard("{Enter}{Enter}");
+
+    expect(api.setCompanyId).toHaveBeenCalledTimes(1);
+    gate.resolve(snapshot);
+  });
+
+  it("locks a visibility toggle until its write comes back", async () => {
+    const user = userEvent.setup();
+    const gate = deferred<Snapshot>();
+    api.setHidden.mockReturnValue(gate.promise);
+    render(<ReviewWindow />);
+    await user.click(await screen.findByRole("button", { name: "Projects" }));
+    const toggle = screen.getByLabelText("Acme Rebuild Development");
+
+    await user.click(toggle);
+
+    expect(toggle.hasAttribute("disabled")).toBe(true);
+    expect(api.setHidden).toHaveBeenCalledTimes(1);
+    gate.resolve(snapshot);
+  });
+
+  it("favourites only once per click", async () => {
+    const user = userEvent.setup();
+    const gate = deferred<Snapshot>();
+    api.toggleFavourite.mockReturnValue(gate.promise);
+    render(<ReviewWindow />);
+    await user.click(await screen.findByRole("button", { name: "Projects" }));
+    const star = screen.getAllByLabelText("Favourite Bank Portal Ops")[0]!;
+
+    await user.click(star);
+    await user.click(star);
+
+    expect(api.toggleFavourite).toHaveBeenCalledTimes(1);
+    gate.resolve(snapshot);
+  });
+});
+
+describe("the connection tab", () => {
+  it("leads with success, not with a disconnect button", async () => {
+    const user = userEvent.setup();
+    render(<ReviewWindow />);
+
+    await user.click(await screen.findByRole("button", { name: "Keito Connection" }));
+
+    expect(screen.getByText("You’re connected!")).toBeDefined();
+  });
+
+  it("shows the stored company id and a masked key, never the key itself", async () => {
+    const user = userEvent.setup();
+    render(<ReviewWindow />);
+    await user.click(await screen.findByRole("button", { name: "Keito Connection" }));
+
+    expect((screen.getByLabelText("Company ID") as HTMLInputElement).value).toBe("co");
+    expect((screen.getByLabelText("API key") as HTMLInputElement).value).toBe("kto_••••••••abcd");
+  });
+
+  it("updates the company id alone without asking for the key again", async () => {
+    const user = userEvent.setup();
+    api.setCompanyId.mockResolvedValue(snapshot);
+    render(<ReviewWindow />);
+    await user.click(await screen.findByRole("button", { name: "Keito Connection" }));
+
+    await user.clear(screen.getByLabelText("Company ID"));
+    await user.type(screen.getByLabelText("Company ID"), "co_other");
+    await user.click(screen.getByRole("button", { name: "Update" }));
+
+    expect(api.setCompanyId).toHaveBeenCalledWith("co_other");
+    expect(api.setApiKey).not.toHaveBeenCalled();
+  });
+
+  it("sends a genuinely new key through setApiKey", async () => {
+    const user = userEvent.setup();
+    api.setApiKey.mockResolvedValue(snapshot);
+    render(<ReviewWindow />);
+    await user.click(await screen.findByRole("button", { name: "Keito Connection" }));
+
+    await user.clear(screen.getByLabelText("API key"));
+    await user.type(screen.getByLabelText("API key"), "kto_brand_new");
+    await user.click(screen.getByRole("button", { name: "Update" }));
+
+    expect(api.setApiKey).toHaveBeenCalledWith("kto_brand_new", "co");
+  });
+
+  it("opens on the connection tab when there is no working key", async () => {
+    api.getSnapshot.mockResolvedValue({
+      ...snapshot,
+      keyStatus: "missing",
+      apiKeyHint: null,
+    } satisfies Snapshot);
 
     render(<ReviewWindow />);
 
-    expect(await screen.findByPlaceholderText("kto_…")).toBeDefined();
+    expect(await screen.findByRole("button", { name: "Connect" })).toBeDefined();
   });
 });

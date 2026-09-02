@@ -49,6 +49,7 @@ const snapshot: Snapshot = {
   workspaceTimezone: "UTC",
   hotkey: "X",
   accountId: "co_9",
+  apiKeyHint: "kto_••••••••abcd",
   trayFallback: "task",
   trayPrefix: "none",
   revision: 1,
@@ -192,6 +193,81 @@ describe("the start form", () => {
     await userEvent.setup().type(note, "Sprint planning{Enter}");
 
     expect(api.switchTo).toHaveBeenCalledWith("p_acme:t_qa", "Sprint planning");
+  });
+});
+
+/** A promise the test controls, so "in flight" is a state we can act during. */
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((r) => (resolve = r));
+  return { promise, resolve };
+}
+
+describe("while an action is in flight", () => {
+  it("starts only one timer however many times Enter is pressed", async () => {
+    const user = userEvent.setup();
+    const gate = deferred<Snapshot>();
+    api.switchTo.mockReturnValue(gate.promise);
+    render(<Popover />);
+    const note = await screen.findByPlaceholderText(/what are you working on/i);
+
+    await user.type(note, "Sprint planning");
+    await user.keyboard("{Enter}{Enter}{Enter}");
+
+    expect(api.switchTo).toHaveBeenCalledTimes(1);
+    gate.resolve({ ...snapshot, error: null });
+  });
+
+  it("turns the start button into a spinner and refuses further clicks", async () => {
+    const user = userEvent.setup();
+    const gate = deferred<Snapshot>();
+    api.switchTo.mockReturnValue(gate.promise);
+    render(<Popover />);
+
+    await user.click(await screen.findByLabelText("Start timer"));
+
+    const button = screen.getByLabelText("Start timer");
+    expect(button.getAttribute("aria-busy")).toBe("true");
+    expect(button.hasAttribute("disabled")).toBe(true);
+    expect(within(button).getByRole("status")).toBeDefined();
+    gate.resolve({ ...snapshot, error: null });
+  });
+
+  it("stops only once however many times Stop is clicked", async () => {
+    const user = userEvent.setup();
+    const gate = deferred<Snapshot>();
+    api.getSnapshot.mockResolvedValue({
+      ...snapshot,
+      today: [entry("te_1", "p_acme", "t_dev", { is_running: true, ended_time: null })],
+    } satisfies Snapshot);
+    api.stopTimer.mockReturnValue(gate.promise);
+    render(<Popover />);
+    const stop = await screen.findByLabelText(/^Stop Development$/);
+
+    await user.click(stop);
+    await user.click(stop);
+    await user.click(stop);
+
+    expect(api.stopTimer).toHaveBeenCalledTimes(1);
+    gate.resolve(snapshot);
+  });
+
+  it("resumes only once however many times the play button is clicked", async () => {
+    const user = userEvent.setup();
+    const gate = deferred<Snapshot>();
+    api.getSnapshot.mockResolvedValue({
+      ...snapshot,
+      today: [entry("te_1", "p_acme", "t_dev")],
+    } satisfies Snapshot);
+    api.resumeEntry.mockReturnValue(gate.promise);
+    render(<Popover />);
+    const play = await screen.findByLabelText(/^Resume Development$/);
+
+    await user.click(play);
+    await user.click(play);
+
+    expect(api.resumeEntry).toHaveBeenCalledTimes(1);
+    gate.resolve(snapshot);
   });
 });
 

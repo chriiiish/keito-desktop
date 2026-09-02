@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { buildPicker } from "../core/catalog/picker.js";
+import { AsyncButton } from "./AsyncButton.js";
 import type { Pair } from "../core/keito/types.js";
 
 interface CategoryPickerProps {
@@ -9,7 +10,7 @@ interface CategoryPickerProps {
   hidden: readonly string[];
   selectedId: string;
   onSelect: (pairId: string) => void;
-  onToggleFavourite: (pairId: string) => void;
+  onToggleFavourite: (pairId: string) => Promise<unknown>;
 }
 
 /**
@@ -96,18 +97,16 @@ export function CategoryPicker({
         onClick={() => choose(pair.id)}
       >
         <span className="option-label">{label}</span>
-        <button
-          type="button"
-          className={`star${favourites.includes(pair.id) ? " on" : ""}`}
-          title={favourites.includes(pair.id) ? "Remove from favourites" : "Add to favourites"}
-          aria-label={`Favourite ${pair.projectName} ${pair.taskName}`}
-          onClick={(event) => {
-            event.stopPropagation();
-            onToggleFavourite(pair.id);
-          }}
-        >
-          ★
-        </button>
+        <span onClick={(event) => event.stopPropagation()}>
+          <AsyncButton
+            className={`star${favourites.includes(pair.id) ? " on" : ""}`}
+            title={favourites.includes(pair.id) ? "Remove from favourites" : "Add to favourites"}
+            aria-label={`Favourite ${pair.projectName} ${pair.taskName}`}
+            onClick={() => onToggleFavourite(pair.id)}
+          >
+            ★
+          </AsyncButton>
+        </span>
       </li>
     );
   };

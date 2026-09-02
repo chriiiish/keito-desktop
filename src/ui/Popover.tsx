@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { AsyncButton, Spinner, useAsyncAction } from "./AsyncButton.js";
 import { CategoryPicker } from "./CategoryPicker.js";
 import { Elapsed } from "./Elapsed.js";
 import { TodayList } from "./TodayList.js";
@@ -9,8 +10,7 @@ export function Popover(): JSX.Element {
   const [snapshot, setSnapshot] = useSnapshot();
   const [selectedId, setSelectedId] = useState("");
   const [note, setNote] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [resuming, setResuming] = useState<string | null>(null);
+
   const [idle, setIdle] = useState<{ awaySinceMs: number; awaySeconds: number } | null>(null);
   const noteRef = useRef<HTMLInputElement>(null);
 
@@ -35,6 +35,22 @@ export function Popover(): JSX.Element {
   // The note is the field you actually type in, so it takes focus on open.
   useEffect(() => noteRef.current?.focus(), [snapshot?.keyStatus]);
 
+  const [starting, start] = useAsyncAction(async () => {
+    if (!selectedId) return;
+    const next = await keito.switchTo(selectedId, note.trim() || undefined);
+    setSnapshot(next);
+    if (!next.error) {
+      setNote("");
+      void keito.closePopover();
+    }
+  });
+
+  const resume = async (entryId: string) => {
+    const next = await keito.resumeEntry(entryId);
+    setSnapshot(next);
+    if (!next.error) void keito.closePopover();
+  };
+
   if (!snapshot) return <div className="popover loading">Loading…</div>;
 
   if (snapshot.keyStatus !== "ready") {
@@ -50,25 +66,7 @@ export function Popover(): JSX.Element {
     );
   }
 
-  const start = async () => {
-    if (!selectedId || busy) return;
-    setBusy(true);
-    const next = await keito.switchTo(selectedId, note.trim() || undefined);
-    setBusy(false);
-    setSnapshot(next);
-    if (!next.error) {
-      setNote("");
-      void keito.closePopover();
-    }
-  };
 
-  const resume = async (entryId: string) => {
-    setResuming(entryId);
-    const next = await keito.resumeEntry(entryId);
-    setResuming(null);
-    setSnapshot(next);
-    if (!next.error) void keito.closePopover();
-  };
 
   return (
     <div
@@ -93,7 +91,7 @@ export function Popover(): JSX.Element {
             </div>
             <div className="running-right">
               <Elapsed startedAtMs={running.startedAtMs} />
-              <button onClick={() => void keito.stopTimer().then(setSnapshot)}>Stop</button>
+              <AsyncButton onClick={() => keito.stopTimer().then(setSnapshot)}>Stop</AsyncButton>
             </div>
           </>
         ) : (
@@ -104,14 +102,14 @@ export function Popover(): JSX.Element {
       {idle && (
         <div className="idle-banner">
           You were away for {Math.round(idle.awaySeconds / 60)} min.
-          <button
-            onClick={() => {
-              void keito.resolveIdle(false, idle.awaySinceMs).then(setSnapshot);
+          <AsyncButton
+            onClick={async () => {
+              setSnapshot(await keito.resolveIdle(false, idle.awaySinceMs));
               setIdle(null);
             }}
           >
             Discard it
-          </button>
+          </AsyncButton>
           <button className="link" onClick={() => setIdle(null)}>
             Keep it
           </button>
@@ -124,7 +122,8 @@ export function Popover(): JSX.Element {
         className="starter"
         onSubmit={(event) => {
           event.preventDefault();
-          void start();
+          // Guarded, so holding Enter cannot fire a second create.
+          start();
         }}
       >
         {/* Not a <label>: wrapping the picker in one forwards option clicks to the
@@ -138,7 +137,7 @@ export function Popover(): JSX.Element {
             hidden={snapshot.hidden}
             selectedId={selectedId}
             onSelect={setSelectedId}
-            onToggleFavourite={(pairId) => void keito.toggleFavourite(pairId).then(setSnapshot)}
+            onToggleFavourite={(pairId) => keito.toggleFavourite(pairId).then(setSnapshot)}
           />
         </div>
 
@@ -151,8 +150,15 @@ export function Popover(): JSX.Element {
               value={note}
               onChange={(event) => setNote(event.target.value)}
             />
-            <button type="submit" className="play" title="Start timer" disabled={!selectedId || busy}>
-              ▶
+            <button
+              type="submit"
+              className="play"
+              title="Start timer"
+              aria-label="Start timer"
+              aria-busy={starting}
+              disabled={!selectedId || starting}
+            >
+              {starting ? <Spinner /> : "▶"}
             </button>
           </div>
         </label>
@@ -161,9 +167,8 @@ export function Popover(): JSX.Element {
       <TodayList
         entries={snapshot.today}
         catalog={snapshot.catalog}
-        busyId={resuming}
-        onResume={(entryId) => void resume(entryId)}
-        onStop={() => void keito.stopTimer().then(setSnapshot)}
+        onResume={resume}
+        onStop={() => keito.stopTimer().then(setSnapshot)}
       />
 
       <footer>

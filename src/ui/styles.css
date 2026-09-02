@@ -14,6 +14,7 @@
   --accent-soft: #e0e7ff;     /* indigo-100 */
   --on-accent: #ffffff;
   --star: #f59e0b;            /* amber-500 */
+  --success: #059669;         /* emerald-600 */
   --danger: #dc2626;
   --rule-width: 2px;
   color-scheme: light dark;
@@ -32,6 +33,7 @@
     --accent-soft: #312e81;   /* indigo-900 */
     --on-accent: #0f172a;
     --star: #fbbf24;          /* amber-400 */
+    --success: #34d399;       /* emerald-400 */
     --danger: #fb7185;        /* rose-400 */
   }
 }
@@ -168,9 +170,17 @@ input.time { width: 74px; font-variant-numeric: tabular-nums; }
 .settings h2:first-child { margin-top: 0; }
 .settings form { display: flex; gap: 8px; max-width: 460px; }
 .settings input { max-width: 460px; }
-.settings .connected { display: flex; align-items: center; gap: 8px; }
+.settings .connected { display: flex; flex-direction: column; gap: 2px; margin: 0 0 4px; }
+.settings .connected strong { color: var(--success); font-size: 15px; }
+.settings .connected .muted { color: var(--muted); font-size: 12px; }
+.connect-actions { display: flex; align-items: center; gap: 12px; }
+.connect-actions button[type="submit"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.connect-actions button[type="submit"]:disabled { opacity: 0.5; cursor: default; }
+button.link.muted { color: var(--muted); }
+button.link.muted:hover { color: var(--danger); }
 .favourites { list-style: none; padding: 0; margin: 0; max-width: 460px; }
-.favourites li { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.favourites li { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.favourites .star { border: none; background: none; font-size: 15px; color: var(--star); padding: 0 4px; }
 
 .settings form.connect { flex-direction: column; align-items: flex-start; gap: 10px; }
 .settings form.connect.inline { flex-direction: row; align-items: center; width: 100%; max-width: 460px; }
@@ -305,6 +315,9 @@ select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 .visibility-row.task { padding-left: 22px; border-top: 1px solid var(--line); }
 .visibility-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .visibility-count { font-size: 11px; color: var(--muted); font-weight: 400; }
+.visibility-row .star { border: none; background: none; color: var(--line); font-size: 15px; padding: 0 4px; }
+.visibility-row .star.on { color: var(--star); }
+
 .badge {
   font-size: 10px;
   text-transform: uppercase;
@@ -349,3 +362,28 @@ select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 }
 .stop:hover { border-color: var(--danger); }
 .stop:disabled { opacity: 0.5; cursor: default; }
+
+/* ── Busy state ──────────────────────────────────────────── */
+.spinner {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.125em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  opacity: 0.75;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation-duration: 2s; }
+}
+
+button[aria-busy="true"] { cursor: default; }
+/* Keep the button from resizing as its label becomes a spinner. */
+.play, .stop, .star, .connect-actions button { min-width: 2.2em; }
