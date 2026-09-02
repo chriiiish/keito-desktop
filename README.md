@@ -25,6 +25,12 @@ entry requires both ids.
    rather than failing later.
 3. `npm run dev`, then paste the key into the settings window that opens.
 
+**Company ID** is optional on that form. Leave it blank and the app reads it from
+`/users/me` and remembers it. Fill it in when auto-detection fails — Keito documents
+`Keito-Account-Id` as required on *every* request, including the one that would discover it
+— or to point a key that spans companies at a specific one. You can change it later from
+Settings without re-entering the key; clearing it re-detects.
+
 The key is encrypted at rest by the OS (Keychain on macOS, DPAPI on Windows) and never
 written to `preferences.json`.
 

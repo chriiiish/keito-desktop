@@ -56,4 +56,18 @@ describe("KeitoClient", () => {
 
     await expect(client.validateKey()).rejects.toBeInstanceOf(KeitoReadOnlyError);
   });
+
+  it("prefers a company id the user supplied over the one the server reports", async () => {
+    // The header decides which workspace the request acts on, so identity must reflect
+    // what we actually send — not what a token's default company claims.
+    const { fn, calls } = stubFetch([
+      { body: { id: "u_1", first_name: "Chris", company: { id: "co_default", name: "Default" } } },
+    ]);
+    const client = new KeitoClient({ apiKey: "kto_secret", accountId: "co_chosen", fetch: fn });
+
+    const identity = await client.validateKey();
+
+    expect(identity.accountId).toBe("co_chosen");
+    expect(calls[0]!.headers.get("Keito-Account-Id")).toBe("co_chosen");
+  });
 });

@@ -17,6 +17,8 @@ export interface Snapshot {
   favourites: string[];
   workspaceTimezone: string;
   hotkey: string;
+  /** The company id sent as Keito-Account-Id, once known. */
+  accountId: string | null;
   timer:
     | { status: "idle" }
     | { status: "running"; pair: Pair; entryId: string; startedAtMs: number }
@@ -62,6 +64,7 @@ export class AppService {
       favourites: [...prefs.favourites],
       workspaceTimezone: prefs.workspaceTimezone,
       hotkey: prefs.hotkey,
+      accountId: prefs.accountId ?? null,
       timer:
         state.status === "running"
           ? {
@@ -75,10 +78,17 @@ export class AppService {
     };
   }
 
-  /** Validates and stores a pasted key, then loads the workspace. */
-  async setApiKey(key: string): Promise<Snapshot> {
+  /**
+   * Validates and stores a pasted key, then loads the workspace. A company id may be
+   * supplied explicitly — Keito's docs require the Keito-Account-Id header on every
+   * request, including the /users/me call that would otherwise discover it.
+   */
+  async setApiKey(key: string, accountId?: string): Promise<Snapshot> {
     try {
-      await this.#connect(key.trim(), { persist: true });
+      await this.#connect(key.trim(), {
+        persist: true,
+        ...(accountId?.trim() ? { accountId: accountId.trim() } : {}),
+      });
       this.#error = null;
     } catch (error) {
       this.#keyStatus = error instanceof KeitoAuthError ? "rejected" : "missing";
@@ -92,6 +102,24 @@ export class AppService {
     return this.snapshot();
   }
 
+  /** Changes the company id without re-pasting the key, and reconnects with it. */
+  async setCompanyId(accountId: string): Promise<Snapshot> {
+    const key = await this.#secrets.read();
+    if (!key) {
+      this.#error = "Enter an API key first.";
+      return this.snapshot();
+    }
+    try {
+      const trimmed = accountId.trim();
+      await this.#connect(key, trimmed ? { accountId: trimmed } : { rediscover: true });
+      this.#error = null;
+    } catch (error) {
+      if (error instanceof KeitoAuthError) this.#keyStatus = "rejected";
+      this.#error = error instanceof Error ? error.message : String(error);
+    }
+    return this.snapshot();
+  }
+
   async signOut(): Promise<Snapshot> {
     await this.#secrets.clear();
     this.#client = null;
@@ -100,6 +128,7 @@ export class AppService {
     this.#workspace = { catalog: [], recents: [] };
     this.#keyStatus = "missing";
     this.#error = null;
+    await this.#prefs.update({ accountId: undefined });
     return this.snapshot();
   }
 
@@ -185,11 +214,18 @@ export class AppService {
     });
   }
 
-  async #connect(key: string, options: { persist?: boolean } = {}): Promise<void> {
+  async #connect(
+    key: string,
+    options: { persist?: boolean; accountId?: string; rediscover?: boolean } = {},
+  ): Promise<void> {
+    // Explicit beats remembered; `rediscover` deliberately sends no header so the server
+    // reports the token's own company.
     const stored = this.#prefs.get().accountId;
+    const accountId = options.accountId ?? (options.rediscover ? undefined : stored);
+
     const probe = new KeitoClient({
       apiKey: key,
-      ...(stored ? { accountId: stored } : {}),
+      ...(accountId ? { accountId } : {}),
       fetch,
     });
     const identity = await probe.validateKey();

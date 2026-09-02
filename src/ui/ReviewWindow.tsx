@@ -145,6 +145,39 @@ function Entries(): JSX.Element {
   );
 }
 
+/** Edits the company id in place, reconnecting on commit. */
+function CompanyIdField({
+  current,
+  onChange,
+}: {
+  current: string | null;
+  onChange: (next: NonNullable<ReturnType<typeof useSnapshot>[0]>) => void;
+}): JSX.Element {
+  const [value, setValue] = useState(current ?? "");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => setValue(current ?? ""), [current]);
+
+  const dirty = value.trim() !== (current ?? "");
+
+  return (
+    <form
+      className="connect inline"
+      onSubmit={async (event) => {
+        event.preventDefault();
+        setSaving(true);
+        onChange(await keito.setCompanyId(value));
+        setSaving(false);
+      }}
+    >
+      <input value={value} placeholder="co_…" onChange={(event) => setValue(event.target.value)} />
+      <button type="submit" disabled={!dirty || saving}>
+        {saving ? "Checking…" : "Apply"}
+      </button>
+    </form>
+  );
+}
+
 /** An HH:mm cell that only commits a well-formed time. */
 function TimeCell({
   value,
@@ -179,6 +212,7 @@ function Settings({
   onChange: (next: NonNullable<ReturnType<typeof useSnapshot>[0]>) => void;
 }): JSX.Element {
   const [key, setKey] = useState("");
+  const [companyId, setCompanyId] = useState("");
   const [saving, setSaving] = useState(false);
 
   return (
@@ -199,26 +233,50 @@ function Settings({
       )}
 
       <form
+        className="connect"
         onSubmit={async (event) => {
           event.preventDefault();
           setSaving(true);
-          onChange(await keito.setApiKey(key));
+          onChange(await keito.setApiKey(key, companyId));
           setSaving(false);
           setKey("");
+          setCompanyId("");
         }}
       >
-        <input
-          type="password"
-          placeholder="kto_…"
-          value={key}
-          onChange={(event) => setKey(event.target.value)}
-        />
+        <label>
+          API key
+          <input
+            type="password"
+            placeholder="kto_…"
+            value={key}
+            onChange={(event) => setKey(event.target.value)}
+          />
+        </label>
+        <label>
+          Company ID <span className="optional">optional</span>
+          <input
+            placeholder="Leave blank to detect automatically"
+            value={companyId}
+            onChange={(event) => setCompanyId(event.target.value)}
+          />
+        </label>
         <button type="submit" disabled={!key.trim() || saving}>
           {saving ? "Checking…" : "Connect"}
         </button>
       </form>
 
       {snapshot.error && <div className="error">{snapshot.error}</div>}
+
+      {snapshot.keyStatus === "ready" && (
+        <>
+          <h2>Company ID</h2>
+          <p className="hint">
+            Sent as the <code>Keito-Account-Id</code> header on every request. Change it to point
+            the app at a different company on the same key; clear it to detect it again.
+          </p>
+          <CompanyIdField current={snapshot.accountId} onChange={onChange} />
+        </>
+      )}
 
       <h2>Shortcut</h2>
       <p className="hint">Press this anywhere to open the switcher.</p>

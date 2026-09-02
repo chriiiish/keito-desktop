@@ -156,3 +156,9 @@ input.time { width: 74px; font-variant-numeric: tabular-nums; }
 .settings .connected { display: flex; align-items: center; gap: 8px; }
 .favourites { list-style: none; padding: 0; margin: 0; max-width: 460px; }
 .favourites li { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--line); }
+
+.settings form.connect { flex-direction: column; align-items: flex-start; gap: 10px; }
+.settings form.connect.inline { flex-direction: row; align-items: center; width: 100%; max-width: 460px; }
+.settings form.connect label { display: flex; flex-direction: column; gap: 4px; width: 100%; font-size: 12px; color: var(--muted); }
+.settings form.connect .optional { color: var(--line); }
+.settings code { background: var(--raised); padding: 1px 4px; border-radius: 4px; font-size: 12px; }

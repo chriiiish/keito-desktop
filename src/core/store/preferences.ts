@@ -6,8 +6,11 @@ export const DEFAULT_HOTKEY = "CommandOrControl+Shift+K";
 export interface Preferences {
   /** Pair ids, in the order the user favourited them — the order the popover lists them. */
   favourites: string[];
-  /** Discovered from /users/me at setup, so it is not re-derived every launch. */
-  accountId?: string;
+  /**
+   * Sent as the Keito-Account-Id header. Either entered by the user or discovered from
+   * /users/me at setup. Explicitly undefined-able so disconnecting can clear it.
+   */
+  accountId?: string | undefined;
   /**
    * Only used to render and parse the HH:mm times Keito exchanges. The switching path
    * never touches it, because the server sets those timestamps.

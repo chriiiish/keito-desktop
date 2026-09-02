@@ -67,7 +67,8 @@ export class KeitoClient {
     return {
       userId: body.id,
       name: body.first_name,
-      accountId: company.id,
+      // A company id the user configured is what the header carries, so it wins.
+      accountId: this.#accountId ?? company.id,
       accountName: company.name,
     };
   }

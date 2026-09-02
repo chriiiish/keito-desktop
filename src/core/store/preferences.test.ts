@@ -73,4 +73,13 @@ describe("PreferencesStore", () => {
       workspaceTimezone: "Europe/London",
     });
   });
+
+  it("forgets the company id on disconnect, so the next key detects its own", async () => {
+    const store = await PreferencesStore.open(file);
+    await store.update({ accountId: "co_9" });
+
+    await store.update({ accountId: undefined });
+
+    expect((await PreferencesStore.open(file)).get().accountId).toBeUndefined();
+  });
 });

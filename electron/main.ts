@@ -162,7 +162,8 @@ function registerIpc(): void {
     });
 
   handle("snapshot", async () => service.snapshot());
-  handle("set-api-key", async (key: string) => service.setApiKey(key));
+  handle("set-api-key", async (key: string, accountId?: string) => service.setApiKey(key, accountId));
+  handle("set-company-id", async (accountId: string) => service.setCompanyId(accountId));
   handle("sign-out", async () => service.signOut());
   handle("refresh", async () => service.refresh());
   handle("switch-to", async (pairId: string, notes?: string) => service.switchTo(pairId, notes));

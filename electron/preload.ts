@@ -5,7 +5,10 @@ import type { TimeEntry } from "../src/core/keito/types.js";
 /** The only surface the renderer can reach. No node, no direct network. */
 const api = {
   getSnapshot: (): Promise<Snapshot> => ipcRenderer.invoke("snapshot"),
-  setApiKey: (key: string): Promise<Snapshot> => ipcRenderer.invoke("set-api-key", key),
+  setApiKey: (key: string, accountId?: string): Promise<Snapshot> =>
+    ipcRenderer.invoke("set-api-key", key, accountId),
+  setCompanyId: (accountId: string): Promise<Snapshot> =>
+    ipcRenderer.invoke("set-company-id", accountId),
   signOut: (): Promise<Snapshot> => ipcRenderer.invoke("sign-out"),
   refresh: (): Promise<Snapshot> => ipcRenderer.invoke("refresh"),
   switchTo: (pairId: string, notes?: string): Promise<Snapshot> =>

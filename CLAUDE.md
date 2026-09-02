@@ -72,7 +72,10 @@ break against the real server even while the fake keeps passing.
 
 - **Auth is two headers**: `Authorization: Bearer kto_…` and `Keito-Account-Id`. There is no
   OAuth flow; the key is pasted. `GET /users/me` returns `company` for full-access keys, and
-  that's how the account id is discovered.
+  that's how the account id is discovered when the user doesn't supply one. Because the
+  header is documented as required on *every* request, discovery can't be relied on — hence
+  the optional Company ID field. A configured id wins over the server-reported `company.id`
+  in `validateKey()`, since the header is what actually decides which workspace is acted on.
 - **Personal sync keys are read-only** and omit `company`. They cannot create entries, so
   `validateKey()` rejects them with `KeitoReadOnlyError` at setup rather than letting the
   first switch fail.
