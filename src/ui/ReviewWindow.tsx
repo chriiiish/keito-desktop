@@ -290,7 +290,10 @@ function Connection({
               <li>
                 <div className="setting-row">
                   <span className="setting-label">
-                    <strong>Start Keito Timer when you log in</strong>
+                    <strong>
+                      Start Keito Timer when you{" "}
+                      {snapshot.platform === "darwin" ? "log in" : "sign in"}
+                    </strong>
                     <span className="hint">You can change this in Settings later.</span>
                   </span>
                   <Toggle
@@ -442,7 +445,7 @@ function DangerZone({ onChange }: { onChange: (next: Snapshot) => void }): JSX.E
       {confirming ? (
         <>
           <p className="hint">
-            This clears your API key, the company id, favourites, hidden categories, the
+            This clears your API key, the Company ID, favourites, hidden categories, the
             shortcut, the tray label and the run-at-startup setting — everything this app
             has stored. Time already tracked stays in Keito and is not touched.
           </p>

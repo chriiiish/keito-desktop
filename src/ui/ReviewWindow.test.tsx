@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Snapshot } from "../../electron/service.js";
@@ -591,8 +591,19 @@ describe("the connection tab before it works", () => {
   it("offers to run at startup while someone is here anyway", async () => {
     await open();
 
-    expect(screen.getByText(/Start Keito Timer when you log in/)).toBeDefined();
+    expect(screen.getByText(/Start Keito Timer when you (log|sign) in/)).toBeDefined();
     expect(screen.getByLabelText("Run at startup")).toBeDefined();
+  });
+
+  // Windows signs in, macOS logs in. The matcher above accepts either; this is the one
+  // that would notice if the platform switch were dropped and everyone got "log in".
+  it("uses each platform's word for it", async () => {
+    await open();
+    expect(screen.getByText(/when you log in/)).toBeDefined();
+
+    cleanup();
+    await open({ platform: "win32" });
+    expect(screen.getByText(/when you sign in/)).toBeDefined();
   });
 
   it("sets it from there", async () => {
@@ -608,7 +619,7 @@ describe("the connection tab before it works", () => {
   it("stays quiet when the login item is unavailable", async () => {
     await open({ canOpenAtLogin: false });
 
-    expect(screen.queryByText(/Start Keito Timer when you log in/)).toBeNull();
+    expect(screen.queryByText(/Start Keito Timer when you (log|sign) in/)).toBeNull();
     expect(screen.queryByLabelText("Run at startup")).toBeNull();
   });
 
