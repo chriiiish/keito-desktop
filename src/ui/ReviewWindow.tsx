@@ -278,12 +278,49 @@ function Connection({
           </span>
         </p>
       ) : (
-        <p className="hint">
-          Paste a <strong>full-access integration key</strong> from Keito (Settings →
-          Integrations) and your <strong>Company ID</strong>. Both are required — Keito sends
-          the company id on every request, so it cannot be detected for you. A personal
-          read-only sync key will not work: it cannot create time entries.
-        </p>
+        /* A welcome, not a form with a paragraph above it: this is the first screen the
+           app ever shows. An <ol> rather than written-out numbers, so hiding the startup
+           step in a build that cannot offer it renumbers the rest by itself. */
+        <div className="welcome">
+          <h2>Welcome to Keito Timer</h2>
+          <p className="welcome-lead">Two things and you’re tracking time.</p>
+
+          <ol className="welcome-steps">
+            {/* Shown even when the login item is unavailable, disabled and with the
+                reason — the same way Settings handles it. Hiding the step instead reads
+                as a missing feature, and a welcome that silently drops a step in some
+                builds is a welcome nobody can trust to be complete. */}
+            <li>
+              <div className="setting-row">
+                <span className="setting-label">
+                  <strong>
+                    Start Keito Timer when you{" "}
+                    {snapshot.platform === "darwin" ? "log in" : "sign in"}
+                  </strong>
+                  <span className="hint">
+                    {snapshot.canOpenAtLogin
+                      ? "You can change this in Settings later."
+                      : "Available once Keito Timer is installed — this is a development build."}
+                  </span>
+                </span>
+                <Toggle
+                  checked={snapshot.openAtLogin}
+                  label="Run at startup"
+                  disabled={!snapshot.canOpenAtLogin}
+                  onChange={(next) => keito.setOpenAtLogin(next).then(onChange)}
+                />
+              </div>
+            </li>
+            <li>
+              <strong>Connect to Keito</strong>
+              <span className="hint">
+                Ask your Keito administrator for a <strong>write-enabled API key</strong> and
+                your <strong>Company ID</strong>. If you look after Keito yourself, both are
+                under Settings → Integrations.
+              </span>
+            </li>
+          </ol>
+        </div>
       )}
 
       <form
@@ -415,7 +452,7 @@ function DangerZone({ onChange }: { onChange: (next: Snapshot) => void }): JSX.E
       {confirming ? (
         <>
           <p className="hint">
-            This clears your API key, the company id, favourites, hidden categories, the
+            This clears your API key, the Company ID, favourites, hidden categories, the
             shortcut, the tray label and the run-at-startup setting — everything this app
             has stored. Time already tracked stays in Keito and is not touched.
           </p>

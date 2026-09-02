@@ -220,6 +220,18 @@ button.link.muted:hover { color: var(--danger); }
 .setting-row { display: flex; align-items: center; gap: 12px; max-width: 460px; }
 .setting-label { flex: 1; min-width: 0; }
 
+/* The first screen the app ever shows, so it reads as a welcome rather than a form with
+   a paragraph over it. The list numbers itself, which keeps the steps right when the
+   startup one is not offered. */
+.welcome { max-width: 460px; }
+.welcome h2 { margin-top: 0; }
+.welcome-lead { margin: 0 0 12px; color: var(--muted); }
+.welcome-steps { margin: 0 0 4px; padding-left: 20px; }
+.welcome-steps > li { margin-bottom: 12px; }
+.welcome-steps > li::marker { color: var(--muted); font-variant-numeric: tabular-nums; }
+.welcome-steps .setting-label { display: flex; flex-direction: column; gap: 2px; }
+.welcome-steps .hint { display: block; font-size: 12px; }
+
 /* Set apart by the same bold rule that separates sections elsewhere, so the last thing
    on the page does not read as one more setting. */
 .danger-zone {

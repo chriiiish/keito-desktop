@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Snapshot } from "../../electron/service.js";
@@ -540,6 +540,110 @@ describe("the connection tab", () => {
     render(<ReviewWindow />);
 
     expect(await screen.findByRole("button", { name: "Connect" })).toBeDefined();
+  });
+});
+
+describe("the connection tab before it works", () => {
+  const disconnected = {
+    ...snapshot,
+    keyStatus: "missing",
+    identity: null,
+    apiKeyHint: null,
+    accountId: null,
+  } satisfies Snapshot;
+
+  const open = async (over: Partial<Snapshot> = {}) => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue({ ...disconnected, ...over } satisfies Snapshot);
+    render(<ReviewWindow />);
+    await screen.findByRole("button", { name: "Connect" });
+    return user;
+  };
+
+  it("welcomes you", async () => {
+    await open();
+
+    expect(screen.getByRole("heading", { name: "Welcome to Keito Timer" })).toBeDefined();
+  });
+
+  // Most people setting this up cannot issue themselves a key, so the instruction names
+  // who can rather than only describing the field.
+  it("says who to ask and what to ask for", async () => {
+    await open();
+
+    const steps = screen.getByRole("list");
+    expect(steps.textContent).toMatch(/administrator/i);
+    expect(steps.textContent).toMatch(/write-enabled/i);
+    expect(steps.textContent).toMatch(/Company ID/i);
+  });
+
+  // Startup first, then the key: the switch is one tap and the key is an errand, so
+  // putting the errand first is how a welcome turns into a wall.
+  it("puts the startup switch ahead of the key", async () => {
+    await open();
+
+    const toggle = screen.getByLabelText("Run at startup");
+    const apiKey = screen.getByLabelText("API key");
+
+    expect(toggle.compareDocumentPosition(apiKey) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("offers to run at startup while someone is here anyway", async () => {
+    await open();
+
+    expect(screen.getByText(/Start Keito Timer when you (log|sign) in/)).toBeDefined();
+    expect(screen.getByLabelText("Run at startup")).toBeDefined();
+  });
+
+  // Windows signs in, macOS logs in. The matcher above accepts either; this is the one
+  // that would notice if the platform switch were dropped and everyone got "log in".
+  it("uses each platform's word for it", async () => {
+    await open();
+    expect(screen.getByText(/when you log in/)).toBeDefined();
+
+    cleanup();
+    await open({ platform: "win32" });
+    expect(screen.getByText(/when you sign in/)).toBeDefined();
+  });
+
+  it("sets it from there", async () => {
+    const user = await open();
+    api.setOpenAtLogin.mockResolvedValue({ ...disconnected, openAtLogin: true } satisfies Snapshot);
+
+    await user.click(screen.getByLabelText("Run at startup"));
+
+    expect(api.setOpenAtLogin).toHaveBeenCalledWith(true);
+  });
+
+  // Hiding the step instead reads as a missing feature — which is exactly how it was
+  // reported. Settings shows the same switch disabled with a reason; so does this.
+  it("keeps the step when the login item is unavailable, disabled and explained", async () => {
+    const user = await open({ canOpenAtLogin: false });
+
+    const toggle = screen.getByLabelText("Run at startup");
+    expect(screen.getByText(/Start Keito Timer when you (log|sign) in/)).toBeDefined();
+    expect(toggle.hasAttribute("disabled")).toBe(true);
+    expect(screen.getByText(/development build/i)).toBeDefined();
+
+    await user.click(toggle);
+    expect(api.setOpenAtLogin).not.toHaveBeenCalled();
+  });
+
+  it("still numbers both steps when it cannot be offered", async () => {
+    await open({ canOpenAtLogin: false });
+
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+  });
+
+  it("drops both once the key works", async () => {
+    const user = userEvent.setup();
+    render(<ReviewWindow />);
+    await user.click(await screen.findByRole("button", { name: "Keito Connection" }));
+
+    expect(screen.getByText("You’re connected!")).toBeDefined();
+    expect(screen.queryByRole("heading", { name: "Welcome to Keito Timer" })).toBeNull();
+    expect(screen.queryByRole("list")).toBeNull();
+    expect(screen.queryByLabelText("Run at startup")).toBeNull();
   });
 });
 
