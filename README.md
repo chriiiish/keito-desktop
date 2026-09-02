@@ -6,7 +6,8 @@ the running timer is replaced.
 
 ## What it does
 
-- **Tray popover** with a global hotkey (default `Cmd/Ctrl+Shift+K`): pick a category from
+- **Tray popover** with a global hotkey (default `⌘⇧K` / `Ctrl+Shift+K`, recorded by
+  pressing it in Settings): pick a category from
   the filterable dropdown, type a note, press `⏎` (or the play button).
 - **Today's entries** listed under the note, each resumable with one click — resuming
   continues the existing entry rather than logging a second one for the same task.

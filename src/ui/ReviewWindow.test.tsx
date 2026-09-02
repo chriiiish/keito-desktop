@@ -44,7 +44,9 @@ const snapshot: Snapshot = {
   hidden: [],
   today: [],
   workspaceTimezone: "UTC",
-  hotkey: "X",
+  hotkey: "CommandOrControl+Shift+K",
+  hotkeyRegistered: true,
+  platform: "darwin",
   accountId: "co",
   apiKeyHint: "kto_••••••••abcd",
   trayFallback: "task",
@@ -217,6 +219,60 @@ describe("while a settings action is in flight", () => {
 
     expect(api.toggleFavourite).toHaveBeenCalledTimes(1);
     gate.resolve(snapshot);
+  });
+});
+
+describe("the shortcut recorder", () => {
+  const openSettings = async () => {
+    const user = userEvent.setup();
+    render(<ReviewWindow />);
+    await user.click(await screen.findByRole("button", { name: "Settings" }));
+    return user;
+  };
+
+  it("shows the current shortcut as keys, not as an accelerator string", async () => {
+    await openSettings();
+
+    const display = screen.getByLabelText("Current shortcut");
+
+    expect(within(display).getAllByText(/./).map((k) => k.textContent)).toEqual(["⌘", "⇧", "K"]);
+  });
+
+  it("records the combination that is actually pressed", async () => {
+    const user = await openSettings();
+    api.setHotkey.mockResolvedValue(snapshot);
+
+    await user.click(screen.getByRole("button", { name: "Record" }));
+    await user.keyboard("{Meta>}{Shift>}j{/Shift}{/Meta}");
+
+    expect(api.setHotkey).toHaveBeenCalledWith("CommandOrControl+Shift+J");
+  });
+
+  it("keeps listening while only modifiers are held", async () => {
+    const user = await openSettings();
+
+    await user.click(screen.getByRole("button", { name: "Record" }));
+    await user.keyboard("{Meta>}");
+
+    expect(api.setHotkey).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeDefined();
+  });
+
+  it("cancels on Escape without changing anything", async () => {
+    const user = await openSettings();
+
+    await user.click(screen.getByRole("button", { name: "Record" }));
+    await user.keyboard("{Escape}");
+
+    expect(api.setHotkey).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Record" })).toBeDefined();
+  });
+
+  it("says so when the OS refused the shortcut", async () => {
+    api.getSnapshot.mockResolvedValue({ ...snapshot, hotkeyRegistered: false } satisfies Snapshot);
+    await openSettings();
+
+    expect(screen.getByText(/another application is probably already using it/i)).toBeDefined();
   });
 });
 

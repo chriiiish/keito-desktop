@@ -4,6 +4,7 @@ import type { Snapshot } from "../../electron/service.js";
 import { formatTrayLabel } from "../core/tray/label.js";
 import { keito } from "./keito-api.js";
 import { AsyncButton, Spinner, useAsyncAction } from "./AsyncButton.js";
+import { HotkeyRecorder } from "./HotkeyRecorder.js";
 import { ProjectsTab } from "./ProjectsTab.js";
 import { useSnapshot } from "./useSnapshot.js";
 
@@ -330,9 +331,11 @@ function Settings({
     <section className="settings">
       <h2>Shortcut</h2>
       <p className="hint">Press this anywhere to open the switcher.</p>
-      <input
-        defaultValue={snapshot.hotkey}
-        onBlur={(event) => void keito.setHotkey(event.target.value.trim()).then(onChange)}
+      <HotkeyRecorder
+        hotkey={snapshot.hotkey}
+        platform={snapshot.platform}
+        registered={snapshot.hotkeyRegistered}
+        onRecord={(accelerator) => keito.setHotkey(accelerator).then(onChange)}
       />
 
       <h2>Menu bar label</h2>

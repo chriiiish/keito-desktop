@@ -23,6 +23,10 @@ export interface Snapshot {
   hidden: string[];
   workspaceTimezone: string;
   hotkey: string;
+  /** False when the OS refused the accelerator — usually another app already has it. */
+  hotkeyRegistered: boolean;
+  /** So the renderer can name modifier keys the way this platform's users expect. */
+  platform: string;
   /** The company id sent as Keito-Account-Id, once known. */
   accountId: string | null;
   /** A masked stand-in for the stored key, so settings can show one without exposing it. */
@@ -91,6 +95,7 @@ export class AppService {
   #startedAtMs: number | null = null;
   #revision = 0;
   #apiKeyHint: string | null = null;
+  #hotkeyRegistered = true;
 
   private constructor(prefs: PreferencesStore, secrets: SecretStore, log: Logger) {
     this.#prefs = prefs;
@@ -135,6 +140,8 @@ export class AppService {
       hidden: [...prefs.hidden],
       workspaceTimezone: prefs.workspaceTimezone,
       hotkey: prefs.hotkey,
+      hotkeyRegistered: this.#hotkeyRegistered,
+      platform: process.platform,
       accountId: prefs.accountId ?? null,
       apiKeyHint: this.#apiKeyHint,
       trayFallback: prefs.trayFallback,
@@ -283,6 +290,12 @@ export class AppService {
   async setHotkey(hotkey: string): Promise<Snapshot> {
     await this.#prefs.update({ hotkey });
     return this.snapshot();
+  }
+
+  /** Told by the main process whether the OS actually accepted the accelerator. */
+  setHotkeyRegistered(registered: boolean): void {
+    this.#hotkeyRegistered = registered;
+    if (!registered) this.#log.warn(`The shortcut ${this.#prefs.get().hotkey} was refused`);
   }
 
   /**

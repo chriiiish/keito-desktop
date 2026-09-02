@@ -398,3 +398,31 @@ button[aria-busy="true"] { cursor: default; }
   font-size: 13px;
 }
 .loading-entries .spinner { color: var(--accent); width: 1.15em; height: 1.15em; }
+
+/* ── Shortcut recorder ───────────────────────────────────── */
+.hotkey { display: flex; align-items: center; gap: 10px; max-width: 460px; }
+.hotkey-display {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: 1;
+  min-height: 34px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+}
+.hotkey-display.recording { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.hotkey-display .muted { color: var(--muted); font-size: 12px; }
+.hotkey kbd {
+  font: inherit;
+  font-size: 12px;
+  min-width: 24px;
+  text-align: center;
+  padding: 2px 7px;
+  border: 1px solid var(--rule);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--raised);
+}
+.hint.warn { color: var(--danger); }

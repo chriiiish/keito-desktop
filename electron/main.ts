@@ -154,14 +154,16 @@ function createTray(): void {
   });
 }
 
-function registerHotkey(hotkey: string): void {
+/** Returns whether the OS accepted it — another app may already hold the combination. */
+function registerHotkey(hotkey: string): boolean {
   if (registeredHotkey) globalShortcut.unregister(registeredHotkey);
+  registeredHotkey = null;
   try {
     if (globalShortcut.register(hotkey, togglePopover)) registeredHotkey = hotkey;
   } catch {
     // An unavailable accelerator must not stop the app from starting.
-    registeredHotkey = null;
   }
+  return registeredHotkey !== null;
 }
 
 function registerIpc(): void {
@@ -196,9 +198,9 @@ function registerIpc(): void {
   );
 
   handle("set-hotkey", async (hotkey: string) => {
-    const snapshot = await service.setHotkey(hotkey);
-    registerHotkey(hotkey);
-    return snapshot;
+    await service.setHotkey(hotkey);
+    service.setHotkeyRegistered(registerHotkey(hotkey));
+    return service.snapshot();
   });
 
   handle("open-log", async () => {
@@ -260,7 +262,7 @@ app.whenReady().then(async () => {
 
   createTray();
   registerIpc();
-  registerHotkey(prefs.get().hotkey);
+  service.setHotkeyRegistered(registerHotkey(prefs.get().hotkey));
   startMonitors();
 
   updateTrayTitle(service.snapshot());

@@ -187,6 +187,13 @@ where the actual reason lives, and losing it makes every failure look identical.
 `KeitoNetworkError` means the request never reached Keito; an HTTP error status is
 `KeitoRequestError` or something more specific.
 
+The global shortcut is captured by `HotkeyRecorder`, not typed: `toAccelerator` in
+`src/core/keyboard/accelerator.ts` turns a real key press into an Electron accelerator, and
+`formatAccelerator` renders it as `⌘⇧K` chips. Both are pure and tested — key naming is
+where this goes wrong, and a bad accelerator fails silently at `globalShortcut.register`.
+`Snapshot.hotkeyRegistered` reports whether the OS accepted it, so a combination another app
+already owns says so instead of just not working.
+
 The tray label is `formatTrayLabel` in `src/core/tray/label.ts` — pure, so the menu bar
 text is tested rather than eyeballed. The note leads by default because it is what says
 what you are doing; project/task are a prefix and a blank-note fallback, and the fallback
