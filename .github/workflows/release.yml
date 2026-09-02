@@ -19,13 +19,35 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # The tag is the release's identity, so it decides the version rather than
+  # merely accompanying one. v0.1.1 previously shipped files named 0.1.0,
+  # because artifactName reads ${version} from package.json and nothing tied
+  # the two together — a mistake only visible on the download page, after the
+  # release was cut.
+  meta:
+    name: Resolve version
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
+      version: ${{ steps.resolve.outputs.version }}
+    steps:
+      - id: resolve
+        run: |
+          TAG="${{ inputs.tag || github.ref_name }}"
+          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "::error::Tag '$TAG' is not vMAJOR.MINOR.PATCH — refusing to release."
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          echo "Releasing $TAG as version ${TAG#v}"
+
   tag:
     name: Tag main
     # Only the manual path creates a tag; a tag push already has one.
+    needs: [meta]
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    outputs:
-      tag: ${{ inputs.tag }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -36,14 +58,14 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "${{ inputs.tag }}" -m "${{ inputs.tag }}"
-          git push origin "${{ inputs.tag }}"
+          git tag -a "${{ needs.meta.outputs.tag }}" -m "${{ needs.meta.outputs.tag }}"
+          git push origin "${{ needs.meta.outputs.tag }}"
 
   build:
     name: Package (${{ matrix.artifact }})
-    needs: [tag]
+    needs: [meta, tag]
     # always() so a tag push — where `tag` is skipped — still builds.
-    if: always() && needs.tag.result != 'failure'
+    if: always() && needs.meta.result == 'success' && needs.tag.result != 'failure'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -60,7 +82,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ needs.tag.outputs.tag || github.ref }}
+          ref: ${{ needs.meta.outputs.tag }}
 
       - uses: actions/setup-node@v7
         with:
@@ -73,6 +95,13 @@ jobs:
 
       - run: npm test
 
+      # After `npm ci`, so the install still sees the committed lockfile. The
+      # version reaches the artifact filenames, the .app's Info.plist and
+      # app.getVersion(), which is what the Contribute tab shows.
+      - name: Stamp the released version
+        shell: bash
+        run: npm pkg set version="${{ needs.meta.outputs.version }}"
+
       - run: npm run build
 
       # The app is unsigned. Without CSC_IDENTITY_AUTO_DISCOVERY=false,
@@ -81,6 +110,24 @@ jobs:
         run: npx electron-builder ${{ matrix.args }} --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      # The stamp above is worth nothing if it silently fails to land, and a
+      # glob upload would happily ship whatever it found.
+      - name: Check the artifacts carry the released version
+        shell: bash
+        run: |
+          shopt -s nullglob
+          found=(release/*.dmg release/*.exe)
+          if [ ${#found[@]} -eq 0 ]; then
+            echo "::error::No installers were produced."
+            exit 1
+          fi
+          for file in "${found[@]}"; do
+            case "$file" in
+              *"-${{ needs.meta.outputs.version }}-"*) echo "ok  $file" ;;
+              *) echo "::error::$file is not named for version ${{ needs.meta.outputs.version }}"; exit 1 ;;
+            esac
+          done
 
       # Just the installers. electron-builder also writes .blockmap and
       # latest*.yml, which exist only to feed electron-updater — nothing in this
@@ -95,7 +142,7 @@ jobs:
 
   release:
     name: Publish GitHub release
-    needs: [tag, build]
+    needs: [meta, build]
     if: always() && needs.build.result == 'success'
     runs-on: ubuntu-latest
     steps:
@@ -106,20 +153,35 @@ jobs:
 
       - uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ needs.tag.outputs.tag || github.ref_name }}
-          name: ${{ needs.tag.outputs.tag || github.ref_name }}
+          tag_name: ${{ needs.meta.outputs.tag }}
+          name: ${{ needs.meta.outputs.tag }}
           draft: true
           generate_release_notes: true
+          # Leads with the three installers, named and linked, because GitHub
+          # appends "Source code (zip)" and "(tar.gz)" to every release and
+          # gives no way to remove them. If the list cannot be shortened, the
+          # thing to download has to be unmissable above it.
+          #
           # The builds are ad-hoc signed, not notarised, so macOS refuses the
           # first launch. Saying so here is the difference between a user who
           # opens the app and one who assumes the download is broken.
           body: |
-            ## Installing
+            ## Download
 
-            **macOS** — `-arm64.dmg` for Apple Silicon, the plain `.dmg` for Intel.
-            Drag the app to Applications. The first launch is refused with
-            "Apple could not verify…" because these builds are not notarised;
-            open **System Settings → Privacy & Security** and press
+            | | File |
+            | --- | --- |
+            | **macOS** — Apple Silicon (M1 and later) | [`Keito-Timer-${{ needs.meta.outputs.version }}-Apple-Silicon.dmg`](https://github.com/${{ github.repository }}/releases/download/${{ needs.meta.outputs.tag }}/Keito-Timer-${{ needs.meta.outputs.version }}-Apple-Silicon.dmg) |
+            | **macOS** — Intel | [`Keito-Timer-${{ needs.meta.outputs.version }}-Intel-Mac.dmg`](https://github.com/${{ github.repository }}/releases/download/${{ needs.meta.outputs.tag }}/Keito-Timer-${{ needs.meta.outputs.version }}-Intel-Mac.dmg) |
+            | **Windows** | [`Keito-Timer-${{ needs.meta.outputs.version }}-Windows.exe`](https://github.com/${{ github.repository }}/releases/download/${{ needs.meta.outputs.tag }}/Keito-Timer-${{ needs.meta.outputs.version }}-Windows.exe) |
+
+            The *Source code* archives below are added by GitHub to every
+            release and are not needed to install the app.
+
+            ## First launch
+
+            **macOS** — drag the app to Applications. The first launch is
+            refused with "Apple could not verify…" because these builds are not
+            notarised; open **System Settings → Privacy & Security** and press
             **Open Anyway**. Only needed once.
 
             **Windows** — run the `.exe`. SmartScreen shows "Windows protected
