@@ -6,7 +6,7 @@ import type { Identity, Pair, TimeEntry } from "../src/core/keito/types.js";
 import { PreferencesStore } from "../src/core/store/preferences.js";
 import type { TrayFallback, TrayPrefix } from "../src/core/tray/label.js";
 import { TimerSwitcher, type TimerState } from "../src/core/timer/switcher.js";
-import { formatWorkspaceTime, parseWorkspaceTime } from "../src/core/time/workspace-time.js";
+import { formatWorkspaceTime } from "../src/core/time/workspace-time.js";
 import { entryStartMs } from "../src/core/time/elapsed.js";
 import type { SecretStore } from "./secrets.js";
 import type { Logger } from "./logger.js";
