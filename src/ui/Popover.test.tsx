@@ -613,6 +613,63 @@ describe("today's entries", () => {
  * Yesterday's rows cannot use the restart endpoint: it continues the entry it is given,
  * which would file today's work under yesterday's date.
  */
+describe("a running row's duration", () => {
+  const runningFor = (minutes: number) =>
+    entry("te_run", "p_acme", "t_dev", {
+      is_running: true,
+      ended_time: null,
+      hours: null,
+      timer_started_at: new Date(Date.now() - minutes * 60_000).toISOString(),
+    });
+
+  // The reported bug: a running entry reports hours: null, and formatting that as a
+  // number rendered every running timer as 0:00.
+  it("counts from the start rather than showing zero", async () => {
+    api.getSnapshot.mockResolvedValue({ ...snapshot, today: [runningFor(30)] } satisfies Snapshot);
+
+    render(<Popover />);
+    await screen.findByLabelText(/^Stop Development$/);
+
+    expect(screen.getByText("0:30")).toBeDefined();
+    expect(screen.queryByText("0:00")).toBeNull();
+  });
+
+  it("goes past the hour properly", async () => {
+    api.getSnapshot.mockResolvedValue({ ...snapshot, today: [runningFor(95)] } satisfies Snapshot);
+
+    render(<Popover />);
+    await screen.findByLabelText(/^Stop Development$/);
+
+    expect(screen.getByText("1:35")).toBeDefined();
+  });
+
+  it("still reads a stopped entry from its recorded hours", async () => {
+    api.getSnapshot.mockResolvedValue({
+      ...snapshot,
+      today: [entry("te_done", "p_acme", "t_dev", { hours: 2.5 })],
+    } satisfies Snapshot);
+
+    render(<Popover />);
+    await screen.findByLabelText(/^Resume Development$/);
+
+    expect(screen.getByText("2:30")).toBeDefined();
+  });
+
+  // Yesterday's list is fed by the same formatter, and a timer left running overnight is
+  // exactly the case that would otherwise read 0:00 on the wrong day.
+  it("does the same for a timer left running from yesterday", async () => {
+    api.getSnapshot.mockResolvedValue({
+      ...snapshot,
+      yesterday: [runningFor(45)],
+    } satisfies Snapshot);
+
+    render(<Popover />);
+    await screen.findByText("Yesterday");
+
+    expect(screen.getByText("0:45")).toBeDefined();
+  });
+});
+
 describe("yesterday's entries", () => {
   const yesterdayEntry = (over: Partial<TimeEntry> = {}) =>
     entry("te_y", "p_bank", "t_ops", { spent_date: "2026-09-01", notes: "Migration", ...over });
