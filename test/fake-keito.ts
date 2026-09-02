@@ -36,6 +36,11 @@ export class FakeKeito {
   requests: Array<{ method: string; path: string; body: unknown; headers: Headers }> = [];
   /** Set to make the next request fail as if the network were down. */
   offline = false;
+  /** projectId -> how many more times GET /tasks should answer 503 for it. */
+  taskFailures = new Map<string, number>();
+  /** The most requests this fake ever had in flight at once. */
+  maxConcurrent = 0;
+  #inFlight = 0;
 
   #options: Required<Pick<FakeKeitoOptions, "projects" | "tasksByProject" | "now">> & {
     rejectAuth: boolean;
@@ -64,6 +69,19 @@ export class FakeKeito {
   readonly fetch: typeof fetch = async (input, init) => {
     if (this.offline) throw new TypeError("fetch failed");
 
+    this.#inFlight++;
+    this.maxConcurrent = Math.max(this.maxConcurrent, this.#inFlight);
+    // Yield so genuinely parallel callers overlap here, making the count meaningful.
+    await Promise.resolve();
+    try {
+      return await this.#handle(input, init);
+    } finally {
+      this.#inFlight--;
+    }
+  };
+
+  async #handle(input: RequestInfo | URL, init: RequestInit | undefined): Promise<Response> {
+
     const request = new Request(input as string, init);
     const url = new URL(request.url);
     const path = url.pathname.replace(new URL(KEITO_BASE_URL).pathname, "");
@@ -84,6 +102,15 @@ export class FakeKeito {
     }
     if (method === "GET" && path === "/tasks") {
       const projectId = url.searchParams.get("project_id") ?? "";
+      const failures = this.taskFailures.get(projectId) ?? 0;
+      if (failures > 0) {
+        this.taskFailures.set(projectId, failures - 1);
+        // The message Keito actually returns under load.
+        return this.#json(
+          { error: "Task reference data is temporarily at capacity. Retry shortly." },
+          503,
+        );
+      }
       return this.#json({ tasks: this.#options.tasksByProject[projectId] ?? [] });
     }
     if (method === "GET" && path === "/time_entries") {

@@ -113,11 +113,16 @@ Tests live only at these seams: `KeitoClient`, `TimerSwitcher`, `buildPicker`,
 round-tripping to a temp dir. The Electron main process, the tray and the hotkey are
 deliberately **not** unit-tested — they're verified by running the app.
 
-`src/ui/Popover.test.tsx` is the one component test (jsdom + Testing Library). The popover
+`src/ui/Popover.test.tsx` and `src/ui/ReviewWindow.test.tsx` are the component tests (jsdom + Testing Library). The popover
 holds real logic — which category is preselected, dropdown grouping and filtering,
 favouriting from inside the list, resuming today's entries — and it is the screen that
-cannot be checked by reading a Snapshot. Keep component testing to that; the rest of the UI
-stays verify-by-running.
+cannot be checked by reading a Snapshot. Keep component testing to those two; the rest of
+the UI stays verify-by-running.
+
+The palette in `src/ui/styles.css` is taken from keito.ai: indigo-600 (`#4f46e5`) on slate
+neutrals, amber for favourites. It is all tokens — `--rule` is the bold bar between
+sections, `--line` the hairline within one, `--tint` the Today band. Never hard-code a
+colour; add a token so light and dark stay in step.
 
 `CategoryPicker` is a custom combobox rather than a `<select>` on purpose: native options
 cannot hold a favourite button and cannot be type-filtered across project and task together.
@@ -129,6 +134,12 @@ contract test when the behaviour being faked is one the real API decides.
 `rankRecents` scores uses with a 7-day half-life over a 30-day window. Its tests assert
 ordering against hand-computed values — don't replace them with assertions that recompute
 the score the way the implementation does.
+
+`GET /tasks` returns **503 "Task reference data is temporarily at capacity"** under load —
+seen against the live workspace. The client retries 429/502/503/504 up to `MAX_ATTEMPTS`
+with linear backoff, `loadWorkspace` caps itself at `TASK_FETCH_CONCURRENCY` in-flight task
+lookups, and a project whose tasks still will not load is skipped with a warning rather
+than rejecting the whole catalog. Losing one project beats failing to start.
 
 ## Diagnostics
 

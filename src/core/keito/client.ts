@@ -2,6 +2,7 @@ import {
   KeitoAccountIdRequiredError,
   KeitoAuthError,
   KeitoConflictError,
+  KeitoError,
   KeitoNetworkError,
   KeitoReadOnlyError,
   KeitoRequestError,
@@ -53,7 +54,13 @@ export interface KeitoClientOptions {
   fetch: typeof fetch;
   /** Called once per request, for logging. Never receives the API key. */
   onRequest?: (record: RequestRecord) => void;
+  /** Base backoff between retries of a throttled request. Tests set this to 0. */
+  retryDelayMs?: number;
 }
+
+/** Statuses worth trying again: Keito throttles /tasks under load with a 503. */
+const RETRYABLE = new Set([429, 502, 503, 504]);
+const MAX_ATTEMPTS = 3;
 
 /**
  * Single entries come back unwrapped from the live API, though the docs describe a
@@ -90,6 +97,7 @@ export class KeitoClient {
   #baseUrl: string;
   #fetch: typeof fetch;
   #onRequest: ((record: RequestRecord) => void) | undefined;
+  #retryDelayMs: number;
 
   constructor(options: KeitoClientOptions) {
     this.#apiKey = options.apiKey;
@@ -97,6 +105,7 @@ export class KeitoClient {
     this.#baseUrl = options.baseUrl ?? KEITO_BASE_URL;
     this.#fetch = options.fetch;
     this.#onRequest = options.onRequest;
+    this.#retryDelayMs = options.retryDelayMs ?? 400;
   }
 
   async validateKey(): Promise<Identity> {
@@ -206,7 +215,28 @@ export class KeitoClient {
     return unwrapEntry(body);
   }
 
+  /**
+   * Retries a throttled request a couple of times before giving up. Keito answers 503
+   * for /tasks when its reference data is at capacity, and a single blip should not sink
+   * a whole catalog load.
+   */
   async #request(
+    path: string,
+    options: { method?: string; body?: unknown; idempotencyKey?: string } = {},
+  ): Promise<{ body: unknown }> {
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await this.#attempt(path, options);
+      } catch (error) {
+        const retryable = error instanceof KeitoError && RETRYABLE.has(error.status ?? 0);
+        if (!retryable || attempt >= MAX_ATTEMPTS) throw error;
+        // Linear backoff: brief, since this runs while the popover waits.
+        await new Promise((resolve) => setTimeout(resolve, this.#retryDelayMs * attempt));
+      }
+    }
+  }
+
+  async #attempt(
     path: string,
     options: { method?: string; body?: unknown; idempotencyKey?: string } = {},
   ): Promise<{ body: unknown }> {

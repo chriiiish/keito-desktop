@@ -27,27 +27,45 @@ function weekStart(today: Date): Date {
   return date;
 }
 
+type Tab = "entries" | "visibility" | "settings";
+
+const TABS: ReadonlyArray<readonly [Tab, string]> = [
+  ["entries", "Entries"],
+  ["visibility", "Visible Projects"],
+  ["settings", "Settings"],
+];
+
 export function ReviewWindow(): JSX.Element {
   const [snapshot, setSnapshot] = useSnapshot();
-  const [tab, setTab] = useState<"entries" | "settings">("entries");
+  const [tab, setTab] = useState<Tab>("entries");
 
   if (!snapshot) return <div className="window loading">Loading…</div>;
+
+  // Nothing but Settings can do anything useful without a working key.
+  const active: Tab = snapshot.keyStatus === "ready" ? tab : "settings";
 
   return (
     <div className="window">
       <nav className="tabs">
-        <button className={tab === "entries" ? "on" : ""} onClick={() => setTab("entries")}>
-          Entries
-        </button>
-        <button className={tab === "settings" ? "on" : ""} onClick={() => setTab("settings")}>
-          Settings
-        </button>
+        {TABS.map(([id, label]) => (
+          <button key={id} className={active === id ? "on" : ""} onClick={() => setTab(id)}>
+            {label}
+          </button>
+        ))}
       </nav>
-      {snapshot.keyStatus !== "ready" || tab === "settings" ? (
-        <Settings snapshot={snapshot} onChange={setSnapshot} />
-      ) : (
-        <Entries revision={snapshot.revision} />
+
+      {active === "entries" && <Entries revision={snapshot.revision} />}
+      {active === "visibility" && (
+        <section className="settings">
+          <h2>Categories in the dropdown</h2>
+          <p className="hint">
+            Everything is shown by default. Switch off what you never track against.
+            Favourites and anything you have used in the last 30 days stay visible regardless.
+          </p>
+          <VisibleCategories snapshot={snapshot} onChange={setSnapshot} />
+        </section>
       )}
+      {active === "settings" && <Settings snapshot={snapshot} onChange={setSnapshot} />}
     </div>
   );
 }
@@ -324,13 +342,6 @@ function Settings({
         defaultValue={snapshot.hotkey}
         onBlur={(event) => void keito.setHotkey(event.target.value.trim()).then(onChange)}
       />
-
-      <h2>Categories in the dropdown</h2>
-      <p className="hint">
-        Everything is shown by default. Switch off what you never track against. Favourites
-        and anything you have used in the last 30 days stay visible regardless.
-      </p>
-      <VisibleCategories snapshot={snapshot} onChange={onChange} />
 
       <h2>Menu bar label</h2>
       <p className="hint">

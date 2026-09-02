@@ -266,7 +266,12 @@ export class AppService {
   async refresh(): Promise<Snapshot> {
     if (!this.#client || !this.#switcher) return this.snapshot();
     return this.#run(async () => {
-      this.#workspace = await loadWorkspace(this.#client!, new Date());
+      this.#workspace = await loadWorkspace(this.#client!, new Date(), (project, error) => {
+        this.#log.warn(`Skipped project "${project.name}": its tasks would not load`, {
+          projectId: project.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
       const before = this.#switcher!.current();
       await this.#switcher!.refresh(this.#workspace.catalog);
       const after = this.#switcher!.current();

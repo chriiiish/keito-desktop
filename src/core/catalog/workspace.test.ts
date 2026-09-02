@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { FakeKeito } from "../../../test/fake-keito.js";
 import { KeitoClient } from "../keito/client.js";
-import { loadWorkspace } from "./workspace.js";
+import { loadWorkspace, TASK_FETCH_CONCURRENCY } from "./workspace.js";
 
 const NOW = new Date("2026-09-02T09:30:00Z");
 
@@ -60,5 +60,49 @@ describe("loadWorkspace", () => {
     const { today } = await loadWorkspace(client, NOW);
 
     expect(today.map((entry) => entry.project_id)).toEqual(["p_acme"]);
+  });
+
+  it("retries a project whose tasks are temporarily at capacity", async () => {
+    const keito = keitoWith();
+    keito.taskFailures.set("p_bank", 2);
+    const client = new KeitoClient({
+      apiKey: "kto_k",
+      accountId: "co_9",
+      fetch: keito.fetch,
+      retryDelayMs: 0,
+    });
+
+    const { catalog } = await loadWorkspace(client, NOW);
+
+    expect(catalog.map((pair) => pair.id)).toEqual(["p_acme:t_dev", "p_bank:t_dev"]);
+  });
+
+  it("keeps the rest of the catalog when one project will not load at all", async () => {
+    const keito = keitoWith();
+    keito.taskFailures.set("p_bank", 99);
+    const client = new KeitoClient({
+      apiKey: "kto_k",
+      accountId: "co_9",
+      fetch: keito.fetch,
+      retryDelayMs: 0,
+    });
+
+    const { catalog } = await loadWorkspace(client, NOW);
+
+    // Losing one project beats failing to start at all.
+    expect(catalog.map((pair) => pair.id)).toEqual(["p_acme:t_dev"]);
+  });
+
+  it("does not stampede the API with one request per project at once", async () => {
+    const projects = Array.from({ length: 20 }, (_, i) => ({ id: `p_${i}`, name: `Project ${i}` }));
+    const tasksByProject = Object.fromEntries(
+      projects.map((project) => [project.id, [{ id: "t_dev", name: "Development" }]]),
+    );
+    const keito = new FakeKeito({ now: () => NOW, projects, tasksByProject });
+    const client = new KeitoClient({ apiKey: "kto_k", accountId: "co_9", fetch: keito.fetch });
+
+    await loadWorkspace(client, NOW);
+
+    expect(keito.maxConcurrent).toBeLessThanOrEqual(TASK_FETCH_CONCURRENCY);
   });
 });
