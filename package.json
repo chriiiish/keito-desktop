@@ -48,6 +48,7 @@
       "out/**",
       "build/tray*.png"
     ],
+    "afterPack": "build/afterPack.cjs",
     "mac": {
       "category": "public.app-category.productivity",
       "target": [

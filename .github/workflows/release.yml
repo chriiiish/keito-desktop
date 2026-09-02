@@ -49,8 +49,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # The runner is arm64, so `--mac` alone would build only Apple
+          # Silicon and leave Intel users with nothing to download.
           - os: macos-latest
-            args: --mac
+            args: --mac --arm64 --x64
             artifact: mac
           - os: windows-latest
             args: --win
@@ -107,6 +109,21 @@ jobs:
           name: ${{ needs.tag.outputs.tag || github.ref_name }}
           draft: true
           generate_release_notes: true
+          # The builds are ad-hoc signed, not notarised, so macOS refuses the
+          # first launch. Saying so here is the difference between a user who
+          # opens the app and one who assumes the download is broken.
+          body: |
+            ## Installing
+
+            **macOS** — `-arm64.dmg` for Apple Silicon, the plain `.dmg` for Intel.
+            Drag the app to Applications. The first launch is refused with
+            "Apple could not verify…" because these builds are not notarised;
+            open **System Settings → Privacy & Security** and press
+            **Open Anyway**. Only needed once.
+
+            **Windows** — run the `.exe`. SmartScreen shows "Windows protected
+            your PC"; choose **More info → Run anyway**.
+
           files: |
             dist/*.dmg
             dist/*.exe

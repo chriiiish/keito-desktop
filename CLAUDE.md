@@ -215,6 +215,16 @@ silently rather than loudly.
 - **`PreferencesStore` serialises its writes.** Two overlapping saves race for the same
   `.tmp` file and the loser fails with `ENOENT`; starring in the popover while toggling in
   the settings window is enough to hit it.
+- **An unsigned macOS build is a broken one, not merely an untrusted one.**
+  electron-builder has no ad-hoc mode — `mac.identity: null` and
+  `CSC_IDENTITY_AUTO_DISCOVERY=false` both skip signing altogether, leaving the `.app`
+  with only the linker signature inside the stock Electron binary. That seals neither the
+  Info.plist nor the resources, so macOS says *"Keito Timer is damaged and can't be
+  opened"* — a dead end with no Open Anyway button, and it reads to users as a corrupt
+  download rather than a missing certificate. `build/afterPack.cjs` ad-hoc signs the
+  bundle and then **verifies** it, so the build fails instead of shipping another
+  "damaged" dmg. Ad-hoc is not notarised: the first launch is still refused, but
+  recoverably. Setting `CSC_LINK`/`CSC_NAME` stands the hook down.
 
 ## Diagnostics
 
