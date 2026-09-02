@@ -51,6 +51,8 @@ const snapshot: Snapshot = {
   workspaceTimezone: "UTC",
   hotkey: "CommandOrControl+Shift+K",
   hotkeyRegistered: true,
+  openAtLogin: false,
+  canOpenAtLogin: true,
   platform: "darwin",
   appVersion: "0.1.0",
   accountId: "co_9",

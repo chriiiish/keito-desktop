@@ -188,6 +188,12 @@ button.link.muted:hover { color: var(--danger); }
 .settings form.connect .optional { color: var(--line); }
 .settings code { background: var(--raised); padding: 1px 4px; border-radius: 4px; font-size: 12px; }
 
+/* A label and its switch on one line, the way the per-task rows already read. The label
+   is targeted by class, not as a descendant span: the Toggle's own .track is a span and a
+   flex item, so `flex: 1` reached inside the switch and collapsed it to nothing. */
+.setting-row { display: flex; align-items: center; gap: 12px; max-width: 460px; }
+.setting-label { flex: 1; min-width: 0; }
+
 /* Set apart by the same bold rule that separates sections elsewhere, so the last thing
    on the page does not read as one more setting. */
 .danger-zone {

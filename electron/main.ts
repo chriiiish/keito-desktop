@@ -219,6 +219,24 @@ function registerHotkey(hotkey: string): boolean {
   return registeredHotkey !== null;
 }
 
+/**
+ * What the OS says, not what we last asked for. The login item is editable outside the
+ * app — System Settings on macOS, Task Manager on Windows — so preferences.json would
+ * drift from reality within a fortnight of anyone noticing it exists.
+ *
+ * In a development run this would report the login item for the Electron binary that
+ * `npm run dev` launches, which is why changing it is refused there.
+ */
+function readOpenAtLogin(): boolean {
+  try {
+    return app.getLoginItemSettings().openAtLogin;
+  } catch (error) {
+    // Nothing here is worth failing startup over; the switch simply reads as off.
+    log.warn(`Could not read the login item: ${String(error)}`);
+    return false;
+  }
+}
+
 function registerIpc(): void {
   const handle = (channel: string, fn: (...args: any[]) => Promise<unknown>) =>
     ipcMain.handle(channel, async (_event, ...args) => {
@@ -261,6 +279,26 @@ function registerIpc(): void {
   handle("reset-all", async () => {
     const reset = await service.resetAll();
     service.setHotkeyRegistered(registerHotkey(reset.hotkey));
+    // The login item is this app's doing too, and lives outside preferences.json — a
+    // "fresh install" that still launched itself at login would not be one.
+    if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: false });
+    service.setOpenAtLogin(readOpenAtLogin(), app.isPackaged);
+    return service.snapshot();
+  });
+
+  // Set it, then read back what the OS actually did rather than assuming it agreed. A
+  // login item can be refused or removed by policy, and reporting the request instead of
+  // the result would leave the switch claiming something untrue.
+  handle("set-open-at-login", async (openAtLogin: boolean) => {
+    // Refused outright in development: the item would be registered against Electron.app,
+    // which is both useless and hard to find again once the dev session ends. The switch
+    // is disabled there too; this is the half that cannot be clicked around.
+    if (!app.isPackaged) {
+      log.warn("Refusing to change the login item in a development run");
+      return service.snapshot();
+    }
+    app.setLoginItemSettings({ openAtLogin });
+    service.setOpenAtLogin(readOpenAtLogin(), app.isPackaged);
     return service.snapshot();
   });
 
@@ -364,6 +402,7 @@ async function start(): Promise<void> {
   createTray();
   registerIpc();
   service.setHotkeyRegistered(registerHotkey(prefs.get().hotkey));
+  service.setOpenAtLogin(readOpenAtLogin(), app.isPackaged);
   startMonitors();
 
   started = true;
