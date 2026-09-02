@@ -5,6 +5,7 @@ import { keito } from "./keito-api.js";
 import { AsyncButton, Spinner, useAsyncAction } from "./AsyncButton.js";
 import { HotkeyRecorder } from "./HotkeyRecorder.js";
 import { TrayLabelSettings } from "./TrayLabelSettings.js";
+import { ContributeTab } from "./ContributeTab.js";
 import { ProjectsTab } from "./ProjectsTab.js";
 import { useSnapshot } from "./useSnapshot.js";
 
@@ -17,13 +18,14 @@ function weekStart(today: Date): Date {
   return date;
 }
 
-type Tab = "entries" | "projects" | "connection" | "settings";
+type Tab = "entries" | "projects" | "connection" | "settings" | "contribute";
 
 const TABS: ReadonlyArray<readonly [Tab, string]> = [
   ["entries", "Time Entries"],
   ["projects", "Projects"],
   ["connection", "Keito Connection"],
   ["settings", "Settings"],
+  ["contribute", "Contribute"],
 ];
 
 export function ReviewWindow(): JSX.Element {
@@ -49,6 +51,7 @@ export function ReviewWindow(): JSX.Element {
       {active === "projects" && <ProjectsTab snapshot={snapshot} onChange={setSnapshot} />}
       {active === "connection" && <Connection snapshot={snapshot} onChange={setSnapshot} />}
       {active === "settings" && <Settings snapshot={snapshot} onChange={setSnapshot} />}
+      {active === "contribute" && <ContributeTab snapshot={snapshot} />}
     </div>
   );
 }

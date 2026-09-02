@@ -16,6 +16,7 @@ const api = {
   setCompanyId: vi.fn(),
   signOut: vi.fn(),
   openLog: vi.fn(),
+  openExternal: vi.fn(),
   updateEntry: vi.fn(),
   deleteEntry: vi.fn(),
 };
@@ -47,6 +48,7 @@ const snapshot: Snapshot = {
   hotkey: "CommandOrControl+Shift+K",
   hotkeyRegistered: true,
   platform: "darwin",
+  appVersion: "0.1.0",
   accountId: "co",
   apiKeyHint: "kto_••••••••abcd",
   trayFallback: "task",
@@ -73,6 +75,7 @@ describe("the review window", () => {
       "Projects",
       "Keito Connection",
       "Settings",
+      "Contribute",
     ]);
   });
 
@@ -322,6 +325,47 @@ describe("the menu bar label settings", () => {
     await user.click(screen.getByRole("radio", { name: /show the project/i }));
 
     expect(api.setTrayLabel).toHaveBeenCalledWith({ prefix: "none", fallback: "project" });
+  });
+});
+
+describe("the contribute tab", () => {
+  const openContribute = async () => {
+    const user = userEvent.setup();
+    render(<ReviewWindow />);
+    await user.click(await screen.findByRole("button", { name: "Contribute" }));
+    return user;
+  };
+
+  it("says the project is open source", async () => {
+    await openContribute();
+
+    expect(screen.getByText(/free and open source/i)).toBeDefined();
+  });
+
+  it("opens the repository in the real browser, not in the app", async () => {
+    const user = await openContribute();
+    api.openExternal.mockResolvedValue(undefined);
+
+    await user.click(screen.getByRole("button", { name: /browse the source/i }));
+
+    expect(api.openExternal).toHaveBeenCalledWith("https://github.com/chriiiish/kieto-desktop");
+  });
+
+  it("links to issues and pull requests as well", async () => {
+    const user = await openContribute();
+    api.openExternal.mockResolvedValue(undefined);
+
+    await user.click(screen.getByRole("button", { name: /report a bug/i }));
+
+    expect(api.openExternal).toHaveBeenCalledWith(
+      "https://github.com/chriiiish/kieto-desktop/issues",
+    );
+  });
+
+  it("shows the build version, so a bug report can name it", async () => {
+    await openContribute();
+
+    expect(screen.getByText("0.1.0")).toBeDefined();
   });
 });
 

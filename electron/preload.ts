@@ -31,6 +31,7 @@ const api = {
   ): Promise<Snapshot> => ipcRenderer.invoke("update-entry", id, patch),
   deleteEntry: (id: string): Promise<Snapshot> => ipcRenderer.invoke("delete-entry", id),
   openLog: (): Promise<void> => ipcRenderer.invoke("open-log"),
+  openExternal: (url: string): Promise<void> => ipcRenderer.invoke("open-external", url),
   logPath: (): Promise<string> => ipcRenderer.invoke("log-path"),
   closePopover: (): Promise<void> => ipcRenderer.invoke("close-popover"),
   openWindow: (): Promise<void> => ipcRenderer.invoke("open-window"),

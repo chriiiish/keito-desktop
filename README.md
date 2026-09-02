@@ -63,6 +63,12 @@ written to `preferences.json`.
   behaviours — a single-entry GET, ETags, `If-Match`, a `time_entry` response wrapper —
   do not exist. `npm run test:contract` is what keeps the two in step.
 
+## Contributing
+
+Source: <https://github.com/chriiiish/kieto-desktop>. Issues and pull requests welcome.
+The app's own **Contribute** tab links to the same places and shows the build version,
+which is worth quoting in a bug report.
+
 ## Commands
 
 | Command | What it does |

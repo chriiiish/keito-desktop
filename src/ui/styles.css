@@ -473,3 +473,14 @@ button[aria-busy="true"] { cursor: default; }
   font-size: 12px;
   color: var(--muted);
 }
+
+/* ── Contribute ──────────────────────────────────────────── */
+.contribute { max-width: 620px; }
+.contribute-links { list-style: none; margin: 0 0 4px; padding: 0; }
+.contribute-links li { display: flex; flex-direction: column; gap: 1px; padding: 7px 0; border-bottom: 1px solid var(--line); }
+.contribute-link { align-self: flex-start; padding: 0; font-size: 13px; }
+.contribute-links .hint { font-size: 12px; }
+
+.build-info { display: grid; grid-template-columns: auto 1fr; gap: 2px 14px; margin: 0; font-size: 12px; }
+.build-info dt { color: var(--muted); }
+.build-info dd { margin: 0; font-variant-numeric: tabular-nums; }

@@ -207,6 +207,18 @@ function registerIpc(): void {
     return service.snapshot();
   });
 
+  // Only ever opens the project's own pages. A renderer must not be able to hand the OS
+  // an arbitrary URL, or a file:// one.
+  handle("open-external", async (url: string) => {
+    const allowed = new URL(url);
+    if (allowed.protocol !== "https:" || allowed.hostname !== "github.com") {
+      log.warn(`Refused to open an external URL: ${url}`);
+      return undefined;
+    }
+    await shell.openExternal(allowed.toString());
+    return undefined;
+  });
+
   handle("open-log", async () => {
     await shell.openPath(service.logPath);
     return undefined;
@@ -262,7 +274,7 @@ app.whenReady().then(async () => {
 
   const prefs = await PreferencesStore.open(join(app.getPath("userData"), "preferences.json"));
   const secrets = new SecretStore(join(app.getPath("userData"), "credentials.bin"));
-  service = await AppService.create(prefs, secrets, log);
+  service = await AppService.create(prefs, secrets, log, app.getVersion());
 
   createTray();
   registerIpc();

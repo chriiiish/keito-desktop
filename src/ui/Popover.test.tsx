@@ -51,6 +51,7 @@ const snapshot: Snapshot = {
   hotkey: "CommandOrControl+Shift+K",
   hotkeyRegistered: true,
   platform: "darwin",
+  appVersion: "0.1.0",
   accountId: "co_9",
   apiKeyHint: "kto_••••••••abcd",
   trayFallback: "task",

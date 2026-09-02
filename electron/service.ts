@@ -27,6 +27,8 @@ export interface Snapshot {
   hotkeyRegistered: boolean;
   /** So the renderer can name modifier keys the way this platform's users expect. */
   platform: string;
+  /** Shown on the Contribute tab, so a bug report can say which build it came from. */
+  appVersion: string;
   /** The company id sent as Keito-Account-Id, once known. */
   accountId: string | null;
   /** A masked stand-in for the stored key, so settings can show one without exposing it. */
@@ -96,19 +98,27 @@ export class AppService {
   #revision = 0;
   #apiKeyHint: string | null = null;
   #hotkeyRegistered = true;
+  #appVersion: string;
 
-  private constructor(prefs: PreferencesStore, secrets: SecretStore, log: Logger) {
+  private constructor(
+    prefs: PreferencesStore,
+    secrets: SecretStore,
+    log: Logger,
+    appVersion: string,
+  ) {
     this.#prefs = prefs;
     this.#secrets = secrets;
     this.#log = log;
+    this.#appVersion = appVersion;
   }
 
   static async create(
     prefs: PreferencesStore,
     secrets: SecretStore,
     log: Logger,
+    appVersion = "0.0.0",
   ): Promise<AppService> {
-    const service = new AppService(prefs, secrets, log);
+    const service = new AppService(prefs, secrets, log, appVersion);
     const key = await secrets.read();
     log.info("Starting", { hasStoredKey: Boolean(key), accountId: prefs.get().accountId ?? null });
     if (key) {
@@ -142,6 +152,7 @@ export class AppService {
       hotkey: prefs.hotkey,
       hotkeyRegistered: this.#hotkeyRegistered,
       platform: process.platform,
+      appVersion: this.#appVersion,
       accountId: prefs.accountId ?? null,
       apiKeyHint: this.#apiKeyHint,
       trayFallback: prefs.trayFallback,
