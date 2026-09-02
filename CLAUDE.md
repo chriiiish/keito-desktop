@@ -279,16 +279,16 @@ fact. A step now fails the build if an artifact's name does not carry the releas
 version, because a glob upload will otherwise ship whatever it finds.
 
 Once the release exists, `record-version` writes that version into `package.json` and
-`package-lock.json` on `main`, so the repository stops disagreeing with what shipped. It
-pushes directly when it can and opens a pull request when it cannot — a release that has
-already happened should not be reported as failed because of how a branch rule is
-configured.
+`package-lock.json` on `main`, so the repository stops disagreeing with what shipped.
 
-Pushing directly needs a **deploy key**, not the workflow's own token: a ruleset's bypass
-list only offers GitHub Apps installed on the repository, and `github-actions` is not one
-that can be installed, so Actions itself can never be a bypass actor. The `main` ruleset
-admits `DeployKey` instead, and `record-version` checks out over SSH with
-`secrets.RELEASE_DEPLOY_KEY`.
+That push needs a **deploy key**, not the workflow's own token: a ruleset's bypass list
+only offers GitHub Apps installed on the repository, and `github-actions` is not one that
+can be installed, so Actions itself can never be a bypass actor and no app id will do.
+The `main` ruleset admits `DeployKey` instead, and the job checks out over SSH with
+`secrets.RELEASE_DEPLOY_KEY`. If that key is missing from the secrets or from the bypass
+list the job fails loudly rather than routing around it — the release is already
+published by then, and a version silently left unrecorded is the thing this job exists to
+prevent.
 
 **The download names are literals, not `${productName}`.** `artifactName` spells out
 `Keito-Timer-…` because the product name contains a space and GitHub rewrites a space in a
