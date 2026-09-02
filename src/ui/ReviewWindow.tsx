@@ -30,6 +30,26 @@ export function ReviewWindow(): JSX.Element {
   const [snapshot, setSnapshot] = useSnapshot();
   const [tab, setTab] = useState<Tab>("entries");
 
+  /**
+   * Connecting opens the entries table, whatever the tabs were last clicked.
+   *
+   * Until a key works every tab renders the connection form, but the click is
+   * still recorded — so a new user who poked at the tabs while setting up would
+   * land on whichever one they poked, usually Contribute. The first thing to
+   * see after connecting is the work you have logged.
+   *
+   * Adjusted during render rather than in an effect. An effect runs *after* the commit,
+   * so the first render with a working key would still use the old tab — mounting, say,
+   * the Contribute tab for a frame before replacing it. Setting state during render makes
+   * React re-run this function before it commits anything, so that frame never exists.
+   */
+  const ready = snapshot?.keyStatus === "ready";
+  const [wasReady, setWasReady] = useState(ready);
+  if (ready !== wasReady) {
+    setWasReady(ready);
+    if (ready) setTab("entries");
+  }
+
   if (!snapshot) return <div className="window loading">Loading…</div>;
 
   // Nothing else can do anything useful until the connection works.
