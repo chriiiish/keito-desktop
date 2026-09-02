@@ -53,6 +53,20 @@ export function ReviewWindow(): JSX.Element {
     if (ready) setTab("entries");
   }
 
+  /**
+   * The window title carries the workspace once there is one to name — several Keito
+   * accounts is the case where two identical windows are worth telling apart.
+   *
+   * Set through `document.title` rather than `BrowserWindow.setTitle`: index.html carries
+   * a <title>, so Electron syncs the window title from the document and would overwrite
+   * anything the main process set as soon as the page loaded. This also makes it
+   * something the component tests can actually read.
+   */
+  const company = ready ? snapshot?.identity?.accountName?.trim() : undefined;
+  useEffect(() => {
+    document.title = company ? `Keito Timer - ${company}` : "Keito Timer";
+  }, [company]);
+
   if (!snapshot) return <div className="window loading">Loading…</div>;
 
   // Nothing else can do anything useful until the connection works.
