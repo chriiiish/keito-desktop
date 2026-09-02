@@ -54,21 +54,21 @@ export function RecentEntries({
     empty: string,
     startAgain: boolean,
   ) => (
-    <section className="today">
-      <div className="today-heading">{heading}</div>
+    <section className="day">
+      <h2 className="day-heading">{heading}</h2>
       {entries.length === 0 ? (
         <p className="empty">{empty}</p>
       ) : (
         <ul>
           {entries.map(describe).map(({ entry, pair, taskName, projectName }) => (
             <li key={entry.id} className={entry.is_running ? "running-row" : ""}>
-              <div className="today-text">
+              <div className="entry-text">
                 <strong>{entry.notes?.trim() || taskName}</strong>
                 <span>
                   {projectName} — {taskName}
                 </span>
               </div>
-              <span className="today-hours">{formatHours(entry)}</span>
+              <span className="entry-hours">{formatHours(entry)}</span>
               {entry.is_running ? (
                 <AsyncButton
                   className="stop small"
@@ -118,11 +118,19 @@ export function RecentEntries({
   );
 
   return (
-    <>
+    /**
+     * One scroller for both days, not one per day.
+     *
+     * Each section used to carry `flex: 1; overflow-y: auto` of its own, so adding
+     * Yesterday split the space in half and gave you two short panes to scroll
+     * separately — with a long day today you could not reach yesterday without first
+     * scrolling to the bottom of a box that ended halfway up the popover.
+     */
+    <div className="recent">
       {day("Today", today, "Nothing logged yet today.", false)}
       {/* Left out entirely on a day with no history behind it, rather than showing an
           empty heading that says nothing. */}
       {yesterday.length > 0 && day("Yesterday", yesterday, "", true)}
-    </>
+    </div>
   );
 }

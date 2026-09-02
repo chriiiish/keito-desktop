@@ -302,31 +302,48 @@ select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 .option.cursor .star { color: rgb(255 255 255 / 0.5); }
 .option.cursor .star.on { color: #fcd34d; }
 
-/* ── Today ───────────────────────────────────────────────── */
-.today {
+/* ── Today and yesterday ─────────────────────────────────── */
+/* One scroller for both days. The flex and the overflow live here, not on each day: on
+   the sections they split the space and gave two short panes scrolling separately. */
+.recent {
   flex: 1;
   min-height: 0;
+  overflow-y: auto;
   border-top: var(--rule-width) solid var(--rule);
   background: var(--tint);
-  padding: 8px 12px 4px;
-  overflow-y: auto;
+  padding: 0 12px 4px;
 }
-.today-heading { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin-bottom: 4px; }
-.today ul { list-style: none; margin: 0; padding: 0; }
-.today li { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
-.today li + li { border-top: 1px solid var(--rule); }
-.today-text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
-.today-text strong, .today-text span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.today-text span { font-size: 11px; color: var(--muted); }
-.today-hours { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12px; }
-.today .running-row { background: none; }
-.today .today-hours { color: var(--fg); opacity: 0.65; }
-.today .running-row strong::before { content: "● "; color: var(--accent); }
+/* Sticky, because in one list the heading is the only thing saying which day a row
+   belongs to, and it would otherwise scroll away from the rows it labels. Opaque for the
+   same reason: rows must not show through it. */
+.day-heading {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0;
+  padding: 8px 0 4px;
+  background: var(--tint);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.day ul { list-style: none; margin: 0; padding: 0; }
+.day li { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+.day li + li { border-top: 1px solid var(--rule); }
+.entry-text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.entry-text strong, .entry-text span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.entry-text span { font-size: 11px; color: var(--muted); }
+.entry-hours { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12px; }
+.day .running-row { background: none; }
+.day .entry-hours { color: var(--fg); opacity: 0.65; }
+.day .running-row strong::before { content: "● "; color: var(--accent); }
 .play.small, .stop.small { padding: 2px 9px; font-size: 11px; }
 /* Closes the gap between the two triangles so they read as one fast-forward mark. The
    trailing space the tracking would otherwise leave is taken back on the right. */
 .play.forward { letter-spacing: -0.18em; padding-right: calc(9px + 0.18em); }
-.today .empty { margin: 2px 0 6px; font-size: 12px; }
+.day .empty { margin: 2px 0 6px; font-size: 12px; }
 
 /* ── Visible categories ──────────────────────────────────── */
 .visibility { max-width: 560px; }
