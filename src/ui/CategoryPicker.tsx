@@ -17,8 +17,19 @@ interface CategoryPickerProps {
  * A filterable category dropdown. Native <select> can't do this: options can't hold a
  * favourite button, and there is no way to type-filter across project and task together.
  */
-/** Stable per-option DOM id, for aria-activedescendant. */
-const optionId = (pairId: string) => `category-option-${pairId.replace(/[^\w-]/g, "_")}`;
+/**
+ * Per-option DOM id, for aria-activedescendant. Keyed on the row's position rather than
+ * its pair: "All projects" repeats what is pinned above it, so one pair can occupy two
+ * rows, and an id derived from the pair would appear in the document twice.
+ */
+const optionId = (index: number) => `category-option-${index}`;
+
+/** One rendered row, carrying the position the arrow keys count in. */
+interface Row {
+  pair: Pair;
+  label: string;
+  index: number;
+}
 
 export function CategoryPicker({
   catalog,
@@ -42,21 +53,64 @@ export function CategoryPicker({
     [catalog, favourites, recents, hidden, query],
   );
 
-  // The flat order the arrow keys walk, matching what is rendered top to bottom.
-  const flat = useMemo(
-    () => [...result.favourites, ...result.recent, ...result.projects.flatMap((g) => g.pairs)],
-    [result],
-  );
+  /**
+   * Numbers the rows once, in render order, and hands each one its position.
+   *
+   * The old version derived a row's index with `flat.indexOf(pair)`. Because the repeats
+   * under "All projects" are the *same* Pair object as the pinned one above, indexOf
+   * always answered with the first copy: the repeat's own index belonged to no row, so
+   * arrowing onto it highlighted nothing, and the index it claimed instead lit up the
+   * pinned row somewhere else on screen.
+   */
+  const { flat, favouriteRows, recentRows, projectGroups } = useMemo(() => {
+    const flat: Pair[] = [];
+    const take = (pair: Pair, label: string): Row => {
+      const row = { pair, label, index: flat.length };
+      flat.push(pair);
+      return row;
+    };
+    // Evaluated in the order they are rendered, which is what makes index === position.
+    const favouriteRows = result.favourites.map((pair) =>
+      take(pair, `${pair.projectName} — ${pair.taskName}`),
+    );
+    const recentRows = result.recent.map((pair) =>
+      take(pair, `${pair.projectName} — ${pair.taskName}`),
+    );
+    const projectGroups = result.projects.map((group) => ({
+      projectId: group.projectId,
+      projectName: group.projectName,
+      rows: group.pairs.map((pair) => take(pair, pair.taskName)),
+    }));
+    return { flat, favouriteRows, recentRows, projectGroups };
+  }, [result]);
 
   const selected = catalog.find((pair) => pair.id === selectedId);
 
   useEffect(() => setCursor(0), [query]);
 
-  // Keep the highlighted row visible when arrowing past the edge of the menu.
+  /**
+   * Keep the highlighted row visible when arrowing past the edge of the menu — but only
+   * when a key moved it.
+   *
+   * Hovering also moves the highlight, and scrolling the list drags rows under a
+   * stationary pointer, which fires mouseenter. Scrolling on that put the list back where
+   * it wanted to be mid-gesture: the row moved out from under the pointer between press
+   * and release, so the click either landed on a different task or on neither, leaving
+   * the menu open.
+   */
+  const scrollToCursor = useRef(false);
   useEffect(() => {
+    if (!scrollToCursor.current) return;
+    scrollToCursor.current = false;
     // Optional call: jsdom, and some embedded runtimes, do not implement it.
     cursorRef.current?.scrollIntoView?.({ block: "nearest" });
   }, [cursor, open]);
+
+  /** Moves the highlight and follows it, for the keyboard paths only. */
+  const moveCursor = (next: (current: number) => number) => {
+    scrollToCursor.current = true;
+    setCursor(next);
+  };
   useEffect(() => {
     if (open) filterRef.current?.focus();
     else setQuery("");
@@ -79,6 +133,7 @@ export function CategoryPicker({
 
   /** Opens with the highlight already on `index`, so arrows continue from there. */
   const openAt = (index: number) => {
+    scrollToCursor.current = true;
     setCursor(Math.max(0, Math.min(index, flat.length - 1)));
     setOpen(true);
   };
@@ -100,10 +155,10 @@ export function CategoryPicker({
 
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      setCursor((c) => Math.min(c + 1, flat.length - 1));
+      moveCursor((c) => Math.min(c + 1, flat.length - 1));
     } else if (event.key === "ArrowUp") {
       event.preventDefault();
-      setCursor((c) => Math.max(c - 1, 0));
+      moveCursor((c) => Math.max(c - 1, 0));
     } else if (event.key === "Enter") {
       // Enter picks from the list; it must not also submit the start form underneath.
       event.preventDefault();
@@ -117,16 +172,17 @@ export function CategoryPicker({
     }
   };
 
-  const row = (pair: Pair, label: string) => {
-    const index = flat.indexOf(pair);
+  const row = ({ pair, label, index }: Row) => {
     return (
       <li
-        key={pair.id}
-        id={optionId(pair.id)}
+        key={index}
+        id={optionId(index)}
         ref={index === cursor ? cursorRef : undefined}
         role="option"
         aria-selected={pair.id === selectedId}
         className={`option${index === cursor ? " cursor" : ""}`}
+        // Deliberately not moveCursor: hovering must never scroll the list, or the row
+        // moves out from under the pointer that is trying to click it.
         onMouseEnter={() => setCursor(index)}
         onClick={() => choose(pair.id)}
       >
@@ -180,30 +236,30 @@ export function CategoryPicker({
             role="combobox"
             aria-expanded
             aria-controls="category-listbox"
-            aria-activedescendant={flat[cursor] ? optionId(flat[cursor]!.id) : undefined}
+            aria-activedescendant={flat[cursor] ? optionId(cursor) : undefined}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
           <ul role="listbox" id="category-listbox" className="picker-list">
-            {result.favourites.length > 0 && (
+            {favouriteRows.length > 0 && (
               <>
                 <li className="group-heading">Favourites</li>
-                {result.favourites.map((pair) => row(pair, `${pair.projectName} — ${pair.taskName}`))}
+                {favouriteRows.map(row)}
               </>
             )}
 
-            {result.recent.length > 0 && (
+            {recentRows.length > 0 && (
               <>
                 <li className="group-heading">Recent</li>
-                {result.recent.map((pair) => row(pair, `${pair.projectName} — ${pair.taskName}`))}
+                {recentRows.map(row)}
               </>
             )}
 
-            {result.projects.length > 0 && <li className="group-heading">All projects</li>}
-            {result.projects.map((group) => (
+            {projectGroups.length > 0 && <li className="group-heading">All projects</li>}
+            {projectGroups.map((group) => (
               <li key={group.projectId} className="project-group">
                 <div className="project-heading">{group.projectName}</div>
-                <ul>{group.pairs.map((pair) => row(pair, pair.taskName))}</ul>
+                <ul>{group.rows.map(row)}</ul>
               </li>
             ))}
 
