@@ -23,6 +23,8 @@ const api = {
     patch: { notes?: string; startedTime?: string; endedTime?: string },
   ): Promise<TimeEntry | null> => ipcRenderer.invoke("update-entry", id, patch),
   deleteEntry: (id: string): Promise<void> => ipcRenderer.invoke("delete-entry", id),
+  openLog: (): Promise<void> => ipcRenderer.invoke("open-log"),
+  logPath: (): Promise<string> => ipcRenderer.invoke("log-path"),
   closePopover: (): Promise<void> => ipcRenderer.invoke("close-popover"),
   openWindow: (): Promise<void> => ipcRenderer.invoke("open-window"),
   resolveIdle: (keep: boolean, awaySinceMs: number): Promise<Snapshot> =>

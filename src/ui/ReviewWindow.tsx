@@ -171,7 +171,7 @@ function CompanyIdField({
       }}
     >
       <input value={value} placeholder="co_…" onChange={(event) => setValue(event.target.value)} />
-      <button type="submit" disabled={!dirty || saving}>
+      <button type="submit" disabled={!dirty || !value.trim() || saving}>
         {saving ? "Checking…" : "Apply"}
       </button>
     </form>
@@ -227,8 +227,10 @@ function Settings({
         </p>
       ) : (
         <p className="hint">
-          Paste a <strong>full-access integration key</strong> from Keito (Settings → Integrations).
-          A personal read-only sync key cannot create time entries.
+          Paste a <strong>full-access integration key</strong> from Keito (Settings → Integrations)
+          and your <strong>Company ID</strong>. Both are required — Keito sends the company id on
+          every request, so it cannot be detected for you. A personal read-only sync key will not
+          work: it cannot create time entries.
         </p>
       )}
 
@@ -253,26 +255,33 @@ function Settings({
           />
         </label>
         <label>
-          Company ID <span className="optional">optional</span>
+          Company ID
           <input
-            placeholder="Leave blank to detect automatically"
+            placeholder="Required — from your Keito account settings"
             value={companyId}
             onChange={(event) => setCompanyId(event.target.value)}
           />
         </label>
-        <button type="submit" disabled={!key.trim() || saving}>
+        <button type="submit" disabled={!key.trim() || !companyId.trim() || saving}>
           {saving ? "Checking…" : "Connect"}
         </button>
       </form>
 
-      {snapshot.error && <div className="error">{snapshot.error}</div>}
+      {snapshot.error && (
+        <div className="error">
+          {snapshot.error}
+          <button className="link" onClick={() => void keito.openLog()}>
+            Open log
+          </button>
+        </div>
+      )}
 
       {snapshot.keyStatus === "ready" && (
         <>
           <h2>Company ID</h2>
           <p className="hint">
             Sent as the <code>Keito-Account-Id</code> header on every request. Change it to point
-            the app at a different company on the same key; clear it to detect it again.
+            the app at a different company on the same key.
           </p>
           <CompanyIdField current={snapshot.accountId} onChange={onChange} />
         </>
@@ -303,6 +312,12 @@ function Settings({
           })}
         </ul>
       )}
+
+      <h2>Diagnostics</h2>
+      <p className="hint">
+        Every request is logged with its status and timing. API keys are masked.
+      </p>
+      <button onClick={() => void keito.openLog()}>Open log file</button>
 
       <h2>Workspace timezone</h2>
       <p className="hint">

@@ -1,7 +1,49 @@
-import { KeitoAuthError, KeitoConflictError, KeitoNetworkError, KeitoReadOnlyError } from "./errors.js";
+import {
+  KeitoAccountIdRequiredError,
+  KeitoAuthError,
+  KeitoConflictError,
+  KeitoNetworkError,
+  KeitoReadOnlyError,
+  KeitoRequestError,
+} from "./errors.js";
 import type { Identity, Project, Task, TimeEntry } from "./types.js";
 
 export const KEITO_BASE_URL = "https://app.keito.ai/api/v2";
+
+/** Pulls a human-readable reason out of an error response, whatever shape it arrives in. */
+async function readErrorDetail(response: Response): Promise<string | null> {
+  const text = await response.text().catch(() => "");
+  if (!text) return null;
+  try {
+    const parsed = JSON.parse(text) as Record<string, unknown>;
+    for (const field of ["message", "error", "detail", "error_description"]) {
+      const value = parsed[field];
+      if (typeof value === "string" && value) return value;
+    }
+    return JSON.stringify(parsed).slice(0, 300);
+  } catch {
+    // HTML error pages and proxy responses land here.
+    return text.replace(/\s+/g, " ").trim().slice(0, 200);
+  }
+}
+
+function describeCause(cause: unknown): string {
+  if (cause instanceof Error) {
+    const code = (cause as NodeJS.ErrnoException).code;
+    return code ? `${cause.message} (${code})` : cause.message;
+  }
+  return String(cause);
+}
+
+/** One line of the request log. Deliberately carries no credentials. */
+export interface RequestRecord {
+  method: string;
+  path: string;
+  status?: number;
+  ok: boolean;
+  durationMs: number;
+  error?: string;
+}
 
 export interface KeitoClientOptions {
   apiKey: string;
@@ -9,6 +51,8 @@ export interface KeitoClientOptions {
   accountId?: string;
   baseUrl?: string;
   fetch: typeof fetch;
+  /** Called once per request, for logging. Never receives the API key. */
+  onRequest?: (record: RequestRecord) => void;
 }
 
 /** An entity plus the ETag Keito handed back, needed as If-Match on the next mutation. */
@@ -42,12 +86,14 @@ export class KeitoClient {
   #accountId: string | undefined;
   #baseUrl: string;
   #fetch: typeof fetch;
+  #onRequest: ((record: RequestRecord) => void) | undefined;
 
   constructor(options: KeitoClientOptions) {
     this.#apiKey = options.apiKey;
     this.#accountId = options.accountId;
     this.#baseUrl = options.baseUrl ?? KEITO_BASE_URL;
     this.#fetch = options.fetch;
+    this.#onRequest = options.onRequest;
   }
 
   async validateKey(): Promise<Identity> {
@@ -168,29 +214,58 @@ export class KeitoClient {
     if (options.idempotencyKey) headers.set("Idempotency-Key", options.idempotencyKey);
     if (options.ifMatch) headers.set("If-Match", options.ifMatch);
 
+    const method = options.method ?? "GET";
+    const startedAt = Date.now();
+    const report = (record: Omit<RequestRecord, "method" | "path" | "durationMs">) => {
+      this.#onRequest?.({ method, path, durationMs: Date.now() - startedAt, ...record });
+    };
+
     let response: Response;
     try {
       response = await this.#fetch(`${this.#baseUrl}${path}`, {
-        method: options.method ?? "GET",
+        method,
         headers,
         ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
       });
     } catch (cause) {
-      throw new KeitoNetworkError("Could not reach Keito.", { cause });
+      const error = new KeitoNetworkError(
+        `Could not reach Keito at ${this.#baseUrl}${path}: ${describeCause(cause)}`,
+        { path, cause },
+      );
+      report({ ok: false, error: error.message });
+      throw error;
     }
 
-    if (response.status === 401 || response.status === 403) {
-      throw new KeitoAuthError("Keito rejected this API key.");
-    }
-    if (response.status === 409) {
-      throw new KeitoConflictError("A timer is already running in Keito.");
-    }
-    if (response.status === 412 || response.status === 428) {
-      throw new KeitoConflictError("This entry changed in Keito since it was loaded. Reload and try again.");
-    }
     if (!response.ok) {
-      throw new KeitoNetworkError(`Keito returned ${response.status} for ${path}.`);
+      // Keito puts the actual reason in the body. Losing it turns every failure into a
+      // shrug, so read it first and fold it into the message.
+      const detail = await readErrorDetail(response);
+      const context = { status: response.status, path };
+      const suffix = detail ? `: ${detail}` : "";
+      report({ ok: false, status: response.status, ...(detail ? { error: detail } : {}) });
+
+      if (response.status === 400 && /account-id/i.test(detail ?? "")) {
+        throw new KeitoAccountIdRequiredError(
+          "Keito needs a Company ID. Enter it in Settings — it is required on every request, so it cannot be detected automatically.",
+          context,
+        );
+      }
+      if (response.status === 401 || response.status === 403) {
+        throw new KeitoAuthError(`Keito rejected this request (${response.status})${suffix}`, context);
+      }
+      if (response.status === 409) {
+        throw new KeitoConflictError(`A timer is already running in Keito${suffix}`, context);
+      }
+      if (response.status === 412 || response.status === 428) {
+        throw new KeitoConflictError(
+          `This entry changed in Keito since it was loaded. Reload and try again${suffix}`,
+          context,
+        );
+      }
+      throw new KeitoRequestError(`Keito returned ${response.status} for ${path}${suffix}`, context);
     }
+
+    report({ ok: true, status: response.status });
 
     const etag = response.headers.get("ETag");
     const body = response.status === 204 ? undefined : await response.json();

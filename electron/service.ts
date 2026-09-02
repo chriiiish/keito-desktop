@@ -1,12 +1,13 @@
 import { buildPicker } from "../src/core/catalog/picker.js";
 import { loadWorkspace, type Workspace } from "../src/core/catalog/workspace.js";
-import { KeitoClient } from "../src/core/keito/client.js";
-import { KeitoAuthError, KeitoReadOnlyError } from "../src/core/keito/errors.js";
+import { KeitoClient, type RequestRecord } from "../src/core/keito/client.js";
+import { KeitoAuthError, KeitoError, KeitoReadOnlyError } from "../src/core/keito/errors.js";
 import type { Identity, Pair, TimeEntry } from "../src/core/keito/types.js";
 import { PreferencesStore } from "../src/core/store/preferences.js";
 import { TimerSwitcher, type TimerState } from "../src/core/timer/switcher.js";
 import { formatWorkspaceTime, parseWorkspaceTime } from "../src/core/time/workspace-time.js";
 import type { SecretStore } from "./secrets.js";
+import type { Logger } from "./logger.js";
 
 /** Everything the renderer needs to draw either window. */
 export interface Snapshot {
@@ -33,6 +34,7 @@ export interface Snapshot {
 export class AppService {
   #prefs: PreferencesStore;
   #secrets: SecretStore;
+  #log: Logger;
   #client: KeitoClient | null = null;
   #switcher: TimerSwitcher | null = null;
   #identity: Identity | null = null;
@@ -41,16 +43,34 @@ export class AppService {
   #error: string | null = null;
   #startedAtMs: number | null = null;
 
-  private constructor(prefs: PreferencesStore, secrets: SecretStore) {
+  private constructor(prefs: PreferencesStore, secrets: SecretStore, log: Logger) {
     this.#prefs = prefs;
     this.#secrets = secrets;
+    this.#log = log;
   }
 
-  static async create(prefs: PreferencesStore, secrets: SecretStore): Promise<AppService> {
-    const service = new AppService(prefs, secrets);
+  static async create(
+    prefs: PreferencesStore,
+    secrets: SecretStore,
+    log: Logger,
+  ): Promise<AppService> {
+    const service = new AppService(prefs, secrets, log);
     const key = await secrets.read();
-    if (key) await service.#connect(key);
+    log.info("Starting", { hasStoredKey: Boolean(key), accountId: prefs.get().accountId ?? null });
+    if (key) {
+      try {
+        await service.#connect(key);
+      } catch (error) {
+        // A bad stored key must not stop the app; the settings window explains it.
+        service.#recordFailure(error);
+      }
+    }
     return service;
+  }
+
+  /** The log file, so Settings can offer to open it. */
+  get logPath(): string {
+    return this.#log.path;
   }
 
   snapshot(): Snapshot {
@@ -92,12 +112,8 @@ export class AppService {
       this.#error = null;
     } catch (error) {
       this.#keyStatus = error instanceof KeitoAuthError ? "rejected" : "missing";
-      this.#error =
-        error instanceof KeitoReadOnlyError
-          ? error.message
-          : error instanceof Error
-            ? error.message
-            : String(error);
+      this.#recordFailure(error, "Connecting with a new key failed");
+      if (error instanceof KeitoReadOnlyError) this.#error = error.message;
     }
     return this.snapshot();
   }
@@ -109,13 +125,17 @@ export class AppService {
       this.#error = "Enter an API key first.";
       return this.snapshot();
     }
+    const trimmed = accountId.trim();
+    if (!trimmed) {
+      this.#error = "A Company ID is required — Keito sends it on every request.";
+      return this.snapshot();
+    }
     try {
-      const trimmed = accountId.trim();
-      await this.#connect(key, trimmed ? { accountId: trimmed } : { rediscover: true });
+      await this.#connect(key, { accountId: trimmed });
       this.#error = null;
     } catch (error) {
       if (error instanceof KeitoAuthError) this.#keyStatus = "rejected";
-      this.#error = error instanceof Error ? error.message : String(error);
+      this.#recordFailure(error, "Changing the company id failed");
     }
     return this.snapshot();
   }
@@ -216,21 +236,31 @@ export class AppService {
 
   async #connect(
     key: string,
-    options: { persist?: boolean; accountId?: string; rediscover?: boolean } = {},
+    options: { persist?: boolean; accountId?: string } = {},
   ): Promise<void> {
-    // Explicit beats remembered; `rediscover` deliberately sends no header so the server
-    // reports the token's own company.
+    // Explicit beats remembered. Keito rejects any request without this header, so there
+    // is no discovery path to fall back to.
     const stored = this.#prefs.get().accountId;
-    const accountId = options.accountId ?? (options.rediscover ? undefined : stored);
+    const accountId = options.accountId ?? stored;
+
+    this.#log.info("Connecting", { accountId: accountId ?? null });
 
     const probe = new KeitoClient({
       apiKey: key,
       ...(accountId ? { accountId } : {}),
       fetch,
+      onRequest: this.#logRequest,
     });
     const identity = await probe.validateKey();
 
-    this.#client = new KeitoClient({ apiKey: key, accountId: identity.accountId, fetch });
+    this.#log.info("Connected", { accountId: identity.accountId, user: identity.userId });
+
+    this.#client = new KeitoClient({
+      apiKey: key,
+      accountId: identity.accountId,
+      fetch,
+      onRequest: this.#logRequest,
+    });
     this.#switcher = new TimerSwitcher({ client: this.#client, now: () => new Date() });
     this.#identity = identity;
     this.#keyStatus = "ready";
@@ -240,6 +270,12 @@ export class AppService {
 
     await this.refresh();
   }
+
+  readonly #logRequest = (record: RequestRecord): void => {
+    const line = `${record.method} ${record.path} -> ${record.status ?? "no response"} (${record.durationMs}ms)`;
+    if (record.ok) this.#log.info(line);
+    else this.#log.warn(line, record.error ? { error: record.error } : undefined);
+  };
 
   /** Reconstructs an adopted timer's start from its spent_date and HH:mm start. */
   #adoptedStartMs(entry: TimeEntry): number {
@@ -259,8 +295,20 @@ export class AppService {
       this.#error = null;
     } catch (error) {
       if (error instanceof KeitoAuthError) this.#keyStatus = "rejected";
-      this.#error = error instanceof Error ? error.message : String(error);
+      this.#recordFailure(error);
     }
     return this.snapshot();
+  }
+
+  /** Puts a failure in front of the user and in the log, with the detail the log needs. */
+  #recordFailure(error: unknown, context = "Request failed"): void {
+    const message = error instanceof Error ? error.message : String(error);
+    this.#error = message;
+    this.#log.error(`${context}: ${message}`, {
+      type: error instanceof Error ? error.constructor.name : typeof error,
+      ...(error instanceof KeitoError && error.status !== undefined ? { status: error.status } : {}),
+      ...(error instanceof KeitoError && error.path !== undefined ? { path: error.path } : {}),
+      ...(error instanceof Error && error.cause ? { cause: String(error.cause) } : {}),
+    });
   }
 }

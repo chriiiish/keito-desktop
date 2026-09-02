@@ -25,11 +25,10 @@ entry requires both ids.
    rather than failing later.
 3. `npm run dev`, then paste the key into the settings window that opens.
 
-**Company ID** is optional on that form. Leave it blank and the app reads it from
-`/users/me` and remembers it. Fill it in when auto-detection fails — Keito documents
-`Keito-Account-Id` as required on *every* request, including the one that would discover it
-— or to point a key that spans companies at a specific one. You can change it later from
-Settings without re-entering the key; clearing it re-detects.
+**Company ID is required** alongside the key. Keito sends `Keito-Account-Id` on every
+request — including `/users/me`, which answers `400 Missing Keito-Account-Id header`
+without it — so it cannot be detected for you. Find it in your Keito account settings.
+You can change it later from Settings without re-entering the key.
 
 The key is encrypted at rest by the OS (Keychain on macOS, DPAPI on Windows) and never
 written to `preferences.json`.
@@ -66,6 +65,25 @@ KEITO_API_KEY=kto_xxx npm run test:contract
 
 Creates exactly one scratch time entry and deletes it again. This is what catches
 `test/fake-keito.ts` drifting from the real API.
+
+## Troubleshooting
+
+Every request is logged with its status, timing and Keito's own error message. API keys are
+masked in the log.
+
+- **macOS**: `~/Library/Logs/Keito Timer/keito-timer.log`
+- **Windows**: `%APPDATA%\\Keito Timer\\logs\\keito-timer.log`
+
+Settings → Diagnostics → **Open log file**, or the tray menu's **Open log…**, opens it
+directly. Error banners in Settings carry an *Open log* link.
+
+To check credentials outside the app:
+
+```sh
+curl -sS -i https://app.keito.ai/api/v2/users/me \
+  -H "Authorization: Bearer kto_YOUR_KEY" \
+  -H "Keito-Account-Id: YOUR_COMPANY_ID"
+```
 
 ## Known limits
 

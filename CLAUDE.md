@@ -71,11 +71,12 @@ These are properties of the Keito API, not choices — changing code that depend
 break against the real server even while the fake keeps passing.
 
 - **Auth is two headers**: `Authorization: Bearer kto_…` and `Keito-Account-Id`. There is no
-  OAuth flow; the key is pasted. `GET /users/me` returns `company` for full-access keys, and
-  that's how the account id is discovered when the user doesn't supply one. Because the
-  header is documented as required on *every* request, discovery can't be relied on — hence
-  the optional Company ID field. A configured id wins over the server-reported `company.id`
-  in `validateKey()`, since the header is what actually decides which workspace is acted on.
+  OAuth flow; both are entered by the user. **The company id cannot be auto-discovered** —
+  verified against the live API, `/users/me` without the header answers
+  `400 Missing Keito-Account-Id header`, so the endpoint you would read `company` from is
+  itself gated on it. `KeitoAccountIdRequiredError` exists to name this precisely. A
+  configured id wins over the server-reported `company.id` in `validateKey()`, since the
+  header is what actually decides which workspace is acted on.
 - **Personal sync keys are read-only** and omit `company`. They cannot create entries, so
   `validateKey()` rejects them with `KeitoReadOnlyError` at setup rather than letting the
   first switch fail.
@@ -104,6 +105,21 @@ contract test when the behaviour being faked is one the real API decides.
 `rankRecents` scores uses with a 7-day half-life over a 30-day window. Its tests assert
 ordering against hand-computed values — don't replace them with assertions that recompute
 the score the way the implementation does.
+
+## Diagnostics
+
+`electron/logger.ts` appends to `app.getPath("logs")/keito-timer.log` (rotated at 512KB),
+synchronously so a startup crash still leaves the line explaining it. `KeitoClient` takes an
+`onRequest` hook — that is how the core stays Electron-free while every request still gets
+logged with method, path, status and duration. **Nothing that reaches the log may carry the
+API key**; `redact()` masks `kto_…` as a second line of defence and is tested.
+
+Client errors carry `status` and `path`, and fold Keito's own response body into the
+message. Don't go back to fixed strings like "Keito rejected this API key" — the body is
+where the actual reason lives, and losing it makes every failure look identical.
+
+`KeitoNetworkError` means the request never reached Keito; an HTTP error status is
+`KeitoRequestError` or something more specific.
 
 ## Failure model
 

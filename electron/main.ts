@@ -15,6 +15,7 @@ import { PreferencesStore } from "../src/core/store/preferences.js";
 import { IdleWatcher, shouldAutoStop } from "../src/core/timer/idle.js";
 import { AppService, type Snapshot } from "./service.js";
 import { SecretStore } from "./secrets.js";
+import { Logger } from "./logger.js";
 
 const POPOVER_SIZE = { width: 420, height: 520 };
 const IDLE_POLL_MS = 30_000;
@@ -25,6 +26,7 @@ let popover: BrowserWindow | null = null;
 let mainWindow: BrowserWindow | null = null;
 let service: AppService;
 let registeredHotkey: string | null = null;
+let log: Logger;
 
 const rendererUrl = process.env["ELECTRON_RENDERER_URL"];
 
@@ -136,6 +138,7 @@ function createTray(): void {
         { label: "Stop timer", click: () => void service.stopTimer().then(broadcast) },
         { type: "separator" },
         { label: "Entries & settings…", click: openMainWindow },
+        { label: "Open log…", click: () => void shell.openPath(service.logPath) },
         { type: "separator" },
         { label: "Quit Keito Timer", role: "quit" },
       ]),
@@ -184,6 +187,12 @@ function registerIpc(): void {
     return snapshot;
   });
 
+  handle("open-log", async () => {
+    await shell.openPath(service.logPath);
+    return undefined;
+  });
+  handle("log-path", async () => service.logPath);
+
   handle("close-popover", async () => {
     popover?.hide();
     return undefined;
@@ -224,9 +233,16 @@ app.whenReady().then(async () => {
   // A menubar app has no dock presence on macOS.
   if (process.platform === "darwin") app.dock?.hide();
 
+  log = new Logger(join(app.getPath("logs"), "keito-timer.log"));
+  log.info("App ready", { version: app.getVersion(), platform: process.platform });
+
+  // Anything that escapes a handler belongs in the log, not a silent void.
+  process.on("uncaughtException", (error) => log.error(`Uncaught: ${error.stack ?? error.message}`));
+  process.on("unhandledRejection", (reason) => log.error(`Unhandled rejection: ${String(reason)}`));
+
   const prefs = await PreferencesStore.open(join(app.getPath("userData"), "preferences.json"));
   const secrets = new SecretStore(join(app.getPath("userData"), "credentials.bin"));
-  service = await AppService.create(prefs, secrets);
+  service = await AppService.create(prefs, secrets, log);
 
   createTray();
   registerIpc();
