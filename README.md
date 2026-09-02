@@ -55,6 +55,9 @@ written to `preferences.json`.
   The workspace-timezone setting only renders and parses manual edits.
 - **`src/core/` imports nothing from Electron** and does no I/O it isn't handed. That's what
   keeps the test suite a fast in-process loop.
+- **Startup costs 3 API requests, a popover open normally 1.** `GET /projects` embeds each
+  project's tasks and list responses include the running entry, so neither needs its own
+  call; the catalog is then cached for 15 minutes.
 - **The fake mirrors the API as observed, not as documented.** Several documented
   behaviours — a single-entry GET, ETags, `If-Match`, a `time_entry` response wrapper —
   do not exist. `npm run test:contract` is what keeps the two in step.
@@ -101,6 +104,5 @@ curl -sS -i https://app.keito.ai/api/v2/users/me \
 
 - Builds are **unsigned**: macOS needs right-click → Open the first time, Windows shows a
   SmartScreen warning.
-- The catalog fetches tasks per project in parallel, which is fine for a personal workspace
-  but would want a concurrency cap for one with hundreds of projects.
-- Projects are read one page deep (`per_page=200`).
+- The 30-day entries window is paged at 200; a very heavy month costs an extra request or
+  two to rank recents correctly.

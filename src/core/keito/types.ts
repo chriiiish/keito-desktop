@@ -9,12 +9,15 @@ export interface Identity {
 export interface Project {
   id: string;
   name: string;
-  client_name?: string;
+  client?: { id?: string; name?: string } | null;
+  /** GET /projects embeds the tasks assigned to each project — no second call needed. */
+  tasks?: Task[];
 }
 
 export interface Task {
   id: string;
   name: string;
+  is_active?: boolean;
 }
 
 /**
@@ -34,6 +37,9 @@ export interface TimeEntry {
   id: string;
   project_id: string;
   task_id: string;
+  /** Entries embed the project and task, so their names need no catalog lookup. */
+  project?: { id: string; name: string } | null;
+  task?: { id: string; name: string } | null;
   spent_date: string;
   started_time: string | null;
   ended_time: string | null;

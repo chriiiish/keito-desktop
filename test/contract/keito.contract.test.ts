@@ -8,7 +8,7 @@
  */
 import { afterAll, describe, expect, it } from "vitest";
 import { KeitoClient } from "../../src/core/keito/client.js";
-import { loadWorkspace } from "../../src/core/catalog/workspace.js";
+import { loadCatalog, loadEntries } from "../../src/core/catalog/workspace.js";
 
 const apiKey = process.env["KEITO_API_KEY"];
 const suite = apiKey ? describe : describe.skip;
@@ -34,6 +34,32 @@ suite("Keito API contract", () => {
     expect(identity.accountId).toBeTruthy();
   });
 
+  it("embeds each project's tasks, which is what makes one call enough", async () => {
+    const projects = await client.listProjects();
+
+    expect(projects.length).toBeGreaterThan(0);
+    // If this ever stops being true, loadCatalog silently returns an empty catalog.
+    expect(projects.some((project) => (project.tasks?.length ?? 0) > 0)).toBe(true);
+  });
+
+  it("includes the running entry in a plain list, so no is_running lookup is needed", async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const entry = await client.createTimeEntry({
+      projectId: (await client.listProjects())[0]!.id,
+      taskId: (await client.listProjects())[0]!.tasks![0]!.id,
+      spentDate: today,
+      isRunning: true,
+      replaceRunning: true,
+      notes: "kieto-timer contract test — safe to delete",
+    });
+    created.push(entry.id);
+
+    const { running } = await loadEntries(client, new Date());
+
+    expect(running?.id).toBe(entry.id);
+    await client.stopTimeEntry(entry.id);
+  });
+
   it("has no single-entry GET endpoint, so nothing may depend on one", async () => {
     const [existing] = await client.listTimeEntries({});
     if (!existing) return;
@@ -48,8 +74,8 @@ suite("Keito API contract", () => {
     expect(response.status).toBe(405);
   });
 
-  it("returns a catalog of (project, task) pairs", async () => {
-    const { catalog } = await loadWorkspace(client, new Date());
+  it("returns a catalog of (project, task) pairs from a single projects call", async () => {
+    const catalog = await loadCatalog(client, new Date());
 
     expect(catalog.length).toBeGreaterThan(0);
     expect(catalog[0]).toMatchObject({
@@ -61,7 +87,7 @@ suite("Keito API contract", () => {
   });
 
   it("starts a running timer with a server-set start time, then stops it", async () => {
-    const { catalog } = await loadWorkspace(client, new Date());
+    const catalog = await loadCatalog(client, new Date());
     const pair = catalog[0]!;
 
     const entry = await client.createTimeEntry({

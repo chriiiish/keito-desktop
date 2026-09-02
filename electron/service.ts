@@ -1,5 +1,5 @@
 import { buildPicker } from "../src/core/catalog/picker.js";
-import { loadWorkspace, type Workspace } from "../src/core/catalog/workspace.js";
+import { loadCatalog, loadEntries } from "../src/core/catalog/workspace.js";
 import { KeitoClient, type RequestRecord } from "../src/core/keito/client.js";
 import { KeitoAuthError, KeitoError, KeitoReadOnlyError } from "../src/core/keito/errors.js";
 import type { Identity, Pair, TimeEntry } from "../src/core/keito/types.js";
@@ -39,6 +39,9 @@ export interface Snapshot {
   error: string | null;
 }
 
+/** Projects and tasks change rarely; the popover is opened constantly. */
+const CATALOG_TTL_MS = 15 * 60_000;
+
 /**
  * When a timer began, in epoch ms. The live API supplies `timer_started_at` as a real
  * instant; the spent_date + HH:mm reconstruction is only a fallback for entries without it.
@@ -69,7 +72,10 @@ export class AppService {
   #client: KeitoClient | null = null;
   #switcher: TimerSwitcher | null = null;
   #identity: Identity | null = null;
-  #workspace: Workspace = { catalog: [], recents: [], today: [] };
+  #catalog: Pair[] = [];
+  #catalogLoadedAt = 0;
+  #recents: string[] = [];
+  #today: TimeEntry[] = [];
   #keyStatus: Snapshot["keyStatus"] = "missing";
   #error: string | null = null;
   #startedAtMs: number | null = null;
@@ -111,9 +117,9 @@ export class AppService {
     return {
       keyStatus: this.#keyStatus,
       identity: this.#identity,
-      catalog: this.#workspace.catalog,
-      recents: this.#workspace.recents,
-      today: this.#workspace.today,
+      catalog: this.#catalog,
+      recents: this.#recents,
+      today: this.#today,
       favourites: [...prefs.favourites],
       hidden: [...prefs.hidden],
       workspaceTimezone: prefs.workspaceTimezone,
@@ -183,7 +189,10 @@ export class AppService {
     this.#client = null;
     this.#switcher = null;
     this.#identity = null;
-    this.#workspace = { catalog: [], recents: [], today: [] };
+    this.#catalog = [];
+    this.#catalogLoadedAt = 0;
+    this.#recents = [];
+    this.#today = [];
     this.#keyStatus = "missing";
     this.#error = null;
     await this.#prefs.update({ accountId: undefined });
@@ -191,7 +200,7 @@ export class AppService {
   }
 
   async switchTo(pairId: string, notes?: string): Promise<Snapshot> {
-    const pair = this.#workspace.catalog.find((candidate) => candidate.id === pairId);
+    const pair = this.#catalog.find((candidate) => candidate.id === pairId);
     if (!pair || !this.#switcher) return this.snapshot();
     return this.#run(async () => {
       await this.#switcher!.switchTo(pair, notes);
@@ -200,7 +209,7 @@ export class AppService {
         state.status === "running"
           ? startMsOf(state.entry, () => this.#prefs.get().workspaceTimezone)
           : Date.now();
-      await this.#reloadToday();
+      await this.#reloadEntries();
       // A new use changes the ranking, so recents are recomputed on the next refresh.
     });
   }
@@ -210,9 +219,9 @@ export class AppService {
    * accumulates on the existing entry instead of creating a second one for the same task.
    */
   async resumeEntry(entryId: string): Promise<Snapshot> {
-    const entry = this.#workspace.today.find((candidate) => candidate.id === entryId);
+    const entry = this.#today.find((candidate) => candidate.id === entryId);
     const pair = entry
-      ? this.#workspace.catalog.find(
+      ? this.#catalog.find(
           (candidate) =>
             candidate.projectId === entry.project_id && candidate.taskId === entry.task_id,
         )
@@ -226,7 +235,7 @@ export class AppService {
         state.status === "running"
           ? startMsOf(state.entry, () => this.#prefs.get().workspaceTimezone)
           : Date.now();
-      await this.#reloadToday();
+      await this.#reloadEntries();
     });
   }
 
@@ -235,7 +244,7 @@ export class AppService {
     return this.#run(async () => {
       await this.#switcher!.stop();
       this.#startedAtMs = null;
-      await this.#reloadToday();
+      await this.#reloadEntries();
     });
   }
 
@@ -263,17 +272,35 @@ export class AppService {
     return this.snapshot();
   }
 
-  async refresh(): Promise<Snapshot> {
+  /**
+   * Reloads what the UI shows. Normally one request: the catalog is cached, because
+   * projects and tasks change far more slowly than the popover is opened.
+   */
+  async refresh(options: { force?: boolean } = {}): Promise<Snapshot> {
     if (!this.#client || !this.#switcher) return this.snapshot();
     return this.#run(async () => {
-      this.#workspace = await loadWorkspace(this.#client!, new Date(), (project, error) => {
-        this.#log.warn(`Skipped project "${project.name}": its tasks would not load`, {
-          projectId: project.id,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      });
+      const now = new Date();
+
+      const stale = now.getTime() - this.#catalogLoadedAt > CATALOG_TTL_MS;
+      if (options.force || stale || this.#catalog.length === 0) {
+        try {
+          this.#catalog = await loadCatalog(this.#client!, now);
+          this.#catalogLoadedAt = now.getTime();
+        } catch (error) {
+          // A stale catalog beats an empty one; the client has already logged why.
+          if (this.#catalog.length === 0) throw error;
+          this.#log.warn("Kept the previous catalog: reloading it failed", {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+
+      const { recents, today, running } = await loadEntries(this.#client!, now);
+      this.#recents = recents;
+      this.#today = today;
+
       const before = this.#switcher!.current();
-      await this.#switcher!.refresh(this.#workspace.catalog);
+      this.#switcher!.adopt(running, this.#catalog);
       const after = this.#switcher!.current();
       if (after.status === "running" && before.status !== "running") {
         this.#startedAtMs = startMsOf(after.entry, () => this.#prefs.get().workspaceTimezone);
@@ -294,7 +321,7 @@ export class AppService {
     if (!this.#client) return this.snapshot();
     return this.#run(async () => {
       await this.#client!.updateTimeEntry(id, patch);
-      await this.#reloadToday();
+      await this.#reloadEntries();
     });
   }
 
@@ -303,8 +330,8 @@ export class AppService {
     return this.#run(async () => {
       await this.#client!.deleteTimeEntry(id);
       // A deleted entry may have been the running one; re-read what Keito now says.
-      await this.#switcher?.refresh(this.#workspace.catalog);
-      await this.#reloadToday();
+      await this.#switcher?.refresh(this.#catalog);
+      await this.#reloadEntries();
     });
   }
 
@@ -318,7 +345,7 @@ export class AppService {
       await this.#client!.updateTimeEntry(state.entry.id, {
         endedTime: formatWorkspaceTime(awaySince, zone),
       });
-      await this.#switcher!.refresh(this.#workspace.catalog);
+      await this.#switcher!.refresh(this.#catalog);
       this.#startedAtMs = null;
     });
   }
@@ -360,11 +387,18 @@ export class AppService {
     await this.refresh();
   }
 
-  /** One cheap request, so today's list stays honest after a mutation. */
-  async #reloadToday(): Promise<void> {
+  /**
+   * One request after a mutation, so today's list and the recents ranking both stay
+   * honest. The catalog is untouched — nothing a timer does changes the project list.
+   *
+   * Deliberately does not touch the timer state: the mutation's own response is
+   * authoritative, and re-deriving it here would race with it.
+   */
+  async #reloadEntries(): Promise<void> {
     if (!this.#client) return;
-    const day = new Date().toISOString().slice(0, 10);
-    this.#workspace = { ...this.#workspace, today: await this.#client.listTimeEntries({ from: day, to: day }) };
+    const { recents, today } = await loadEntries(this.#client, new Date());
+    this.#recents = recents;
+    this.#today = today;
   }
 
   readonly #logRequest = (record: RequestRecord): void => {

@@ -1,5 +1,6 @@
 import type { KeitoClient } from "../keito/client.js";
 import { KeitoAuthError } from "../keito/errors.js";
+import { pairId } from "../catalog/catalog.js";
 import type { Pair, TimeEntry } from "../keito/types.js";
 
 export type TimerState =
@@ -7,6 +8,26 @@ export type TimerState =
   | { status: "running"; pair: Pair; entry: TimeEntry }
   /** The key was rejected. The UI routes this to settings rather than a generic error. */
   | { status: "needs-auth" };
+
+/**
+ * The catalog is the source of display names, but a timer can be running against a project
+ * that has since been archived or switched off. The entry embeds both names, so fall back
+ * to those rather than pretending nothing is running.
+ */
+function pairFor(entry: TimeEntry, catalog: readonly Pair[]): Pair {
+  const known = catalog.find(
+    (candidate) => candidate.projectId === entry.project_id && candidate.taskId === entry.task_id,
+  );
+  if (known) return known;
+
+  return {
+    id: pairId(entry.project_id, entry.task_id),
+    projectId: entry.project_id,
+    projectName: entry.project?.name ?? "Unknown project",
+    taskId: entry.task_id,
+    taskName: entry.task?.name ?? "Unknown task",
+  };
+}
 
 export interface TimerSwitcherOptions {
   client: KeitoClient;
@@ -77,19 +98,23 @@ export class TimerSwitcher {
   }
 
   /**
-   * Asks Keito what is running — which may be a timer started in the web app or on
-   * another machine — and matches it back to a pair in the catalog.
+   * Records what Keito says is running, from entries the caller already has. Separate
+   * from refresh() so a workspace load does not pay for a second request to learn it.
    */
-  async refresh(catalog: readonly Pair[]): Promise<void> {
-    const [running] = await this.#guard(() => this.#client.listTimeEntries({ isRunning: true }));
+  adopt(running: TimeEntry | null, catalog: readonly Pair[]): void {
     if (!running) {
       this.#state = { status: "idle" };
       return;
     }
+    this.#state = { status: "running", pair: pairFor(running, catalog), entry: running };
+  }
 
-    const pair = catalog.find(
-      (candidate) => candidate.projectId === running.project_id && candidate.taskId === running.task_id,
-    );
-    this.#state = pair ? { status: "running", pair, entry: running } : { status: "idle" };
+  /**
+   * Asks Keito what is running — a timer may have been started in the web app or on
+   * another machine. Prefer adopt() when the entries are already to hand.
+   */
+  async refresh(catalog: readonly Pair[]): Promise<void> {
+    const [running] = await this.#guard(() => this.#client.listTimeEntries({ isRunning: true }));
+    this.adopt(running ?? null, catalog);
   }
 }

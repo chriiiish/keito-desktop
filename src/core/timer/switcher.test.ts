@@ -149,6 +149,40 @@ describe("picking up a timer started elsewhere", () => {
     expect(keito.requests.some((r) => /^\/time_entries\/[^/]+$/.test(r.path))).toBe(false);
   });
 
+  it("adopts a timer from entries already fetched, without another request", async () => {
+    const seeded = keito.seedRunning({ project_id: "p_acme", task_id: "t_qa" });
+    const before = keito.requests.length;
+
+    switcher.adopt(seeded as never, [DEV, QA]);
+
+    expect(switcher.current()).toMatchObject({ status: "running", pair: QA });
+    expect(keito.requests).toHaveLength(before);
+  });
+
+  it("keeps showing a timer whose project has left the catalog, using the names on the entry", () => {
+    switcher.adopt(
+      {
+        id: "te_x",
+        project_id: "p_archived",
+        task_id: "t_old",
+        project: { id: "p_archived", name: "Archived Project" },
+        task: { id: "t_old", name: "Old Task" },
+        spent_date: "2026-09-02",
+        started_time: "09:00",
+        ended_time: null,
+        hours: null,
+        is_running: true,
+        notes: null,
+      } as never,
+      [DEV, QA],
+    );
+
+    expect(switcher.current()).toMatchObject({
+      status: "running",
+      pair: { projectName: "Archived Project", taskName: "Old Task" },
+    });
+  });
+
   it("goes idle when Keito says nothing is running", async () => {
     await switcher.refresh([DEV, QA]);
 

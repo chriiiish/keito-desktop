@@ -135,11 +135,28 @@ contract test when the behaviour being faked is one the real API decides.
 ordering against hand-computed values — don't replace them with assertions that recompute
 the score the way the implementation does.
 
+## Request budget
+
+Startup is **3 requests**; a popover open is normally **1**. Keep it that way.
+
+- **`GET /projects` embeds each project's `tasks`.** Never fetch `/tasks?project_id=` per
+  project — that was 1 + N requests for data already in hand. `buildCatalog` reads
+  `project.tasks` directly.
+- **List responses include running entries.** There is no separate `?is_running=true`
+  lookup; `loadEntries` picks the running entry out of the window it already fetched, and
+  `TimerSwitcher.adopt()` takes it without touching the network. `refresh()` still does its
+  own call for callers that have no entries to hand.
+- **The catalog is cached for `CATALOG_TTL_MS`.** Projects and tasks change far more slowly
+  than the popover is opened. A failed reload keeps the previous catalog rather than
+  emptying it.
+- **Every list endpoint is paged** via `#paged` at `PAGE_SIZE`. Without it a busy month is
+  ranked from the first page alone — silently wrong rather than visibly broken.
+- Entries embed `project` and `task` objects, so a timer running against an archived
+  project still shows its real names instead of reading as "nothing running".
+
 `GET /tasks` returns **503 "Task reference data is temporarily at capacity"** under load —
 seen against the live workspace. The client retries 429/502/503/504 up to `MAX_ATTEMPTS`
-with linear backoff, `loadWorkspace` caps itself at `TASK_FETCH_CONCURRENCY` in-flight task
-lookups, and a project whose tasks still will not load is skipped with a warning rather
-than rejecting the whole catalog. Losing one project beats failing to start.
+with linear backoff. That retry now matters mainly for `/projects` and `/time_entries`.
 
 ## Diagnostics
 

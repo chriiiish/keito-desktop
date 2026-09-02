@@ -1,24 +1,24 @@
 import { describe, expect, it } from "vitest";
 import { buildCatalog, pairId } from "./catalog.js";
 
+// GET /projects embeds each project's assigned tasks, so no per-project lookup is needed.
 const projects = [
-  { id: "p_zebra", name: "Zebra", client_name: "Acme" },
-  { id: "p_apple", name: "Apple", client_name: "Beta Ltd" },
-  { id: "p_empty", name: "Unstaffed", client_name: "Acme" },
+  { id: "p_zebra", name: "Zebra", client: { name: "Acme" }, tasks: [{ id: "t_dev", name: "Development" }] },
+  {
+    id: "p_apple",
+    name: "Apple",
+    client: { name: "Beta Ltd" },
+    tasks: [
+      { id: "t_design", name: "Design" },
+      { id: "t_dev", name: "Development" },
+    ],
+  },
+  { id: "p_empty", name: "Unstaffed", client: { name: "Acme" }, tasks: [] },
 ];
-
-const tasksByProject = {
-  p_zebra: [{ id: "t_dev", name: "Development" }],
-  p_apple: [
-    { id: "t_design", name: "Design" },
-    { id: "t_dev", name: "Development" },
-  ],
-  p_empty: [],
-};
 
 describe("buildCatalog", () => {
   it("produces one selectable pair per task assigned to a project", () => {
-    const catalog = buildCatalog(projects, tasksByProject);
+    const catalog = buildCatalog(projects);
 
     expect(catalog.map((pair) => pair.id)).toEqual([
       "p_apple:t_design",
@@ -28,7 +28,7 @@ describe("buildCatalog", () => {
   });
 
   it("carries the names the popover displays, so it never needs a second lookup", () => {
-    const catalog = buildCatalog(projects, tasksByProject);
+    const catalog = buildCatalog(projects);
 
     expect(catalog[2]).toEqual({
       id: "p_zebra:t_dev",
@@ -41,9 +41,28 @@ describe("buildCatalog", () => {
   });
 
   it("omits projects with no tasks assigned, since they cannot be timed against", () => {
-    const catalog = buildCatalog(projects, tasksByProject);
+    const catalog = buildCatalog(projects);
 
     expect(catalog.some((pair) => pair.projectId === "p_empty")).toBe(false);
+  });
+
+  it("leaves out tasks that have been deactivated", () => {
+    const catalog = buildCatalog([
+      {
+        id: "p_a",
+        name: "Alpha",
+        tasks: [
+          { id: "t_live", name: "Live" },
+          { id: "t_dead", name: "Retired", is_active: false },
+        ],
+      },
+    ]);
+
+    expect(catalog.map((pair) => pair.taskId)).toEqual(["t_live"]);
+  });
+
+  it("copes with a project that carries no tasks field at all", () => {
+    expect(buildCatalog([{ id: "p_a", name: "Alpha" }])).toEqual([]);
   });
 
   it("identifies a pair by project and task together", () => {

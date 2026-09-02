@@ -24,8 +24,11 @@ export interface FakeEntry {
 }
 
 export interface FakeKeitoOptions {
-  projects?: Array<{ id: string; name: string; client_name?: string }>;
+  projects?: Array<{ id: string; name: string; client?: { name: string }; tasks?: Array<{ id: string; name: string; is_active?: boolean }> }>;
+  /** Convenience: folded into each project's embedded `tasks`, as the live API returns them. */
   tasksByProject?: Record<string, Array<{ id: string; name: string }>>;
+  /** Page size the fake enforces, so pagination handling is exercised. */
+  pageSize?: number;
   now?: () => Date;
   /** Reject every request, as an expired or wrong key would. */
   rejectAuth?: boolean;
@@ -44,6 +47,7 @@ export class FakeKeito {
 
   #options: Required<Pick<FakeKeitoOptions, "projects" | "tasksByProject" | "now">> & {
     rejectAuth: boolean;
+    pageSize: number;
   };
   #seq = 0;
 
@@ -53,6 +57,7 @@ export class FakeKeito {
       tasksByProject: options.tasksByProject ?? {},
       now: options.now ?? (() => new Date()),
       rejectAuth: options.rejectAuth ?? false,
+      pageSize: options.pageSize ?? 200,
     };
   }
 
@@ -98,7 +103,12 @@ export class FakeKeito {
       return this.#json({ id: "u_1", first_name: "Chris", company: { id: "co_9", name: "Acme" } });
     }
     if (method === "GET" && path === "/projects") {
-      return this.#json({ projects: this.#options.projects });
+      // Tasks arrive embedded, exactly as the live API returns them.
+      const withTasks = this.#options.projects.map((project) => ({
+        ...project,
+        tasks: project.tasks ?? this.#options.tasksByProject[project.id] ?? [],
+      }));
+      return this.#page(withTasks, "projects", url);
     }
     if (method === "GET" && path === "/tasks") {
       const projectId = url.searchParams.get("project_id") ?? "";
@@ -120,7 +130,7 @@ export class FakeKeito {
       const to = url.searchParams.get("to");
       if (from) entries = entries.filter((e) => e.spent_date >= from);
       if (to) entries = entries.filter((e) => e.spent_date <= to);
-      return this.#json({ time_entries: entries });
+      return this.#page(entries, "time_entries", url);
     }
     if (method === "POST" && path === "/time_entries") {
       const wantsRunning = body?.is_running === true;
@@ -210,6 +220,20 @@ export class FakeKeito {
   #stop(entry: FakeEntry): void {
     entry.is_running = false;
     entry.ended_time = this.#options.now().toISOString().slice(11, 16);
+  }
+
+  /** Paginates like the live API: a named array plus page/total metadata. */
+  #page(items: readonly unknown[], key: string, url: URL): Response {
+    const perPage = Math.min(Number(url.searchParams.get("per_page")) || 25, this.#options.pageSize);
+    const page = Number(url.searchParams.get("page")) || 1;
+    const slice = items.slice((page - 1) * perPage, page * perPage);
+    return this.#json({
+      [key]: slice,
+      page,
+      per_page: perPage,
+      total_entries: items.length,
+      total_pages: Math.max(1, Math.ceil(items.length / perPage)),
+    });
   }
 
   /** The live API sends no ETag on any response. */

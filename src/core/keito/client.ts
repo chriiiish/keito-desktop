@@ -7,7 +7,7 @@ import {
   KeitoReadOnlyError,
   KeitoRequestError,
 } from "./errors.js";
-import type { Identity, Project, Task, TimeEntry } from "./types.js";
+import type { Identity, Project, TimeEntry } from "./types.js";
 
 export const KEITO_BASE_URL = "https://app.keito.ai/api/v2";
 
@@ -60,6 +60,11 @@ export interface KeitoClientOptions {
 
 /** Statuses worth trying again: Keito throttles /tasks under load with a 503. */
 const RETRYABLE = new Set([429, 502, 503, 504]);
+
+/** Keito's maximum page size. Fewer, larger pages means fewer round trips. */
+const PAGE_SIZE = 200;
+/** A guard against an endpoint that never stops reporting more pages. */
+const MAX_PAGES = 25;
 const MAX_ATTEMPTS = 3;
 
 /**
@@ -154,28 +159,38 @@ export class KeitoClient {
     return unwrapEntry(created);
   }
 
+  /**
+   * Active projects, each with its assigned tasks embedded — the live API returns them
+   * inline, so the whole catalog costs one paged request rather than one per project.
+   */
   async listProjects(): Promise<Project[]> {
-    const { body } = await this.#request("/projects?is_active=true&per_page=200");
-    return (body as { projects: Project[] }).projects;
-  }
-
-  /** Tasks assigned to a project. Tasks are workspace-global; assignment is per project. */
-  async listTasks(projectId: string): Promise<Task[]> {
-    const { body } = await this.#request(`/tasks?project_id=${encodeURIComponent(projectId)}`);
-    return (body as { tasks: Task[] }).tasks;
+    return this.#paged<Project>("/projects", "projects", { is_active: "true" });
   }
 
   /** Lists time entries. `isRunning` narrows to the one active timer. */
-  async listTimeEntries(filter: { isRunning?: boolean; from?: string; to?: string } = {}): Promise<TimeEntry[]> {
-    const params = new URLSearchParams();
-    if (filter.isRunning !== undefined) params.set("is_running", String(filter.isRunning));
-    if (filter.from) params.set("from", filter.from);
-    if (filter.to) params.set("to", filter.to);
-    const query = params.size > 0 ? `?${params}` : "";
+  async listTimeEntries(
+    filter: { isRunning?: boolean; from?: string; to?: string } = {},
+  ): Promise<TimeEntry[]> {
+    const params: Record<string, string> = {};
+    if (filter.isRunning !== undefined) params["is_running"] = String(filter.isRunning);
+    if (filter.from) params["from"] = filter.from;
+    if (filter.to) params["to"] = filter.to;
+    return this.#paged<TimeEntry>("/time_entries", "time_entries", params);
+  }
 
-    const { body } = await this.#request(`/time_entries${query}`);
-    const entries = (body as { time_entries: TimeEntry[] }).time_entries;
-    return entries;
+  /**
+   * Reads every page of a list endpoint. Without this a busy month would be ranked from
+   * the first page alone, which is silently wrong rather than visibly broken.
+   */
+  async #paged<T>(path: string, key: string, params: Record<string, string> = {}): Promise<T[]> {
+    const items: T[] = [];
+    for (let page = 1; ; page++) {
+      const query = new URLSearchParams({ ...params, per_page: String(PAGE_SIZE), page: String(page) });
+      const { body } = await this.#request(`${path}?${query}`);
+      const parsed = body as Record<string, unknown> & { total_pages?: number };
+      items.push(...((parsed[key] as T[] | undefined) ?? []));
+      if (page >= (parsed.total_pages ?? 1) || page >= MAX_PAGES) return items;
+    }
   }
 
   /** Applies a correction to an entry. */
