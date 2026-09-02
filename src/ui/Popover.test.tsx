@@ -587,6 +587,21 @@ describe("yesterday's entries", () => {
     expect(resume.textContent).toBe("▶");
   });
 
+  // Each day used to own its own `flex: 1; overflow-y: auto`, so two days meant two short
+  // panes splitting the space between them and scrolling separately.
+  it("puts both days in one scroller rather than one each", async () => {
+    api.getSnapshot.mockResolvedValue(withYesterday({ today: [entry("te_t", "p_acme", "t_dev")] }));
+
+    render(<Popover />);
+    await screen.findByText("Yesterday");
+
+    const scrollers = document.querySelectorAll(".recent");
+    expect(scrollers).toHaveLength(1);
+    expect(scrollers[0]!.querySelectorAll(".day")).toHaveLength(2);
+    // Both headings live inside that one container, not beside it.
+    expect(scrollers[0]!.querySelectorAll(".day-heading")).toHaveLength(2);
+  });
+
   it("leaves the heading out when there is nothing behind you", async () => {
     render(<Popover />);
     await screen.findByText("Today");
