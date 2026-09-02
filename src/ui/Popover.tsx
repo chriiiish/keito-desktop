@@ -207,6 +207,7 @@ export function Popover(): JSX.Element {
         today={snapshot.today}
         yesterday={snapshot.yesterday}
         catalog={snapshot.catalog}
+        timeZone={snapshot.workspaceTimezone}
         onResume={resume}
         onStartAgain={startAgain}
         onStop={() => keito.stopTimer().then(setSnapshot)}

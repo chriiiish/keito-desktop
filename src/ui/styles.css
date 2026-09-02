@@ -191,6 +191,7 @@ td input { border-color: transparent; background: transparent; }
 td input:hover { border-color: var(--line); }
 input.time { width: 74px; font-variant-numeric: tabular-nums; }
 .running-row { background: var(--accent-soft); }
+td.ticking { color: var(--accent); font-variant-numeric: tabular-nums; }
 
 .settings h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 22px 0 6px; }
 .settings h2:first-child { margin-top: 0; }
@@ -382,6 +383,9 @@ select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 .entry-hours { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12px; }
 .day .running-row { background: none; }
 .day .entry-hours { color: var(--fg); opacity: 0.65; }
+/* A running row's figure is climbing, so it is coloured like the timer it belongs to
+   rather than dimmed like the settled ones. After the rule above, which it overrides. */
+.day .entry-hours.ticking { color: var(--accent); opacity: 1; font-variant-numeric: tabular-nums; }
 .day .running-row strong::before { content: "● "; color: var(--accent); }
 .play.small, .stop.small { padding: 2px 9px; font-size: 11px; }
 /* Closes the gap between the two triangles so they read as one fast-forward mark. The

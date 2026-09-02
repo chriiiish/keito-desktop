@@ -6,7 +6,8 @@ import type { Identity, Pair, TimeEntry } from "../src/core/keito/types.js";
 import { PreferencesStore } from "../src/core/store/preferences.js";
 import type { TrayFallback, TrayPrefix } from "../src/core/tray/label.js";
 import { Timer, type TimerState } from "../src/core/timer/timer.js";
-import { formatWorkspaceTime, parseWorkspaceTime } from "../src/core/time/workspace-time.js";
+import { formatWorkspaceTime } from "../src/core/time/workspace-time.js";
+import { entryStartMs } from "../src/core/time/elapsed.js";
 import type { SecretStore } from "./secrets.js";
 import type { Logger } from "./logger.js";
 
@@ -75,22 +76,14 @@ function maskKey(key: string): string {
 const CATALOG_TTL_MS = 15 * 60_000;
 
 /**
- * When a timer began, in epoch ms. The live API supplies `timer_started_at` as a real
- * instant; the spent_date + HH:mm reconstruction is only a fallback for entries without it.
+ * When a timer began, in epoch ms. Shared with the renderer through `src/core`, so the
+ * header clock and the running rows in the lists agree on where a timer started.
+ *
+ * Falls back to "now" when the entry says nothing, which is wrong but harmless here: the
+ * header clock simply restarts rather than rendering a nonsense duration.
  */
 function startMsOf(entry: TimeEntry, timeZone: () => string): number {
-  if (entry.timer_started_at) {
-    const parsed = Date.parse(entry.timer_started_at);
-    if (!Number.isNaN(parsed)) return parsed;
-  }
-  if (entry.started_time) {
-    try {
-      return parseWorkspaceTime(entry.spent_date, entry.started_time, timeZone()).getTime();
-    } catch {
-      // Falls through to "now", which is wrong but harmless: the clock just restarts.
-    }
-  }
-  return Date.now();
+  return entryStartMs(entry, timeZone()) ?? Date.now();
 }
 
 /**
