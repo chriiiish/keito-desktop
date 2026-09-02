@@ -209,6 +209,25 @@ describe("collapsing projects", () => {
     expect(screen.getByLabelText("Bank Portal Ops")).toBeDefined();
   });
 
+  // Filtering forces matches open, so the header cannot honour a click. Left live it
+  // would look inert while quietly rewriting what you find on clearing the filter.
+  it("cannot be collapsed while a filter is holding it open", async () => {
+    const user = await openProjects({ hidden: ["p_bank:t_ops"] });
+    const filter = screen.getByPlaceholderText("Filter projects and tasks…");
+    await user.type(filter, "Ops");
+
+    const bank = screen.getByRole("button", { name: "Bank Portal" });
+    expect(bank.hasAttribute("disabled")).toBe(true);
+    await user.click(bank);
+    expect(bank.getAttribute("aria-expanded")).toBe("true");
+
+    // Clearing the filter leaves it as it was, not secretly toggled underneath.
+    await user.clear(filter);
+    expect(screen.getByRole("button", { name: "Bank Portal" }).getAttribute("aria-expanded")).toBe(
+      "false",
+    );
+  });
+
   // Visibility is stored as exclusions, so a project added to the workspace later is
   // shown until someone switches it off. An allow-list would make it invisible instead.
   it("shows a project that appeared after the preferences were written", async () => {

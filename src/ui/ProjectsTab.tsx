@@ -158,6 +158,11 @@ export function ProjectsTab({ snapshot, onChange }: ProjectsTabProps): JSX.Eleme
                   className="disclosure"
                   aria-expanded={open}
                   aria-controls={`tasks-${group.projectId}`}
+                  // Inert while filtering, which forces every match open. Left live it
+                  // would appear to do nothing — aria-expanded could not change either —
+                  // while quietly rewriting what you find on clearing the filter.
+                  disabled={filtering}
+                  title={filtering ? "Matches stay open while a filter is active" : undefined}
                   onClick={() => toggleProject(group.projectId)}
                 >
                   <span className="chevron" aria-hidden="true">
