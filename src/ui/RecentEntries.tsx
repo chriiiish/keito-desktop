@@ -80,7 +80,7 @@ export function RecentEntries({
                 </AsyncButton>
               ) : startAgain ? (
                 <AsyncButton
-                  className="play small"
+                  className="play forward small"
                   title="Start this again today"
                   aria-label={`Start ${taskName} again today`}
                   // An entry whose project or task has since been archived resolves to no
@@ -88,7 +88,12 @@ export function RecentEntries({
                   disabled={!pair}
                   onClick={() => onStartAgain(pair!.id, entry.notes?.trim() || undefined)}
                 >
-                  ▶
+                  {/* Fast-forward rather than play, because the button does something
+                      different: it carries the work forward onto today instead of
+                      resuming where it stopped. Two of the ▶ already used elsewhere,
+                      closed up by CSS — the single ⏩ codepoint renders as a colour emoji
+                      on both macOS and Windows and would not match the other icons. */}
+                  ▶▶
                 </AsyncButton>
               ) : (
                 <AsyncButton

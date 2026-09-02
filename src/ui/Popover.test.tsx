@@ -504,6 +504,19 @@ describe("yesterday's entries", () => {
     expect(screen.getByText("Migration")).toBeDefined();
   });
 
+  // The two buttons sit in the same column doing different things, so the icon is the
+  // only thing distinguishing them before you press one.
+  it("marks them fast-forward, not play, to set them apart from today's", async () => {
+    api.getSnapshot.mockResolvedValue(withYesterday({ today: [entry("te_t", "p_acme", "t_dev")] }));
+
+    render(<Popover />);
+
+    const forward = await screen.findByLabelText(/^Start Ops again today$/);
+    const resume = screen.getByLabelText(/^Resume Development$/);
+    expect(forward.textContent).toBe("▶▶");
+    expect(resume.textContent).toBe("▶");
+  });
+
   it("leaves the heading out when there is nothing behind you", async () => {
     render(<Popover />);
     await screen.findByText("Today");

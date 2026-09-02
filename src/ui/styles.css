@@ -323,6 +323,9 @@ select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 .today .today-hours { color: var(--fg); opacity: 0.65; }
 .today .running-row strong::before { content: "● "; color: var(--accent); }
 .play.small, .stop.small { padding: 2px 9px; font-size: 11px; }
+/* Closes the gap between the two triangles so they read as one fast-forward mark. The
+   trailing space the tracking would otherwise leave is taken back on the right. */
+.play.forward { letter-spacing: -0.18em; padding-right: calc(9px + 0.18em); }
 .today .empty { margin: 2px 0 6px; font-size: 12px; }
 
 /* ── Visible categories ──────────────────────────────────── */
