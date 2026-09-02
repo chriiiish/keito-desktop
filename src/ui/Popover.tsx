@@ -71,14 +71,25 @@ export function Popover(): JSX.Element {
   if (!snapshot) return <div className="popover loading">Loading…</div>;
 
   if (snapshot.keyStatus !== "ready") {
+    // A rejected key is not a first run: someone who set this up once does not need
+    // welcoming, they need telling that the key they had has stopped working.
+    const rejected = snapshot.keyStatus === "rejected";
     return (
       <div className="popover">
-        <p className="empty">
-          Keito Timer isn’t connected yet.
-          <button className="link" onClick={() => void keito.openWindow()}>
-            Open settings
+        <div className="onboarding">
+          <ClockMark />
+          <h1>{rejected ? "Keito needs you again" : "Welcome to Keito Timer"}</h1>
+          <p>
+            {rejected
+              ? "Your API key stopped working, so nothing is being tracked."
+              : `Connect your Keito account and start tracking time from the ${
+                  snapshot.platform === "darwin" ? "menu bar" : "tray"
+                }.`}
+          </p>
+          <button className="primary" onClick={() => void keito.openWindow()}>
+            {rejected ? "Fix the connection" : "Get started"}
           </button>
-        </p>
+        </div>
       </div>
     );
   }
@@ -208,5 +219,30 @@ export function Popover(): JSX.Element {
         <span className="hint">⏎ to start · esc to close</span>
       </footer>
     </div>
+  );
+}
+
+/**
+ * The tray glyph, redrawn as inline SVG. The packaged icons live in `build/` and are
+ * loaded by the main process from disk, not bundled for the renderer — and a flat mark in
+ * `currentColor` follows the theme for free, which a PNG would not.
+ */
+function ClockMark(): JSX.Element {
+  return (
+    <svg
+      className="onboarding-mark"
+      viewBox="0 0 48 48"
+      width="56"
+      height="56"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="3"
+      strokeLinecap="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <circle cx="24" cy="24" r="18" />
+      <path d="M24 13v11l7 5" />
+    </svg>
   );
 }

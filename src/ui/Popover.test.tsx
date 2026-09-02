@@ -5,7 +5,7 @@
  * preselected, what order the dropdown groups appear in), and it is the one screen that
  * cannot be checked by reading a snapshot.
  */
-import { act, render, screen, within } from "@testing-library/react";
+import { act, cleanup, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import userEvent from "@testing-library/user-event";
 import type { Snapshot } from "../../electron/service.js";
@@ -229,6 +229,59 @@ function deferred<T>() {
   const promise = new Promise<T>((r) => (resolve = r));
   return { promise, resolve };
 }
+
+describe("the popover before it is connected", () => {
+  const show = async (keyStatus: Snapshot["keyStatus"], over: Partial<Snapshot> = {}) => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue({
+      ...snapshot,
+      keyStatus,
+      identity: null,
+      ...over,
+    } satisfies Snapshot);
+    render(<Popover />);
+    await screen.findByRole("heading");
+    return user;
+  };
+
+  it("welcomes a first run and offers a way in", async () => {
+    await show("missing");
+
+    expect(screen.getByRole("heading", { name: "Welcome to Keito Timer" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Get started" })).toBeDefined();
+    // No start form until there is something to start against.
+    expect(screen.queryByPlaceholderText(/what are you working on/i)).toBeNull();
+  });
+
+  // A Windows user has no menu bar to look at.
+  it("names the place this platform actually puts it", async () => {
+    await show("missing");
+    expect(screen.getByText(/from the menu bar/)).toBeDefined();
+
+    cleanup();
+    await show("missing", { platform: "win32" });
+    expect(screen.getByText(/from the tray/)).toBeDefined();
+  });
+
+  it("opens the window from there", async () => {
+    const user = await show("missing");
+
+    await user.click(screen.getByRole("button", { name: "Get started" }));
+
+    expect(api.openWindow).toHaveBeenCalledTimes(1);
+  });
+
+  // Someone who set this up once does not need welcoming; they need telling that the key
+  // they had has stopped working, and that nothing is being recorded meanwhile.
+  it("says something else when the key was rejected", async () => {
+    await show("rejected");
+
+    expect(screen.getByRole("heading", { name: "Keito needs you again" })).toBeDefined();
+    expect(screen.getByText(/stopped working/i)).toBeDefined();
+    expect(screen.getByRole("button", { name: "Fix the connection" })).toBeDefined();
+    expect(screen.queryByRole("button", { name: "Get started" })).toBeNull();
+  });
+});
 
 describe("focus", () => {
   it("puts the caret in the note field when it first opens", async () => {
