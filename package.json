@@ -1,0 +1,61 @@
+{
+  "name": "kieto-timer",
+  "productName": "Keito Timer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Desktop task-switching timer for Keito",
+  "scripts": {
+    "test": "vitest run --exclude 'test/contract/**'",
+    "test:watch": "vitest --exclude 'test/contract/**'",
+    "test:contract": "vitest run test/contract",
+    "typecheck": "tsc --noEmit",
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "start": "electron-vite preview",
+    "package": "npm run build && electron-builder --mac --win",
+    "package:mac": "npm run build && electron-builder --mac"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react": "^4.7.0",
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^5.0.0",
+    "typescript": "^5.7.3",
+    "vite": "^6.4.3",
+    "vitest": "^3.0.5"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "main": "out/main/index.cjs",
+  "build": {
+    "appId": "ai.keito.timer",
+    "productName": "Keito Timer",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "out/**",
+      "build/trayTemplate*.png"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        "dmg"
+      ],
+      "icon": "build/icon.png"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.png"
+    }
+  }
+}
