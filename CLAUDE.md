@@ -10,7 +10,7 @@ npm test                     # unit + integration suite (in-memory fake, no netw
 npm run test:watch           # same, watching
 npm run typecheck            # tsc --noEmit across src/, electron/, test/
 npm run build                # electron-vite build -> out/
-npm run package              # unsigned .dmg + .exe into release/
+npm run package              # ad-hoc signed .dmg + .exe into release/
 ```
 
 Run a single test file or a single test:
@@ -29,6 +29,33 @@ KEITO_API_KEY=kto_xxx npm run test:contract
 They create exactly one scratch time entry and delete it in `afterAll`. This is the only
 thing that catches `test/fake-keito.ts` drifting from the real API — everything else in the
 suite is checked against the fake, so the fake being wrong means the suite is wrong.
+
+## Commits
+
+**Conventional Commits**: `type(scope): subject`, imperative and lower case, no full stop.
+
+```
+feat(ui): clear all configuration from a Danger Zone
+fix(build): ad-hoc sign the mac app so macOS will open it
+ci: gate merges on a Trivy scan
+docs: record the commit convention
+```
+
+Types: `feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `build` (packaging, deps,
+electron-builder), `ci` (workflows), `chore`. Scope is the part of the layout it lands in —
+`core`, `ui`, `electron`, or a narrower one like `timer` or `keito` — and is optional when
+the change is repo-wide.
+
+A breaking change takes `!` before the colon and a `BREAKING CHANGE:` footer saying what
+callers must now do differently.
+
+**The subject line is the smaller half.** This repository's commit bodies carry the
+reasoning that would otherwise only exist in a pull request, and pull requests are where
+context goes to die. Say what was actually wrong and what it cost, not what the diff
+already shows: "the app carried nothing but the linker signature, which macOS reports as
+damage" tells the next person something; "update signing config" does not. Where a fact
+came from a real check — a live API response, a packaged build, a CI run — say so, because
+that is what stops the next person re-deriving it.
 
 ## Architecture
 

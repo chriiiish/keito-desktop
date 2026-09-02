@@ -1,0 +1,15 @@
+# Who gets review requested automatically. Ownership, not a gate: review is only
+# *required* if branch protection turns on "Require review from Code Owners", and on a
+# solo repository that would block every PR, since you cannot approve your own.
+
+# Everything, unless claimed more specifically below.
+*                       @chriiiish
+
+# The pipeline, the signing hooks and the packaging config decide what ships and whether
+# macOS will open it. They break in ways the test suite cannot see.
+/.github/               @chriiiish
+/build/                 @chriiiish
+/package.json           @chriiiish
+
+# The rules the rest of the code is written against.
+/CLAUDE.md              @chriiiish

@@ -67,7 +67,7 @@ written to `preferences.json`.
 
 ## Contributing
 
-Source: <https://github.com/chriiiish/kieto-desktop>. Issues and pull requests welcome.
+Source: <https://github.com/chriiiish/keito-desktop>. Issues and pull requests welcome.
 The app's own **Contribute** tab links to the same places and shows the build version,
 which is worth quoting in a bug report.
 

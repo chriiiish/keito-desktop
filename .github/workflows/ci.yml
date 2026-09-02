@@ -10,6 +10,10 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Read-only by default; the one job that needs more asks for it itself.
+permissions:
+  contents: read
+
 jobs:
   check:
     name: Typecheck, test, build
@@ -31,3 +35,46 @@ jobs:
       - run: npm test
 
       - run: npm run build
+
+  trivy:
+    name: Trivy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Uploading to code scanning is what lets the "Protect main branch"
+      # ruleset list Trivy as a required tool — the ruleset waits on results,
+      # and a job that only sets its own exit code never produces any.
+      security-events: write
+    steps:
+      - uses: actions/checkout@v7
+
+      # Scans package-lock.json for known-vulnerable dependencies, the tree for
+      # committed secrets, and the workflows for misconfiguration. No `npm ci`
+      # first: the lockfile is what pins the versions, so installing would tell
+      # Trivy nothing it cannot already read, and this job stays independent of
+      # the build one.
+      #
+      # Note this covers what ships to users. Trivy skips devDependencies unless
+      # told otherwise, and this repo's build toolchain currently carries 19
+      # HIGH/CRITICAL of its own — see `include-dev-deps` below.
+      - uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: CRITICAL,HIGH
+          # A vulnerability with no released fix would otherwise block every
+          # future merge with nothing anyone could do to clear it. Drop this to
+          # see them, but expect to need `.trivyignore` for the ones you accept.
+          ignore-unfixed: true
+          exit-code: "1"
+          format: sarif
+          output: trivy-results.sarif
+
+      # always(), because the findings are most worth reading in code scanning
+      # exactly when the step above failed on them.
+      - uses: github/codeql-action/upload-sarif@v4
+        if: always() && hashFiles('trivy-results.sarif') != ''
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy
