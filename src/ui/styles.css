@@ -332,6 +332,28 @@ select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 .visibility-row { display: flex; align-items: center; gap: 8px; padding: 6px 10px; }
 .visibility-row.project { background: var(--raised); font-weight: 600; }
 .visibility-row.task { padding-left: 22px; border-top: 1px solid var(--line); }
+
+/* The whole project name is the hit target, so opening one is not a game of darts
+   against a 10px chevron. */
+.visibility-actions { display: flex; justify-content: flex-end; margin-bottom: 6px; }
+.disclosure {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+.disclosure:hover { border: none; color: var(--accent); }
+.disclosure:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.chevron { display: inline-block; width: 10px; color: var(--muted); transition: transform 120ms ease; }
+.disclosure[aria-expanded="true"] .chevron { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) { .chevron { transition: none; } }
 .visibility-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .visibility-count { font-size: 11px; color: var(--muted); font-weight: 400; }
 .visibility-row .star { border: none; background: none; color: var(--line); font-size: 15px; padding: 0 4px; }

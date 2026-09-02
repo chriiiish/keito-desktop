@@ -147,6 +147,82 @@ describe("the review window", () => {
   });
 });
 
+describe("collapsing projects", () => {
+  const openProjects = async (next?: Partial<Snapshot>) => {
+    const user = userEvent.setup();
+    if (next) api.getSnapshot.mockResolvedValue({ ...snapshot, ...next } satisfies Snapshot);
+    render(<ReviewWindow />);
+    await user.click(await screen.findByRole("button", { name: "Projects" }));
+    return user;
+  };
+
+  // An empty `hidden` means nobody has switched anything off yet, so there is
+  // nothing to have tidied away — and the whole list is what a first visit is for.
+  it("starts expanded when nothing has been switched off", async () => {
+    await openProjects();
+
+    expect(screen.getByRole("button", { name: "Acme Rebuild" }).getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByRole("button", { name: "Collapse all" })).toBeDefined();
+  });
+
+  it("starts collapsed once anything has been switched off", async () => {
+    await openProjects({ hidden: ["p_bank:t_ops"] });
+
+    expect(screen.getByRole("button", { name: "Acme Rebuild" }).getAttribute("aria-expanded")).toBe("false");
+    expect(screen.getByRole("button", { name: "Expand all" })).toBeDefined();
+  });
+
+  it("opens and closes one project at a time", async () => {
+    const user = await openProjects({ hidden: ["p_bank:t_ops"] });
+    const acme = screen.getByRole("button", { name: "Acme Rebuild" });
+
+    await user.click(acme);
+
+    expect(acme.getAttribute("aria-expanded")).toBe("true");
+    // The other one is unaffected.
+    expect(screen.getByRole("button", { name: "Bank Portal" }).getAttribute("aria-expanded")).toBe("false");
+
+    await user.click(acme);
+    expect(acme.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("expands everything, then offers to collapse it again", async () => {
+    const user = await openProjects({ hidden: ["p_bank:t_ops"] });
+
+    await user.click(screen.getByRole("button", { name: "Expand all" }));
+
+    expect(screen.getByRole("button", { name: "Acme Rebuild" }).getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByRole("button", { name: "Bank Portal" }).getAttribute("aria-expanded")).toBe("true");
+
+    await user.click(screen.getByRole("button", { name: "Collapse all" }));
+
+    expect(screen.getByRole("button", { name: "Acme Rebuild" }).getAttribute("aria-expanded")).toBe("false");
+  });
+
+  // A filter that answered with collapsed headers would look like it found nothing.
+  it("opens what a filter matches", async () => {
+    const user = await openProjects({ hidden: ["p_bank:t_ops"] });
+
+    await user.type(screen.getByPlaceholderText("Filter projects and tasks…"), "Ops");
+
+    expect(screen.getByRole("button", { name: "Bank Portal" }).getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByLabelText("Bank Portal Ops")).toBeDefined();
+  });
+
+  // Visibility is stored as exclusions, so a project added to the workspace later is
+  // shown until someone switches it off. An allow-list would make it invisible instead.
+  it("shows a project that appeared after the preferences were written", async () => {
+    await openProjects({
+      hidden: ["p_bank:t_ops"],
+      catalog: [...snapshot.catalog, pair("p_new:t_new", "Brand New", "Discovery")],
+    });
+
+    expect(screen.getByRole("button", { name: "Brand New" })).toBeDefined();
+    const toggle = screen.getByLabelText("All tasks in Brand New") as HTMLInputElement;
+    expect(toggle.checked).toBe(true);
+  });
+});
+
 describe("loading time entries", () => {
   it("owns up to the wait while the API responds", async () => {
     const gate = deferred<never[]>();
