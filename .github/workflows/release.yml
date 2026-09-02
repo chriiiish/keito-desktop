@@ -196,3 +196,62 @@ jobs:
           files: |
             dist/*.dmg
             dist/*.exe
+
+  # The build stamps the version into the artifacts, but the repository still said 0.1.0
+  # afterwards — so `main` never matched anything that had shipped. This writes it back.
+  record-version:
+    name: Record the released version
+    needs: [meta, release]
+    if: always() && needs.release.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+
+      # Pushes straight to main when the ruleset lets Actions through, and opens a pull
+      # request when it does not. Both are correct outcomes; what would not be is failing
+      # a release that has already happened because of how a branch rule is configured.
+      - name: Write the version back
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.meta.outputs.version }}
+          TAG: ${{ needs.meta.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          current=$(node -p "require('./package.json').version")
+          if [ "$current" = "$VERSION" ]; then
+            echo "package.json is already $VERSION — nothing to write back."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # `npm version` rather than `npm pkg set`: it writes the lockfile too, and
+          # leaving those two disagreeing is its own small mess.
+          npm version --no-git-tag-version "$VERSION"
+          git add package.json package-lock.json
+          git commit -m "chore: set the version to $VERSION" \
+                     -m "$TAG is released, so this is what package.json should say."
+
+          if git push origin HEAD:main; then
+            echo "Wrote $VERSION back to main."
+            exit 0
+          fi
+
+          echo "::notice::Cannot push to main, so opening a pull request instead."
+          branch="chore/version-$VERSION"
+          git push --force-with-lease origin "HEAD:refs/heads/$branch"
+          gh pr create \
+            --base main \
+            --head "$branch" \
+            --title "chore: set the version to $VERSION" \
+            --body "$TAG is released. This writes that version back to package.json and package-lock.json, which still said $current.
+
+          Opened by the release workflow because it could not push to main. Note that pull requests opened with GITHUB_TOKEN do not start workflow runs, so the usual checks will not appear here."
