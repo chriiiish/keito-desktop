@@ -560,8 +560,14 @@ describe("the connection tab before it works", () => {
     return user;
   };
 
-  // Most people setting this up cannot issue themselves a key, so the instructions have
-  // to name who can rather than only describing the field.
+  it("welcomes you", async () => {
+    await open();
+
+    expect(screen.getByRole("heading", { name: "Welcome to Keito Timer" })).toBeDefined();
+  });
+
+  // Most people setting this up cannot issue themselves a key, so the instruction names
+  // who can rather than only describing the field.
   it("says who to ask and what to ask for", async () => {
     await open();
 
@@ -571,19 +577,21 @@ describe("the connection tab before it works", () => {
     expect(steps.textContent).toMatch(/Company ID/i);
   });
 
-  // Both failures look like a typo otherwise: a read-only key is refused only when a
-  // timer starts, and a missing company id arrives as a server error.
-  it("warns that a read-only key will not do", async () => {
+  // Startup first, then the key: the switch is one tap and the key is an errand, so
+  // putting the errand first is how a welcome turns into a wall.
+  it("puts the startup switch ahead of the key", async () => {
     await open();
 
-    expect(screen.getByRole("list").textContent).toMatch(/read-only/i);
-    expect(screen.getByText(/cannot be looked up for you/i)).toBeDefined();
+    const toggle = screen.getByLabelText("Run at startup");
+    const apiKey = screen.getByLabelText("API key");
+
+    expect(toggle.compareDocumentPosition(apiKey) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("offers to run at startup while someone is here anyway", async () => {
     await open();
 
-    expect(screen.getByText(/Don’t forget you can start Keito Timer when you log in/)).toBeDefined();
+    expect(screen.getByText(/Start Keito Timer when you log in/)).toBeDefined();
     expect(screen.getByLabelText("Run at startup")).toBeDefined();
   });
 
@@ -600,7 +608,7 @@ describe("the connection tab before it works", () => {
   it("stays quiet when the login item is unavailable", async () => {
     await open({ canOpenAtLogin: false });
 
-    expect(screen.queryByText(/Don’t forget you can start Keito Timer/)).toBeNull();
+    expect(screen.queryByText(/Start Keito Timer when you log in/)).toBeNull();
     expect(screen.queryByLabelText("Run at startup")).toBeNull();
   });
 
@@ -610,8 +618,9 @@ describe("the connection tab before it works", () => {
     await user.click(await screen.findByRole("button", { name: "Keito Connection" }));
 
     expect(screen.getByText("You’re connected!")).toBeDefined();
+    expect(screen.queryByRole("heading", { name: "Welcome to Keito Timer" })).toBeNull();
     expect(screen.queryByRole("list")).toBeNull();
-    expect(screen.queryByText(/Don’t forget you can start Keito Timer/)).toBeNull();
+    expect(screen.queryByLabelText("Run at startup")).toBeNull();
   });
 });
 
