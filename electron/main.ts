@@ -19,6 +19,9 @@ import { SecretStore } from "./secrets.js";
 import { Logger } from "./logger.js";
 
 const POPOVER_SIZE = { width: 420, height: 520 };
+
+/** The only hosts the Contribute tab may send you to. */
+const EXTERNAL_HOSTS = new Set(["github.com", "buymeacoffee.com", "www.buymeacoffee.com"]);
 const IDLE_POLL_MS = 30_000;
 const REFRESH_MS = 5 * 60_000;
 
@@ -210,12 +213,18 @@ function registerIpc(): void {
   // Only ever opens the project's own pages. A renderer must not be able to hand the OS
   // an arbitrary URL, or a file:// one.
   handle("open-external", async (url: string) => {
-    const allowed = new URL(url);
-    if (allowed.protocol !== "https:" || allowed.hostname !== "github.com") {
+    let target: URL;
+    try {
+      target = new URL(url);
+    } catch {
+      log.warn(`Refused to open a malformed URL: ${url}`);
+      return undefined;
+    }
+    if (target.protocol !== "https:" || !EXTERNAL_HOSTS.has(target.hostname)) {
       log.warn(`Refused to open an external URL: ${url}`);
       return undefined;
     }
-    await shell.openExternal(allowed.toString());
+    await shell.openExternal(target.toString());
     return undefined;
   });
 

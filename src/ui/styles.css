@@ -484,3 +484,12 @@ button[aria-busy="true"] { cursor: default; }
 .build-info { display: grid; grid-template-columns: auto 1fr; gap: 2px 14px; margin: 0; font-size: 12px; }
 .build-info dt { color: var(--muted); }
 .build-info dd { margin: 0; font-variant-numeric: tabular-nums; }
+
+.coffee {
+  background: var(--star);
+  border-color: var(--star);
+  color: #1e293b;
+  font-weight: 600;
+  padding: 6px 14px;
+}
+.coffee:hover { filter: brightness(1.05); border-color: var(--star); }

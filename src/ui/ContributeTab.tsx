@@ -3,6 +3,7 @@ import { AsyncButton } from "./AsyncButton.js";
 import { keito } from "./keito-api.js";
 
 const REPO = "https://github.com/chriiiish/kieto-desktop";
+const COFFEE = "https://buymeacoffee.com/chris.lloyd";
 
 const LINKS: ReadonlyArray<readonly [string, string, string]> = [
   ["Browse the source", REPO, "Every line of this app, including the tests."],
@@ -41,6 +42,15 @@ export function ContributeTab({ snapshot }: { snapshot: Snapshot }): JSX.Element
           </li>
         ))}
       </ul>
+
+      <h2>Say thanks</h2>
+      <p className="hint">
+        Keito Timer is free, and will stay that way. If it saves you the daily fight with a
+        browser tab, you can put something in the tip jar.
+      </p>
+      <AsyncButton className="coffee" onClick={() => open(COFFEE)}>
+        ☕ Buy me a coffee
+      </AsyncButton>
 
       <h2>Helping out</h2>
       <p className="hint">

@@ -362,6 +362,21 @@ describe("the contribute tab", () => {
     );
   });
 
+  it("offers the tip jar", async () => {
+    const user = await openContribute();
+    api.openExternal.mockResolvedValue(undefined);
+
+    await user.click(screen.getByRole("button", { name: /buy me a coffee/i }));
+
+    expect(api.openExternal).toHaveBeenCalledWith("https://buymeacoffee.com/chris.lloyd");
+  });
+
+  it("makes clear the app stays free", async () => {
+    await openContribute();
+
+    expect(screen.getByText(/free, and will stay that way/i)).toBeDefined();
+  });
+
   it("shows the build version, so a bug report can name it", async () => {
     await openContribute();
 
