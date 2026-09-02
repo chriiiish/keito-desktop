@@ -91,7 +91,14 @@ export function Popover(): JSX.Element {
             </div>
             <div className="running-right">
               <Elapsed startedAtMs={running.startedAtMs} />
-              <AsyncButton onClick={() => keito.stopTimer().then(setSnapshot)}>Stop</AsyncButton>
+              <AsyncButton
+                className="stop"
+                title="Stop timer"
+                aria-label="Stop timer"
+                onClick={() => keito.stopTimer().then(setSnapshot)}
+              >
+                ■
+              </AsyncButton>
             </div>
           </>
         ) : (

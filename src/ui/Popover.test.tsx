@@ -151,6 +151,26 @@ describe("the start form", () => {
     expect(api.toggleFavourite).toHaveBeenCalledWith("p_bank:t_dev");
   });
 
+  it("stops the running timer from an icon button in the header", async () => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue({
+      ...snapshot,
+      timer: {
+        status: "running",
+        pair: snapshot.catalog[0]!,
+        entryId: "te_1",
+        startedAtMs: Date.now(),
+        note: "Sprint planning",
+      },
+    } satisfies Snapshot);
+    api.stopTimer.mockResolvedValue(snapshot);
+    render(<Popover />);
+
+    await user.click(await screen.findByLabelText("Stop timer"));
+
+    expect(api.stopTimer).toHaveBeenCalledTimes(1);
+  });
+
   it("shows the note on the running timer", async () => {
     api.getSnapshot.mockResolvedValue({
       ...snapshot,
