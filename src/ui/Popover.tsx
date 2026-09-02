@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AsyncButton, Spinner, useAsyncAction } from "./AsyncButton.js";
 import { CategoryPicker } from "./CategoryPicker.js";
 import { Elapsed } from "./Elapsed.js";
@@ -32,8 +32,15 @@ export function Popover(): JSX.Element {
     setSelectedId(running?.pair.id ?? firstSuggestion);
   }, [snapshot, running, firstSuggestion, selectedId]);
 
-  // The note is the field you actually type in, so it takes focus on open.
-  useEffect(() => noteRef.current?.focus(), [snapshot?.keyStatus]);
+  // The note is the field you actually type in, so it takes focus every time the popover
+  // appears — on first mount, and on each show thereafter, since the window is reused.
+  const focusNote = useCallback(() => {
+    noteRef.current?.focus();
+    noteRef.current?.select();
+  }, []);
+
+  useEffect(focusNote, [focusNote, snapshot?.keyStatus]);
+  useEffect(() => keito.onPopoverShown(focusNote), [focusNote]);
 
   const [starting, start] = useAsyncAction(async () => {
     if (!selectedId) return;

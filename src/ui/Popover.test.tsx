@@ -5,7 +5,7 @@
  * preselected, what order the dropdown groups appear in), and it is the one screen that
  * cannot be checked by reading a snapshot.
  */
-import { render, screen, within } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import userEvent from "@testing-library/user-event";
 import type { Snapshot } from "../../electron/service.js";
@@ -15,6 +15,7 @@ const api = {
   getSnapshot: vi.fn(),
   onSnapshot: vi.fn(() => () => {}),
   onIdleReturn: vi.fn(() => () => {}),
+  onPopoverShown: vi.fn((_handler: () => void) => () => {}),
   switchTo: vi.fn(),
   stopTimer: vi.fn(),
   toggleFavourite: vi.fn(),
@@ -224,6 +225,29 @@ function deferred<T>() {
   const promise = new Promise<T>((r) => (resolve = r));
   return { promise, resolve };
 }
+
+describe("focus", () => {
+  it("puts the caret in the note field when it first opens", async () => {
+    render(<Popover />);
+
+    const note = await screen.findByPlaceholderText(/what are you working on/i);
+
+    expect(document.activeElement).toBe(note);
+  });
+
+  it("focuses the note again each time the popover is shown, since the window is reused", async () => {
+    render(<Popover />);
+    const note = await screen.findByPlaceholderText(/what are you working on/i);
+    (screen.getByLabelText("Category") as HTMLElement).focus();
+    expect(document.activeElement).not.toBe(note);
+
+    // The main process announces every show; the renderer never remounts.
+    const onShown = api.onPopoverShown.mock.calls.at(-1)![0];
+    act(() => onShown());
+
+    expect(document.activeElement).toBe(note);
+  });
+});
 
 describe("while an action is in flight", () => {
   it("starts only one timer however many times Enter is pressed", async () => {

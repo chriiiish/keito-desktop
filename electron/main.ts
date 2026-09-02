@@ -104,6 +104,10 @@ function showPopover(): void {
   popover.setPosition(x, y, false);
   popover.show();
   popover.focus();
+  // The popover is hidden and shown rather than recreated, so the renderer never
+  // remounts. Tell it each time it appears so it can put the caret in the note field.
+  popover.webContents.focus();
+  popover.webContents.send("popover-shown");
   void service.refresh().then(broadcast);
 }
 

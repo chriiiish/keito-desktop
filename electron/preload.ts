@@ -44,6 +44,13 @@ const api = {
       ipcRenderer.off("snapshot", listener);
     };
   },
+  onPopoverShown: (handler: () => void) => {
+    const listener = () => handler();
+    ipcRenderer.on("popover-shown", listener);
+    return () => {
+      ipcRenderer.off("popover-shown", listener);
+    };
+  },
   onIdleReturn: (handler: (event: { awaySinceMs: number; awaySeconds: number }) => void) => {
     const listener = (_e: unknown, payload: { awaySinceMs: number; awaySeconds: number }) =>
       handler(payload);

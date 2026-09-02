@@ -50,6 +50,10 @@ src/ui/                React; both windows load one bundle, the URL hash picks w
 test/fake-keito.ts     in-memory Keito exposed as a `fetch`
 ```
 
+The popover window is **hidden and shown, never recreated**, so the renderer does not
+remount between openings. Anything that must happen on every open — putting the caret in
+the note field — needs the `popover-shown` event from `main.ts`, not a mount effect.
+
 `AppService` holds the client, switcher and stores, and exposes a single `Snapshot` object
 that both windows render without further round trips. Every IPC handler returns a Snapshot;
 `main.ts` broadcasts it to both windows automatically. New UI state belongs on `Snapshot`,
