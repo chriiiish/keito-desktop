@@ -98,4 +98,38 @@ describe("PreferencesStore", () => {
       trayPrefix: "task",
     });
   });
+
+  it("shows every category until one is explicitly hidden", async () => {
+    const store = await PreferencesStore.open(file);
+
+    expect(store.get().hidden).toEqual([]);
+  });
+
+  it("remembers which categories are hidden", async () => {
+    const store = await PreferencesStore.open(file);
+    await store.setHidden("p_bank:t_ops", true);
+    await store.setHidden("p_acme:t_qa", true);
+
+    expect((await PreferencesStore.open(file)).get().hidden).toEqual([
+      "p_bank:t_ops",
+      "p_acme:t_qa",
+    ]);
+  });
+
+  it("unhides", async () => {
+    const store = await PreferencesStore.open(file);
+    await store.setHidden("p_bank:t_ops", true);
+
+    await store.setHidden("p_bank:t_ops", false);
+
+    expect((await PreferencesStore.open(file)).get().hidden).toEqual([]);
+  });
+
+  it("hiding twice does not record it twice", async () => {
+    const store = await PreferencesStore.open(file);
+    await store.setHidden("p_bank:t_ops", true);
+    await store.setHidden("p_bank:t_ops", true);
+
+    expect(store.get().hidden).toEqual(["p_bank:t_ops"]);
+  });
 });

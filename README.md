@@ -15,6 +15,8 @@ the running timer is replaced.
   and optionally prefix the note with the project or the task.
 - **Favourites first**, then your three most recent, then every project with its tasks
   beneath it. Filter by typing; star anything from inside the dropdown.
+- **Switch off categories you never use** in Settings, per task or a whole project at once.
+  Favourites and anything used in the last 30 days stay visible regardless.
 - **One-call switching.** `POST /time_entries` with `replace_running: true` stops the old
   timer and starts the new one atomically — no window where nothing is being tracked.
 - **Idle detection.** Away for 10+ minutes? On return it offers to trim the idle span.

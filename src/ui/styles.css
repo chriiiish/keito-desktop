@@ -272,3 +272,47 @@ select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 .today .running-row strong::before { content: "● "; color: var(--accent); }
 .play.small { padding: 2px 9px; font-size: 12px; }
 .today .empty { margin: 2px 0 6px; font-size: 12px; }
+
+/* ── Visible categories ──────────────────────────────────── */
+.visibility { max-width: 560px; }
+.visibility > input { margin-bottom: 10px; }
+.visibility-project { border: 1px solid var(--line); border-radius: 8px; margin-bottom: 8px; overflow: hidden; }
+.visibility-row { display: flex; align-items: center; gap: 8px; padding: 6px 10px; }
+.visibility-row.project { background: var(--raised); font-weight: 600; }
+.visibility-row.task { padding-left: 22px; border-top: 1px solid var(--line); }
+.visibility-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.visibility-count { font-size: 11px; color: var(--muted); font-weight: 400; }
+.badge {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+
+.switch { position: relative; display: inline-flex; flex: none; }
+.switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.switch .track {
+  width: 34px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--line);
+  transition: background 120ms ease;
+  position: relative;
+}
+.switch .track::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 120ms ease;
+}
+.switch input:checked + .track { background: var(--accent); }
+.switch input:checked + .track::after { transform: translateX(14px); }
+.switch input:focus-visible + .track { outline: 2px solid var(--accent); outline-offset: 2px; }

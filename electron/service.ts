@@ -19,6 +19,8 @@ export interface Snapshot {
   /** Entries logged today, newest first — the popover's "already worked on" list. */
   today: TimeEntry[];
   favourites: string[];
+  /** Pair ids switched off in settings; favourites and recents override this. */
+  hidden: string[];
   workspaceTimezone: string;
   hotkey: string;
   /** The company id sent as Keito-Account-Id, once known. */
@@ -113,6 +115,7 @@ export class AppService {
       recents: this.#workspace.recents,
       today: this.#workspace.today,
       favourites: [...prefs.favourites],
+      hidden: [...prefs.hidden],
       workspaceTimezone: prefs.workspaceTimezone,
       hotkey: prefs.hotkey,
       accountId: prefs.accountId ?? null,
@@ -239,6 +242,13 @@ export class AppService {
   async toggleFavourite(pairId: string): Promise<Snapshot> {
     const isFavourite = this.#prefs.get().favourites.includes(pairId);
     await (isFavourite ? this.#prefs.removeFavourite(pairId) : this.#prefs.addFavourite(pairId));
+    this.#revision++;
+    return this.snapshot();
+  }
+
+  /** Switches categories on or off in the dropdown. Takes a list so a whole project is one call. */
+  async setHidden(pairIds: readonly string[], hidden: boolean): Promise<Snapshot> {
+    for (const pairId of pairIds) await this.#prefs.setHidden(pairId, hidden);
     this.#revision++;
     return this.snapshot();
   }

@@ -155,6 +155,13 @@ grouped under its project. "All projects" deliberately does **not** exclude what
 shown above — it is the browse-by-project view, and a task missing from its own project
 would be worse than a repeat.
 
+Visibility is stored as **exclusions** (`Preferences.hidden`), never as an allow-list, so
+categories added to the workspace later appear by default instead of being invisible until
+someone notices. A hidden pair is still shown if it is a favourite or appears anywhere in
+`recents` — the full 30-day ranking, not just the three suggestions. Switching something
+off must never hide what you are actually working on; the preference is still recorded and
+takes effect once that stops being true.
+
 `Snapshot.today` comes free from the 30-day fetch `loadWorkspace` already makes for
 ranking; only mutations pay for `#reloadToday()`, one extra request.
 

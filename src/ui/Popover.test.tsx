@@ -18,6 +18,7 @@ const api = {
   switchTo: vi.fn(),
   stopTimer: vi.fn(),
   toggleFavourite: vi.fn(),
+  setHidden: vi.fn(),
   closePopover: vi.fn(),
   openWindow: vi.fn(),
   resolveIdle: vi.fn(),
@@ -43,6 +44,7 @@ const snapshot: Snapshot = {
   ],
   recents: ["p_bank:t_dev"],
   favourites: ["p_acme:t_qa"],
+  hidden: [],
   today: [],
   workspaceTimezone: "UTC",
   hotkey: "X",
@@ -190,6 +192,30 @@ describe("the start form", () => {
     await userEvent.setup().type(note, "Sprint planning{Enter}");
 
     expect(api.switchTo).toHaveBeenCalledWith("p_acme:t_qa", "Sprint planning");
+  });
+});
+
+describe("hidden categories", () => {
+  it("leaves a switched-off category out of the dropdown", async () => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue({ ...snapshot, hidden: ["p_bank:t_ops"] } satisfies Snapshot);
+    render(<Popover />);
+    await user.click(await screen.findByRole("button", { name: "Category" }));
+
+    expect(within(screen.getByRole("listbox")).queryByText("Ops")).toBeNull();
+  });
+
+  it("still shows a switched-off category that is a favourite", async () => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue({
+      ...snapshot,
+      favourites: ["p_bank:t_ops"],
+      hidden: ["p_bank:t_ops"],
+    } satisfies Snapshot);
+    render(<Popover />);
+    await user.click(await screen.findByRole("button", { name: "Category" }));
+
+    expect(within(screen.getByRole("listbox")).getAllByText(/Ops/).length).toBeGreaterThan(0);
   });
 });
 

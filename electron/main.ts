@@ -181,6 +181,7 @@ function registerIpc(): void {
   handle("stop-timer", async () => service.stopTimer());
   handle("resume-entry", async (entryId: string) => service.resumeEntry(entryId));
   handle("toggle-favourite", async (pairId: string) => service.toggleFavourite(pairId));
+  handle("set-hidden", async (pairIds: string[], hidden: boolean) => service.setHidden(pairIds, hidden));
   handle("list-entries", async (from: string, to: string) => service.listEntries(from, to));
   handle("update-entry", async (id: string, patch: { notes?: string; startedTime?: string; endedTime?: string }) =>
     service.updateEntry(id, patch),

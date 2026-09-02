@@ -18,6 +18,8 @@ export interface Preferences {
    */
   workspaceTimezone: string;
   hotkey: string;
+  /** Pair ids switched off in settings. Exclusions, so new categories appear by default. */
+  hidden: string[];
   /** What the tray shows when the running entry has no note. */
   trayFallback: TrayFallback;
   /** What, if anything, precedes the note in the tray. */
@@ -26,6 +28,7 @@ export interface Preferences {
 
 const defaults = (): Preferences => ({
   favourites: [],
+  hidden: [],
   workspaceTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   hotkey: DEFAULT_HOTKEY,
   trayFallback: "task",
@@ -46,7 +49,12 @@ export class PreferencesStore {
     let value = defaults();
     try {
       const parsed = JSON.parse(await readFile(path, "utf8")) as Partial<Preferences>;
-      value = { ...value, ...parsed, favourites: parsed.favourites ?? [] };
+      value = {
+        ...value,
+        ...parsed,
+        favourites: parsed.favourites ?? [],
+        hidden: parsed.hidden ?? [],
+      };
     } catch {
       // Missing or corrupt: a fresh set of defaults beats refusing to start.
     }
@@ -60,6 +68,15 @@ export class PreferencesStore {
   async update(patch: Partial<Preferences>): Promise<void> {
     this.#value = { ...this.#value, ...patch };
     await this.#flush();
+  }
+
+  /** Switches a category off (or back on) in the dropdown. */
+  async setHidden(pairId: string, hidden: boolean): Promise<void> {
+    const current = this.#value.hidden;
+    if (hidden === current.includes(pairId)) return;
+    await this.update({
+      hidden: hidden ? [...current, pairId] : current.filter((id) => id !== pairId),
+    });
   }
 
   async addFavourite(pairId: string): Promise<void> {

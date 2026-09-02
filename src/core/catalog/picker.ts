@@ -27,6 +27,11 @@ export interface BuildPickerInput {
   /** Pair ids, most relevant first, from rankRecents. */
   recents: readonly string[];
   query: string;
+  /**
+   * Pair ids switched off in settings. Stored as exclusions so categories added to the
+   * workspace later show up by default rather than being invisible until noticed.
+   */
+  hidden?: readonly string[];
   recentLimit?: number;
 }
 
@@ -37,12 +42,16 @@ export interface BuildPickerInput {
  * "All projects" deliberately keeps every task, including ones already shown above — it is
  * the place you look when you know the project and want to browse its tasks, and a task
  * silently missing from its own project would be worse than a repeat.
+ *
+ * Hiding a category never applies to one you have favourited or used recently: switching
+ * something off should not make the thing you are actually working on disappear.
  */
 export function buildPicker({
   catalog,
   favourites,
   recents,
   query,
+  hidden = [],
   recentLimit = RECENT_SUGGESTIONS,
 }: BuildPickerInput): PickerResult {
   const byId = new Map(catalog.map((pair) => [pair.id, pair]));
@@ -58,9 +67,13 @@ export function buildPicker({
     .filter((pair) => !pinnedIds.has(pair.id))
     .slice(0, recentLimit);
 
+  const hiddenIds = new Set(hidden);
+  const alwaysVisible = new Set([...favourites, ...recents]);
+
   const groups = new Map<string, ProjectGroup>();
   for (const pair of catalog) {
     if (!matches(pair)) continue;
+    if (hiddenIds.has(pair.id) && !alwaysVisible.has(pair.id)) continue;
     let group = groups.get(pair.projectId);
     if (!group) {
       group = { projectId: pair.projectId, projectName: pair.projectName, pairs: [] };

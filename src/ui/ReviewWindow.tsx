@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { TimeEntry } from "../core/keito/types.js";
 import { formatTrayLabel } from "../core/tray/label.js";
 import { keito } from "./keito-api.js";
+import { VisibleCategories } from "./VisibleCategories.js";
 import { useSnapshot } from "./useSnapshot.js";
 
 const isoDate = (date: Date) => date.toISOString().slice(0, 10);
@@ -323,6 +324,13 @@ function Settings({
         defaultValue={snapshot.hotkey}
         onBlur={(event) => void keito.setHotkey(event.target.value.trim()).then(onChange)}
       />
+
+      <h2>Categories in the dropdown</h2>
+      <p className="hint">
+        Everything is shown by default. Switch off what you never track against. Favourites
+        and anything you have used in the last 30 days stay visible regardless.
+      </p>
+      <VisibleCategories snapshot={snapshot} onChange={onChange} />
 
       <h2>Menu bar label</h2>
       <p className="hint">

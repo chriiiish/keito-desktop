@@ -6,6 +6,7 @@ interface CategoryPickerProps {
   catalog: readonly Pair[];
   favourites: readonly string[];
   recents: readonly string[];
+  hidden: readonly string[];
   selectedId: string;
   onSelect: (pairId: string) => void;
   onToggleFavourite: (pairId: string) => void;
@@ -19,6 +20,7 @@ export function CategoryPicker({
   catalog,
   favourites,
   recents,
+  hidden,
   selectedId,
   onSelect,
   onToggleFavourite,
@@ -30,8 +32,8 @@ export function CategoryPicker({
   const filterRef = useRef<HTMLInputElement>(null);
 
   const result = useMemo(
-    () => buildPicker({ catalog, favourites, recents, query }),
-    [catalog, favourites, recents, query],
+    () => buildPicker({ catalog, favourites, recents, hidden, query }),
+    [catalog, favourites, recents, hidden, query],
   );
 
   // The flat order the arrow keys walk, matching what is rendered top to bottom.

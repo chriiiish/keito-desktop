@@ -116,4 +116,75 @@ describe("buildPicker", () => {
 
     expect(result.isEmpty).toBe(true);
   });
+
+  it("hides a category the user switched off in settings", () => {
+    const result = buildPicker({
+      catalog,
+      favourites: [],
+      recents: [],
+      hidden: ["p_bank:t_ops"],
+      query: "",
+    });
+
+    expect(result.projects.flatMap((group) => ids(group.pairs))).not.toContain("p_bank:t_ops");
+    expect(result.projects.flatMap((group) => ids(group.pairs))).toContain("p_bank:t_dev");
+  });
+
+  it("drops a project entirely once all of its tasks are hidden", () => {
+    const result = buildPicker({
+      catalog,
+      favourites: [],
+      recents: [],
+      hidden: ["p_bank:t_dev", "p_bank:t_ops"],
+      query: "",
+    });
+
+    expect(result.projects.map((group) => group.projectName)).toEqual(["Acme Rebuild", "Internal"]);
+  });
+
+  it("still shows a hidden category that is a favourite", () => {
+    const result = buildPicker({
+      catalog,
+      favourites: ["p_bank:t_ops"],
+      recents: [],
+      hidden: ["p_bank:t_ops"],
+      query: "",
+    });
+
+    expect(ids(result.favourites)).toEqual(["p_bank:t_ops"]);
+    expect(result.projects.flatMap((group) => ids(group.pairs))).toContain("p_bank:t_ops");
+  });
+
+  it("still shows a hidden category you have used recently", () => {
+    const result = buildPicker({
+      catalog,
+      favourites: [],
+      recents: ["p_bank:t_ops"],
+      hidden: ["p_bank:t_ops"],
+      query: "",
+    });
+
+    expect(ids(result.recent)).toEqual(["p_bank:t_ops"]);
+    expect(result.projects.flatMap((group) => ids(group.pairs))).toContain("p_bank:t_ops");
+  });
+
+  it("honours recency beyond the three suggested, so a used task is never hidden", () => {
+    const result = buildPicker({
+      catalog,
+      favourites: [],
+      // Fourth in the ranking, so not among the suggestions, but still recently used.
+      recents: ["p_acme:t_dev", "p_acme:t_qa", "p_internal:t_admin", "p_bank:t_ops"],
+      hidden: ["p_bank:t_ops"],
+      query: "",
+    });
+
+    expect(ids(result.recent)).not.toContain("p_bank:t_ops");
+    expect(result.projects.flatMap((group) => ids(group.pairs))).toContain("p_bank:t_ops");
+  });
+
+  it("shows everything when nothing is hidden", () => {
+    const result = buildPicker({ catalog, favourites: [], recents: [], query: "" });
+
+    expect(result.projects.flatMap((group) => ids(group.pairs))).toHaveLength(catalog.length);
+  });
 });
