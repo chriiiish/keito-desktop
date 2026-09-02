@@ -383,6 +383,76 @@ describe("keyboard use of the category picker", () => {
   });
 });
 
+/**
+ * "All projects" repeats what is already pinned above it, on purpose. Those repeats are
+ * the *same* Pair object, so anything deriving a row's position from the object rather
+ * than from where it is rendered collapses the two — which is what made arrowing through
+ * the list lose the highlight, double it, or land somewhere else entirely.
+ */
+describe("walking the category picker with the arrow keys", () => {
+  const open = async () => {
+    const user = userEvent.setup();
+    render(<Popover />);
+    await user.click(await screen.findByRole("button", { name: "Category" }));
+    return user;
+  };
+
+  const options = () => screen.getAllByRole("option");
+  const highlighted = () => options().filter((option) => option.className.includes("cursor"));
+
+  it("gives every row an id of its own, repeats included", async () => {
+    await open();
+
+    const ids = options().map((option) => option.id);
+
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("keeps exactly one row highlighted at every step down the list", async () => {
+    const user = await open();
+    const total = options().length;
+    expect(total).toBeGreaterThan(4); // favourites and recents repeat below, so there are repeats to trip on
+
+    for (let step = 0; step < total; step++) {
+      expect(highlighted()).toHaveLength(1);
+      await user.keyboard("{ArrowDown}");
+    }
+  });
+
+  it("and back up again", async () => {
+    const user = await open();
+    const total = options().length;
+    for (let step = 0; step < total; step++) await user.keyboard("{ArrowDown}");
+
+    for (let step = 0; step < total; step++) {
+      expect(highlighted()).toHaveLength(1);
+      await user.keyboard("{ArrowUp}");
+    }
+  });
+
+  it("points aria-activedescendant at the row it actually highlighted", async () => {
+    const user = await open();
+    const filter = screen.getByPlaceholderText(/filter projects and tasks/i);
+
+    for (let step = 0; step < 4; step++) {
+      await user.keyboard("{ArrowDown}");
+      expect(filter.getAttribute("aria-activedescendant")).toBe(highlighted()[0]?.id);
+    }
+  });
+
+  it("starts a repeated task from its row under All projects, and closes", async () => {
+    const user = await open();
+    // The QA task is favourited, so it appears twice; the lower one is the repeat.
+    const qaRows = options().filter((option) => option.textContent?.includes("QA"));
+    expect(qaRows.length).toBe(2);
+
+    await user.click(qaRows[1]!);
+
+    expect(screen.queryByRole("listbox")).toBeNull();
+    expect(screen.getByRole("button", { name: "Category" }).textContent).toContain("QA");
+  });
+});
+
 describe("hidden categories", () => {
   it("leaves a switched-off category out of the dropdown", async () => {
     const user = userEvent.setup();
