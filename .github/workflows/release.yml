@@ -217,6 +217,14 @@ jobs:
           fetch-depth: 0
           ssh-key: ${{ secrets.RELEASE_DEPLOY_KEY }}
 
+      # Pinned to the same version the build uses. `npm version` rewrites
+      # package-lock.json, and a different npm major can rewrite it in its own format —
+      # so an unpinned toolchain would eventually commit a lockfile reformat to main,
+      # unreviewed, under a message that says it only set the version.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
       - name: Write the version back
         env:
           VERSION: ${{ needs.meta.outputs.version }}
