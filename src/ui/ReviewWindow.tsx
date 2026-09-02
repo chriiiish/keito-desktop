@@ -8,14 +8,12 @@ import { TrayLabelSettings } from "./TrayLabelSettings.js";
 import { ContributeTab } from "./ContributeTab.js";
 import { ProjectsTab } from "./ProjectsTab.js";
 import { useSnapshot } from "./useSnapshot.js";
+import { shiftDate, workspaceDate } from "../core/time/workspace-time.js";
 
-const isoDate = (date: Date) => date.toISOString().slice(0, 10);
-
-function weekStart(today: Date): Date {
-  const date = new Date(today);
-  const weekday = (date.getUTCDay() + 6) % 7; // Monday = 0
-  date.setUTCDate(date.getUTCDate() - weekday);
-  return date;
+/** The Monday of the week a YYYY-MM-DD date falls in. */
+function weekStart(today: string): string {
+  const weekday = (new Date(`${today}T00:00:00Z`).getUTCDay() + 6) % 7; // Monday = 0
+  return shiftDate(today, -weekday);
 }
 
 type Tab = "entries" | "projects" | "connection" | "settings" | "contribute";
@@ -47,7 +45,9 @@ export function ReviewWindow(): JSX.Element {
         ))}
       </nav>
 
-      {active === "entries" && <Entries revision={snapshot.revision} />}
+      {active === "entries" && (
+        <Entries revision={snapshot.revision} timeZone={snapshot.workspaceTimezone} />
+      )}
       {active === "projects" && <ProjectsTab snapshot={snapshot} onChange={setSnapshot} />}
       {active === "connection" && <Connection snapshot={snapshot} onChange={setSnapshot} />}
       {active === "settings" && <Settings snapshot={snapshot} onChange={setSnapshot} />}
@@ -60,26 +60,29 @@ export function ReviewWindow(): JSX.Element {
  * `revision` moves whenever anything changed server-side — a timer started from the
  * popover, a stop, a delete. Reloading on it is what keeps this table from going stale
  * until it happens to be remounted.
+ *
+ * "Today" and "this week" are the workspace's days, matching the `spent_date` the rows
+ * carry — from UTC they would be off by one for most of the world for part of each day.
  */
-function Entries({ revision }: { revision: number }): JSX.Element {
+function Entries({ revision, timeZone }: { revision: number; timeZone: string }): JSX.Element {
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [range, setRange] = useState<"today" | "week">("today");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    const today = new Date();
-    const from = range === "today" ? isoDate(today) : isoDate(weekStart(today));
+    const today = workspaceDate(new Date(), timeZone);
+    const from = range === "today" ? today : weekStart(today);
     setLoading(true);
     try {
-      setEntries(await keito.listEntries(from, isoDate(today)));
+      setEntries(await keito.listEntries(from, today));
       setError(null);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setLoading(false);
     }
-  }, [range]);
+  }, [range, timeZone]);
 
   useEffect(() => void load(), [load, revision]);
 
@@ -328,10 +331,12 @@ function Settings({
         onRecord={(accelerator) => keito.setHotkey(accelerator).then(onChange)}
       />
 
-      <h2>Menu bar label</h2>
+      <h2>{snapshot.platform === "darwin" ? "Menu bar label" : "Tray label"}</h2>
       <p className="hint">
-        What the menu bar shows while a timer runs. The note leads by default — it is what
-        says what you are doing.
+        {snapshot.platform === "darwin"
+          ? "What the menu bar shows while a timer runs."
+          : "What the tray tooltip leads with while a timer runs."}{" "}
+        The note leads by default — it is what says what you are doing.
       </p>
       <TrayLabelSettings snapshot={snapshot} onChange={onChange} />
 

@@ -24,6 +24,7 @@ beforeEach(() => {
   switcher = new TimerSwitcher({
     client: new KeitoClient({ apiKey: "kto_k", accountId: "co_9", fetch: keito.fetch }),
     now: () => NOW,
+    timeZone: () => "UTC",
   });
 });
 
@@ -41,6 +42,26 @@ describe("starting a timer", () => {
       hours: null,
       source: "desktop",
     });
+  });
+
+  it("dates the entry by the workspace's calendar, not UTC's", async () => {
+    // 09:30 UTC is already the 2nd in Sydney and still the 1st in Los Angeles. Dating
+    // from the instant alone would file the work on the wrong day in both places.
+    const sydney = new TimerSwitcher({
+      client: new KeitoClient({ apiKey: "kto_k", accountId: "co_9", fetch: keito.fetch }),
+      now: () => new Date("2026-09-01T22:00:00Z"),
+      timeZone: () => "Australia/Sydney",
+    });
+    await sydney.switchTo(DEV);
+    expect(keito.entries.at(-1)!.spent_date).toBe("2026-09-02");
+
+    const losAngeles = new TimerSwitcher({
+      client: new KeitoClient({ apiKey: "kto_k", accountId: "co_9", fetch: keito.fetch }),
+      now: () => new Date("2026-09-02T02:00:00Z"),
+      timeZone: () => "America/Los_Angeles",
+    });
+    await losAngeles.switchTo(QA);
+    expect(keito.entries.at(-1)!.spent_date).toBe("2026-09-01");
   });
 
   it("lets the server set the start time, so no timezone conversion happens on the hot path", async () => {
@@ -206,6 +227,7 @@ describe("when a switch fails", () => {
     const authSwitcher = new TimerSwitcher({
       client: new KeitoClient({ apiKey: "kto_stale", accountId: "co_9", fetch: rejecting.fetch }),
       now: () => NOW,
+      timeZone: () => "UTC",
     });
 
     await expect(authSwitcher.switchTo(DEV)).rejects.toBeInstanceOf(KeitoAuthError);

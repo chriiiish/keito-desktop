@@ -54,7 +54,7 @@ suite("Keito API contract", () => {
     });
     created.push(entry.id);
 
-    const { running } = await loadEntries(client, new Date());
+    const { running } = await loadEntries(client, new Date(), Intl.DateTimeFormat().resolvedOptions().timeZone);
 
     expect(running?.id).toBe(entry.id);
     await client.stopTimeEntry(entry.id);

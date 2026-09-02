@@ -6,6 +6,34 @@
 
 const HH_MM = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
+/**
+ * The calendar date at `instant` **in the workspace's timezone**, as the YYYY-MM-DD
+ * Keito's `spent_date` expects.
+ *
+ * Not `toISOString().slice(0, 10)`: that is the date in UTC, which is the wrong day for
+ * most of the world for part of every day. A timer started at 08:00 in Sydney would be
+ * logged against yesterday; one started at 18:00 in California, against tomorrow.
+ */
+export function workspaceDate(instant: Date, timeZone: string): string {
+  // en-CA formats as YYYY-MM-DD, which is exactly the wire format.
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(instant);
+}
+
+/** Whole days between two YYYY-MM-DD dates. Both are already workspace-local. */
+export function daysBetween(from: string, to: string): number {
+  return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
+}
+
+/** `days` before the given YYYY-MM-DD date, as another YYYY-MM-DD. */
+export function shiftDate(date: string, days: number): string {
+  return new Date(Date.parse(`${date}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
+}
+
 export function formatWorkspaceTime(instant: Date, timeZone: string): string {
   return new Intl.DateTimeFormat("en-GB", {
     timeZone,

@@ -96,7 +96,16 @@ until a contract test covers it.
 - **Timestamps are server-set on the hot path.** Creates omit `started_time`; stops go
   through `PATCH /:id/stop`. Keito exchanges `HH:mm` in *workspace* timezone, not ISO, so
   letting the server stamp both ends keeps timezone conversion out of the switching path
-  entirely. `src/core/time/workspace-time.ts` exists only for manual edits in the window.
+  entirely.
+- **`spent_date` is the one date the client still decides**, and it is a *workspace-local*
+  calendar date, not UTC's. `workspaceDate()` in `src/core/time/workspace-time.ts` is the
+  only way to produce one — `new Date().toISOString().slice(0, 10)` is wrong for most of
+  the world for part of every day (08:00 in Sydney is still yesterday in UTC; 18:00 in
+  California is already tomorrow), and it files the work on the wrong day silently.
+  `TimerSwitcher`, `loadEntries` and the entries window all take the zone for this reason.
+  The suite cannot catch a regression here on its own: the fake echoes whatever
+  `spent_date` it is sent, so tests written in UTC pass either way. `rankRecents` takes
+  today as a `YYYY-MM-DD` string rather than a `Date` so the comparison cannot drift.
 - **There is no `GET /time_entries/:id`** — it answers `405`. Nothing may depend on reading
   a single entry; `PATCH` and `DELETE` go straight at the id.
 - **No ETags, no `If-Match`.** The docs describe both; the live API sends neither and
@@ -179,6 +188,33 @@ Startup is **3 requests**; a popover open is normally **1**. Keep it that way.
 `GET /tasks` returns **503 "Task reference data is temporarily at capacity"** under load —
 seen against the live workspace. The client retries 429/502/503/504 up to `MAX_ATTEMPTS`
 with linear backoff. That retry now matters mainly for `/projects` and `/time_entries`.
+
+## Platform rules
+
+Both macOS and Windows are supported targets, and the two differ in ways that fail
+silently rather than loudly.
+
+- **The tray icon is two assets, not one.** `trayTemplate.png` is a macOS *template*
+  image — pure black plus alpha, which the OS inverts for a dark menu bar. Windows does no
+  such thing, so the same file is an invisible black clock on a dark taskbar.
+  `trayColour.png` is the indigo version Windows gets. Both must stay in the `build/tray*`
+  glob in `package.json`, or the packaged app starts with no icon at all.
+- **`tray.setTitle` is macOS-only.** The `formatTrayLabel` settings would be inert on
+  Windows, so there the label leads the tooltip instead. A change to those settings must
+  still be visible on both.
+- **The popover opens on the side the icon is on**, decided from the icon's bounds, not
+  from `process.platform`: a Windows taskbar is usually at the bottom but can be moved to
+  any edge, and a second display may have neither.
+- **Clicking the tray icon blurs the popover before delivering the click**, so a naive
+  toggle reopens what the blur just hid. `REOPEN_GUARD_MS` in `main.ts` is what makes
+  clicking the icon twice actually close it.
+- **`Menu.setApplicationMenu(null)` only off darwin.** On Windows it removes a File/Edit/
+  View menu bar this app has no use for; on macOS it would take Cmd-Q and Cmd-C with it.
+- **One instance.** `requestSingleInstanceLock()` — a second launch would otherwise get its
+  own tray icon and fight the first for the global shortcut and `preferences.json`.
+- **`PreferencesStore` serialises its writes.** Two overlapping saves race for the same
+  `.tmp` file and the loser fails with `ENOENT`; starring in the popover while toggling in
+  the settings window is enough to hit it.
 
 ## Diagnostics
 

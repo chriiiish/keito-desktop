@@ -2,6 +2,7 @@ import type { KeitoClient } from "../keito/client.js";
 import { KeitoAuthError } from "../keito/errors.js";
 import { pairId } from "../catalog/catalog.js";
 import type { Pair, TimeEntry } from "../keito/types.js";
+import { workspaceDate } from "../time/workspace-time.js";
 
 export type TimerState =
   | { status: "idle" }
@@ -32,6 +33,8 @@ function pairFor(entry: TimeEntry, catalog: readonly Pair[]): Pair {
 export interface TimerSwitcherOptions {
   client: KeitoClient;
   now: () => Date;
+  /** The workspace's timezone, read afresh each time — the setting can change. */
+  timeZone: () => string;
 }
 
 /**
@@ -41,11 +44,13 @@ export interface TimerSwitcherOptions {
 export class TimerSwitcher {
   #client: KeitoClient;
   #now: () => Date;
+  #timeZone: () => string;
   #state: TimerState = { status: "idle" };
 
   constructor(options: TimerSwitcherOptions) {
     this.#client = options.client;
     this.#now = options.now;
+    this.#timeZone = options.timeZone;
   }
 
   current(): TimerState {
@@ -59,7 +64,9 @@ export class TimerSwitcher {
       this.#client.createTimeEntry({
         projectId: pair.projectId,
         taskId: pair.taskId,
-        spentDate: this.#now().toISOString().slice(0, 10),
+        // The workspace's calendar date, not UTC's: they are different days for part of
+        // every day almost everywhere, and this one decides which day the work lands on.
+        spentDate: workspaceDate(this.#now(), this.#timeZone()),
         isRunning: true,
         // Unconditional: "switch" always means "make this the running timer". This is
         // also race-free if another device started a timer since our last refresh.
@@ -92,7 +99,7 @@ export class TimerSwitcher {
     const state = this.#state;
     if (state.status !== "running") return;
 
-    // A timer we adopted from another client has no ETag yet; read it to get one.
+    // The server sets the end time; there is nothing to send and nothing to read first.
     await this.#guard(() => this.#client.stopTimeEntry(state.entry.id));
     this.#state = { status: "idle" };
   }

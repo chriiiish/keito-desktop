@@ -39,6 +39,8 @@ const defaults = (): Preferences => ({
 export class PreferencesStore {
   #path: string;
   #value: Preferences;
+  /** Tail of the write queue — see #flush. */
+  #writing: Promise<void> = Promise.resolve();
 
   private constructor(path: string, value: Preferences) {
     this.#path = path;
@@ -88,7 +90,18 @@ export class PreferencesStore {
     await this.update({ favourites: this.#value.favourites.filter((id) => id !== pairId) });
   }
 
+  /**
+   * Serialised, because two writes overlapping would race for the same temporary file:
+   * the second `writeFile` would land under the first's `rename` and the loser would fail
+   * with ENOENT. Windows is stricter about this than macOS, and starring a category in the
+   * popover while toggling one in the settings window is enough to hit it.
+   */
   async #flush(): Promise<void> {
+    this.#writing = this.#writing.then(() => this.#writeNow()).catch(() => this.#writeNow());
+    return this.#writing;
+  }
+
+  async #writeNow(): Promise<void> {
     await mkdir(dirname(this.#path), { recursive: true });
     // Write-then-rename: a crash mid-write must not leave unreadable preferences.
     const temporary = `${this.#path}.tmp`;

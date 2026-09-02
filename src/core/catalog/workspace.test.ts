@@ -61,7 +61,7 @@ describe("loadEntries", () => {
     keito.seedRunning({ project_id: "p_acme", task_id: "t_dev", spent_date: "2026-09-02" });
     keito.entries.push({ ...keito.entries[0]!, id: "te_old", spent_date: "2026-08-20", is_running: false });
 
-    const result = await loadEntries(clientFor(keito), NOW);
+    const result = await loadEntries(clientFor(keito), NOW, "UTC");
 
     expect(keito.requests).toHaveLength(1);
     expect(result.recents).toEqual(["p_acme:t_dev"]);
@@ -69,10 +69,35 @@ describe("loadEntries", () => {
     expect(result.running?.id).toBe("te_1");
   });
 
+  it("reads today from the workspace's calendar, not UTC's", async () => {
+    // 21:30 in Sydney on the 2nd is still 11:30 UTC on the 2nd — but at 09:30 UTC it is
+    // already the evening of the 2nd there, while Los Angeles is on the 1st.
+    const keito = keitoWith();
+    keito.entries.push({
+      id: "te_sydney",
+      project_id: "p_acme",
+      task_id: "t_dev",
+      spent_date: "2026-09-02",
+      started_time: "09:00",
+      ended_time: "10:00",
+      timer_started_at: null,
+      hours: 1,
+      is_running: false,
+      notes: null,
+      source: null,
+    });
+
+    const early = new Date("2026-09-01T22:00:00Z");
+    expect(
+      (await loadEntries(clientFor(keito), early, "Australia/Sydney")).today.map((e) => e.id),
+    ).toEqual(["te_sydney"]);
+    expect((await loadEntries(clientFor(keito), early, "America/Los_Angeles")).today).toEqual([]);
+  });
+
   it("reports no running timer when none is going", async () => {
     const keito = keitoWith();
 
-    const result = await loadEntries(clientFor(keito), NOW);
+    const result = await loadEntries(clientFor(keito), NOW, "UTC");
 
     expect(result.running).toBeNull();
   });
@@ -95,7 +120,7 @@ describe("loadEntries", () => {
       });
     }
 
-    const result = await loadEntries(clientFor(keito), NOW);
+    const result = await loadEntries(clientFor(keito), NOW, "UTC");
 
     // p_bank has 20 uses to p_acme's 5; only paging past the first page can see that.
     expect(result.recents[0]).toBe("p_bank:t_dev");

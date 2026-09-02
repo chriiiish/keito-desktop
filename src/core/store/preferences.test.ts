@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { PreferencesStore, DEFAULT_HOTKEY } from "./preferences.js";
+import { PreferencesStore, DEFAULT_HOTKEY, type Preferences } from "./preferences.js";
 
 let dir: string;
 let file: string;
@@ -131,5 +131,23 @@ describe("PreferencesStore", () => {
     await store.setHidden("p_bank:t_ops", true);
 
     expect(store.get().hidden).toEqual(["p_bank:t_ops"]);
+  });
+});
+
+describe("concurrent writes", () => {
+  it("serialises overlapping saves rather than racing for the temporary file", async () => {
+    const store = await PreferencesStore.open(file);
+
+    // Nothing awaits in between: this is what two IPC handlers landing in the same tick
+    // looks like, and on Windows the losing rename would fail with ENOENT.
+    await Promise.all([
+      store.addFavourite("p_a:t_a"),
+      store.addFavourite("p_b:t_b"),
+      store.setHidden("p_c:t_c", true),
+    ]);
+
+    const written = JSON.parse(await readFile(file, "utf8")) as Preferences;
+    expect(written.favourites).toEqual(["p_a:t_a", "p_b:t_b"]);
+    expect(written.hidden).toEqual(["p_c:t_c"]);
   });
 });

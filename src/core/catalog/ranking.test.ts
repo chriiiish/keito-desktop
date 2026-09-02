@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { rankRecents } from "./ranking.js";
 
 const NOW = new Date("2026-09-02T10:00:00Z");
+/** Today, as a workspace-local calendar date — what rankRecents actually compares against. */
+const TODAY = "2026-09-02";
 
 /** `count` entries against one pair, all logged `daysAgo` before NOW. */
 function entries(projectId: string, taskId: string, daysAgo: number, count: number) {
@@ -17,7 +19,7 @@ describe("rankRecents", () => {
   it("ranks a pair used a lot today above one used once today", () => {
     const ranked = rankRecents(
       [...entries("p_rare", "t_a", 0, 1), ...entries("p_often", "t_a", 0, 4)],
-      NOW,
+      TODAY,
     );
 
     expect(ranked).toEqual(["p_often:t_a", "p_rare:t_a"]);
@@ -28,7 +30,7 @@ describe("rankRecents", () => {
     // Fresh: 2 uses yesterday -> 2 * 0.5^(1/7) = 1.81. Fresh wins.
     const ranked = rankRecents(
       [...entries("p_stale", "t_a", 20, 5), ...entries("p_fresh", "t_a", 1, 2)],
-      NOW,
+      TODAY,
     );
 
     expect(ranked).toEqual(["p_fresh:t_a", "p_stale:t_a"]);
@@ -37,13 +39,13 @@ describe("rankRecents", () => {
   it("ignores entries older than the 30-day window", () => {
     const ranked = rankRecents(
       [...entries("p_ancient", "t_a", 31, 50), ...entries("p_recent", "t_a", 29, 1)],
-      NOW,
+      TODAY,
     );
 
     expect(ranked).toEqual(["p_recent:t_a"]);
   });
 
   it("has nothing to suggest on a fresh account", () => {
-    expect(rankRecents([], NOW)).toEqual([]);
+    expect(rankRecents([], TODAY)).toEqual([]);
   });
 });

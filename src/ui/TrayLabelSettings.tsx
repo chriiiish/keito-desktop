@@ -18,7 +18,7 @@ const FALLBACK_OPTIONS: ReadonlyArray<readonly [TrayFallback, string]> = [
 ];
 
 /**
- * The menu bar label has two settings whose effect is hard to picture from their names, so
+ * The tray label has two settings whose effect is hard to picture from their names, so
  * every option carries the text it would actually produce, and the preview above updates
  * as soon as one is chosen rather than waiting for the write to come back.
  */
@@ -34,6 +34,10 @@ export function TrayLabelSettings({
 
   useEffect(() => setPrefix(snapshot.trayPrefix), [snapshot.trayPrefix]);
   useEffect(() => setFallback(snapshot.trayFallback), [snapshot.trayFallback]);
+
+  // macOS draws the label beside the menu bar icon. Windows has no equivalent, so the
+  // same text leads the tray tooltip instead — same setting, different place to look.
+  const inTooltip = snapshot.platform !== "darwin";
 
   const running = snapshot.timer.status === "running" ? snapshot.timer : null;
   const subject = running
@@ -55,6 +59,7 @@ export function TrayLabelSettings({
         <span className="tray-preview-text" data-testid="tray-preview">{formatTrayLabel(subject, { fallback, prefix })}</span>
         <span className="tray-preview-caption">
           {running ? "your running timer" : "example"}
+          {inTooltip ? " · shown in the tray tooltip" : ""}
         </span>
       </div>
 

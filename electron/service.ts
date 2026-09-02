@@ -332,7 +332,11 @@ export class AppService {
         }
       }
 
-      const { recents, today, running } = await loadEntries(this.#client!, now);
+      const { recents, today, running } = await loadEntries(
+        this.#client!,
+        now,
+        this.#prefs.get().workspaceTimezone,
+      );
       this.#recents = recents;
       this.#today = today;
 
@@ -414,7 +418,11 @@ export class AppService {
       fetch,
       onRequest: this.#logRequest,
     });
-    this.#switcher = new TimerSwitcher({ client: this.#client, now: () => new Date() });
+    this.#switcher = new TimerSwitcher({
+      client: this.#client,
+      now: () => new Date(),
+      timeZone: () => this.#prefs.get().workspaceTimezone,
+    });
     this.#identity = identity;
     this.#keyStatus = "ready";
     this.#apiKeyHint = maskKey(key);
@@ -434,7 +442,11 @@ export class AppService {
    */
   async #reloadEntries(): Promise<void> {
     if (!this.#client) return;
-    const { recents, today } = await loadEntries(this.#client, new Date());
+    const { recents, today } = await loadEntries(
+      this.#client,
+      new Date(),
+      this.#prefs.get().workspaceTimezone,
+    );
     this.#recents = recents;
     this.#today = today;
   }

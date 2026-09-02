@@ -31,6 +31,8 @@ let mainWindow: BrowserWindow | null = null;
 let service: AppService;
 let registeredHotkey: string | null = null;
 let log: Logger;
+/** False until `service` exists, so a second launch cannot race startup. */
+let started = false;
 
 const rendererUrl = process.env["ELECTRON_RENDERER_URL"];
 
@@ -49,7 +51,11 @@ function broadcast(snapshot: Snapshot): void {
   updateTrayTitle(snapshot);
 }
 
-/** macOS shows the running task next to the tray icon; elsewhere it lands in the tooltip. */
+/**
+ * macOS shows the running task as text beside the menu bar icon. Windows has no such
+ * thing — `setTitle` is a no-op there — so the configured label leads the tooltip
+ * instead, which is the only place a Windows user can read it.
+ */
 function updateTrayTitle(snapshot: Snapshot): void {
   if (!tray) return;
   if (snapshot.timer.status === "running") {
@@ -59,9 +65,10 @@ function updateTrayTitle(snapshot: Snapshot): void {
       { fallback: snapshot.trayFallback, prefix: snapshot.trayPrefix },
     );
     // The tooltip has room for the full context the short label had to drop.
-    tray.setToolTip(
-      [`${pair.projectName} — ${pair.taskName}`, note?.trim()].filter(Boolean).join("\n"),
-    );
+    const context = [`${pair.projectName} — ${pair.taskName}`, note?.trim()]
+      .filter(Boolean)
+      .join("\n");
+    tray.setToolTip(process.platform === "darwin" ? context : `${label}\n${context}`);
     if (process.platform === "darwin") tray.setTitle(` ${label}`);
   } else {
     tray.setToolTip("Keito Timer — nothing running");
@@ -85,24 +92,41 @@ function createPopover(): BrowserWindow {
   window.on("blur", () => {
     if (!window.webContents.isDevToolsOpened()) window.hide();
   });
+  window.on("hide", () => {
+    hiddenAtMs = Date.now();
+  });
   loadRenderer(window, "/popover");
   return window;
 }
 
-/** Positions the popover under the tray icon, kept inside the display's work area. */
+/**
+ * Positions the popover against the tray icon, kept inside the display's work area.
+ *
+ * Which side it opens on is decided by where the icon actually is, not by platform: a
+ * macOS menu bar is at the top, a Windows taskbar is usually at the bottom but can be
+ * moved to any edge, and a second display may have neither.
+ */
 function showPopover(): void {
   if (!popover || popover.isDestroyed()) popover = createPopover();
 
   const trayBounds = tray?.getBounds();
   const cursor = screen.getCursorScreenPoint();
-  const display = screen.getDisplayNearestPoint(cursor);
-  const area = display.workArea;
+  // The icon's own display, not the cursor's: the hotkey can fire with the pointer
+  // anywhere, and the popover belongs beside the icon.
+  const anchor = trayBounds?.width
+    ? { x: trayBounds.x + trayBounds.width / 2, y: trayBounds.y, height: trayBounds.height }
+    : { x: cursor.x, y: cursor.y, height: 0 };
+  const area = screen.getDisplayNearestPoint({ x: Math.round(anchor.x), y: Math.round(anchor.y) })
+    .workArea;
 
-  let x = Math.round((trayBounds?.x ?? cursor.x) + (trayBounds?.width ?? 0) / 2 - POPOVER_SIZE.width / 2);
-  let y = Math.round((trayBounds?.y ?? area.y) + (trayBounds?.height ?? 0) + 4);
+  let x = Math.round(anchor.x - POPOVER_SIZE.width / 2);
+  // Below the icon when it sits in the top half of the screen, above it otherwise —
+  // which is what puts the popover over a bottom Windows taskbar rather than under it.
+  const below = anchor.y + anchor.height / 2 < area.y + area.height / 2;
+  let y = Math.round(below ? anchor.y + anchor.height + 4 : anchor.y - POPOVER_SIZE.height - 4);
 
   x = Math.min(Math.max(x, area.x + 8), area.x + area.width - POPOVER_SIZE.width - 8);
-  if (y + POPOVER_SIZE.height > area.y + area.height) y = area.y + area.height - POPOVER_SIZE.height - 8;
+  y = Math.min(Math.max(y, area.y + 8), area.y + area.height - POPOVER_SIZE.height - 8);
 
   popover.setPosition(x, y, false);
   popover.show();
@@ -114,9 +138,21 @@ function showPopover(): void {
   void service.refresh().then(broadcast);
 }
 
+/**
+ * Clicking the tray icon blurs the popover, which hides it, and only *then* delivers the
+ * click — so by the time we get here it is already invisible and a naive toggle would
+ * reopen it. Treat a click landing right after a hide as the second half of that dismissal.
+ */
+const REOPEN_GUARD_MS = 300;
+let hiddenAtMs = 0;
+
 function togglePopover(): void {
-  if (popover && !popover.isDestroyed() && popover.isVisible()) popover.hide();
-  else showPopover();
+  if (popover && !popover.isDestroyed() && popover.isVisible()) {
+    popover.hide();
+    return;
+  }
+  if (Date.now() - hiddenAtMs < REOPEN_GUARD_MS) return;
+  showPopover();
 }
 
 function openMainWindow(): void {
@@ -139,10 +175,20 @@ function openMainWindow(): void {
   loadRenderer(mainWindow, "/window");
 }
 
+/**
+ * macOS inverts a *template* image (pure black plus alpha) to suit the menu bar, so one
+ * black asset covers light and dark. Windows does no such thing — that same asset is
+ * invisible on a dark taskbar — so it gets the indigo version instead.
+ */
+function trayIcon(): Electron.NativeImage {
+  const file = process.platform === "darwin" ? "trayTemplate.png" : "trayColour.png";
+  const icon = nativeImage.createFromPath(join(__dirname, "../../build", file));
+  if (process.platform === "darwin") icon.setTemplateImage(true);
+  return icon;
+}
+
 function createTray(): void {
-  const icon = nativeImage.createFromPath(join(__dirname, "../../build/trayTemplate.png"));
-  icon.setTemplateImage(true);
-  tray = new Tray(icon);
+  tray = new Tray(trayIcon());
   tray.setToolTip("Keito Timer");
 
   tray.on("click", togglePopover);
@@ -270,9 +316,31 @@ function startMonitors(): void {
   setInterval(() => void service.refresh().then(broadcast), REFRESH_MS);
 }
 
-app.whenReady().then(async () => {
+// One tray icon, one set of global shortcuts, one writer of preferences.json. Without
+// this a second launch — easy on Windows, where the installer offers to run the app and
+// the Start menu entry stays clickable — gets its own tray icon and fights the first for
+// the hotkey.
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    // The user asked for the app that is already running. Show them it is there — but
+    // not before the first instance has finished starting up.
+    if (started) showPopover();
+  });
+  void start();
+}
+
+async function start(): Promise<void> {
+  await app.whenReady();
+
   // A menubar app has no dock presence on macOS.
   if (process.platform === "darwin") app.dock?.hide();
+
+  // Windows and Linux would otherwise give the entries window a File/Edit/View menu bar
+  // this app has no use for, including Reload and Toggle DevTools. On macOS the menu is
+  // the application menu — removing it would take Cmd-Q, Cmd-C and Cmd-V with it.
+  if (process.platform !== "darwin") Menu.setApplicationMenu(null);
 
   log = new Logger(join(app.getPath("logs"), "keito-timer.log"));
   log.info("App ready", { version: app.getVersion(), platform: process.platform });
@@ -290,10 +358,12 @@ app.whenReady().then(async () => {
   service.setHotkeyRegistered(registerHotkey(prefs.get().hotkey));
   startMonitors();
 
+  started = true;
+
   updateTrayTitle(service.snapshot());
   // Nothing configured yet: open settings so the first run explains itself.
   if (service.snapshot().keyStatus !== "ready") openMainWindow();
-});
+}
 
 // A tray app stays alive with no windows open.
 app.on("window-all-closed", () => {});

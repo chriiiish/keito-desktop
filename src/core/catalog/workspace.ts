@@ -2,6 +2,7 @@ import type { KeitoClient } from "../keito/client.js";
 import type { Pair, Project, TimeEntry } from "../keito/types.js";
 import { buildCatalog } from "./catalog.js";
 import { RECENTS_WINDOW_DAYS, rankRecents } from "./ranking.js";
+import { shiftDate, workspaceDate } from "../time/workspace-time.js";
 
 export interface EntriesSnapshot {
   /** Pair ids, most relevant first. */
@@ -11,8 +12,6 @@ export interface EntriesSnapshot {
   /** The one running entry, if any — no separate request needed to find it. */
   running: TimeEntry | null;
 }
-
-const isoDate = (date: Date) => date.toISOString().slice(0, 10);
 
 /**
  * The whole category catalog in **one** request: GET /projects embeds each project's
@@ -38,14 +37,24 @@ export async function loadCatalog(
  * Recents, today's entries and the running timer from **one** request. The window we
  * already fetch for ranking contains today, and list responses include running entries,
  * so no separate `is_running` lookup is needed.
+ *
+ * `timeZone` is the workspace's, because `spent_date` is a workspace-local calendar date.
+ * Deriving "today" from UTC instead would show yesterday's list all morning east of
+ * Greenwich, and tomorrow's all evening west of it.
  */
-export async function loadEntries(client: KeitoClient, now: Date): Promise<EntriesSnapshot> {
-  const since = new Date(now.getTime() - RECENTS_WINDOW_DAYS * 86_400_000);
-  const entries = await client.listTimeEntries({ from: isoDate(since), to: isoDate(now) });
+export async function loadEntries(
+  client: KeitoClient,
+  now: Date,
+  timeZone: string,
+): Promise<EntriesSnapshot> {
+  const today = workspaceDate(now, timeZone);
+  const entries = await client.listTimeEntries({
+    from: shiftDate(today, -RECENTS_WINDOW_DAYS),
+    to: today,
+  });
 
-  const today = isoDate(now);
   return {
-    recents: rankRecents(entries, now),
+    recents: rankRecents(entries, today),
     today: entries.filter((entry) => entry.spent_date === today),
     running: entries.find((entry) => entry.is_running) ?? null,
   };

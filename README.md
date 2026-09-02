@@ -53,7 +53,9 @@ written to `preferences.json`.
   Favourites are local, since Keito has no API for them.
 - **Timezones are dodged on the hot path.** Timers are created with `is_running: true` and
   no `started_time`, and stopped via `PATCH /:id/stop`, so the server stamps both times.
-  The workspace-timezone setting only renders and parses manual edits.
+  The one date the app still decides is `spent_date`, and it is taken from the *workspace*
+  calendar rather than UTC — otherwise a timer started at 8am in Sydney lands on yesterday,
+  and one started at 6pm in California on tomorrow.
 - **`src/core/` imports nothing from Electron** and does no I/O it isn't handed. That's what
   keeps the test suite a fast in-process loop.
 - **Startup costs 3 API requests, a popover open normally 1.** `GET /projects` embeds each
@@ -106,6 +108,22 @@ curl -sS -i https://app.keito.ai/api/v2/users/me \
   -H "Authorization: Bearer kto_YOUR_KEY" \
   -H "Keito-Account-Id: YOUR_COMPANY_ID"
 ```
+
+## Platform notes
+
+macOS and Windows are both supported. The differences that matter:
+
+| | macOS | Windows |
+|---|---|---|
+| Running task | Text beside the menu bar icon | Leads the tray tooltip |
+| Tray icon | Template image, inverted by the OS | Indigo, legible on either taskbar theme |
+| Popover | Below the menu bar | Above the taskbar, whichever edge it is on |
+| Default shortcut | `⌘⇧K` | `Ctrl+Shift+K` |
+| Key storage | Keychain | DPAPI |
+| Installer | Unsigned `.dmg` | Unsigned NSIS `.exe`, per-user, choosable directory |
+
+Only one copy runs at a time on either platform — launching it again brings the popover up
+rather than adding a second tray icon.
 
 ## Known limits
 
