@@ -23,6 +23,13 @@ vi.stubGlobal("keito", api);
 
 const { ReviewWindow } = await import("./ReviewWindow.js");
 
+/** A promise the test controls, so "in flight" is a state we can assert during. */
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((r) => (resolve = r));
+  return { promise, resolve };
+}
+
 const pair = (id: string, projectName: string, taskName: string) => {
   const [projectId, taskId] = id.split(":") as [string, string];
   return { id, projectId, projectName, taskId, taskName };
@@ -134,11 +141,37 @@ describe("the review window", () => {
   });
 });
 
-function deferred<T>() {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((r) => (resolve = r));
-  return { promise, resolve };
-}
+describe("loading time entries", () => {
+  it("owns up to the wait while the API responds", async () => {
+    const gate = deferred<never[]>();
+    api.listEntries.mockReturnValue(gate.promise);
+    render(<ReviewWindow />);
+
+    expect(await screen.findByText("Oh my gosh, look at the time")).toBeDefined();
+    expect(screen.getByRole("status")).toBeDefined();
+    gate.resolve([]);
+  });
+
+  it("shows the table once the entries arrive", async () => {
+    render(<ReviewWindow />);
+
+    expect(await screen.findByText(/nothing logged today/i)).toBeDefined();
+    expect(screen.queryByText("Oh my gosh, look at the time")).toBeNull();
+  });
+
+  it("does the same when switching to the week view", async () => {
+    const user = userEvent.setup();
+    render(<ReviewWindow />);
+    await screen.findByText(/nothing logged today/i);
+
+    const gate = deferred<never[]>();
+    api.listEntries.mockReturnValue(gate.promise);
+    await user.click(screen.getByRole("button", { name: "This week" }));
+
+    expect(screen.getByText("Oh my gosh, look at the time")).toBeDefined();
+    gate.resolve([]);
+  });
+});
 
 describe("while a settings action is in flight", () => {
   it("saves the connection only once however many times Enter or the button fires", async () => {

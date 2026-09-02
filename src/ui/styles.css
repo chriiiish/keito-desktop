@@ -388,3 +388,13 @@ select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 button[aria-busy="true"] { cursor: default; }
 /* Keep the button from resizing as its label becomes a spinner. */
 .play, .stop, .star, .connect-actions button { min-width: 2.2em; }
+
+.loading-entries {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 28px 4px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.loading-entries .spinner { color: var(--accent); width: 1.15em; height: 1.15em; }

@@ -74,15 +74,19 @@ function Entries({ revision }: { revision: number }): JSX.Element {
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [range, setRange] = useState<"today" | "week">("today");
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     const today = new Date();
     const from = range === "today" ? isoDate(today) : isoDate(weekStart(today));
+    setLoading(true);
     try {
       setEntries(await keito.listEntries(from, isoDate(today)));
       setError(null);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setLoading(false);
     }
   }, [range]);
 
@@ -114,6 +118,12 @@ function Entries({ revision }: { revision: number }): JSX.Element {
 
       {error && <div className="error">{error}</div>}
 
+      {loading ? (
+        <p className="loading-entries">
+          <Spinner />
+          Oh my gosh, look at the time
+        </p>
+      ) : (
       <table>
         <thead>
           <tr>
@@ -185,6 +195,7 @@ function Entries({ revision }: { revision: number }): JSX.Element {
           )}
         </tbody>
       </table>
+      )}
     </section>
   );
 }
