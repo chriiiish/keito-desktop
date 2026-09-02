@@ -1,27 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import type { TimeEntry } from "../core/keito/types.js";
 import type { Snapshot } from "../../electron/service.js";
-import { formatTrayLabel } from "../core/tray/label.js";
 import { keito } from "./keito-api.js";
 import { AsyncButton, Spinner, useAsyncAction } from "./AsyncButton.js";
 import { HotkeyRecorder } from "./HotkeyRecorder.js";
+import { TrayLabelSettings } from "./TrayLabelSettings.js";
 import { ProjectsTab } from "./ProjectsTab.js";
 import { useSnapshot } from "./useSnapshot.js";
 
 const isoDate = (date: Date) => date.toISOString().slice(0, 10);
-
-/** A live example of the menu bar label, using the running timer when there is one. */
-function trayPreview(snapshot: Snapshot): string {
-  const running = snapshot.timer.status === "running" ? snapshot.timer : null;
-  return formatTrayLabel(
-    {
-      note: running?.note ?? "Sprint planning",
-      projectName: running?.pair.projectName ?? "Acme Rebuild",
-      taskName: running?.pair.taskName ?? "Development",
-    },
-    { fallback: snapshot.trayFallback, prefix: snapshot.trayPrefix },
-  );
-}
 
 function weekStart(today: Date): Date {
   const date = new Date(today);
@@ -340,43 +327,10 @@ function Settings({
 
       <h2>Menu bar label</h2>
       <p className="hint">
-        What the tray shows while a timer runs. The note leads by default — it is what says
-        what you are doing.
+        What the menu bar shows while a timer runs. The note leads by default — it is what
+        says what you are doing.
       </p>
-      <div className="tray-options">
-        <label>
-          When there is a note
-          <select
-            value={snapshot.trayPrefix}
-            onChange={(event) =>
-              void keito
-                .setTrayLabel({ fallback: snapshot.trayFallback, prefix: event.target.value as never })
-                .then(onChange)
-            }
-          >
-            <option value="none">Show the note alone</option>
-            <option value="project">Prefix it with the project</option>
-            <option value="task">Prefix it with the task</option>
-          </select>
-        </label>
-        <label>
-          When the note is blank
-          <select
-            value={snapshot.trayFallback}
-            onChange={(event) =>
-              void keito
-                .setTrayLabel({ fallback: event.target.value as never, prefix: snapshot.trayPrefix })
-                .then(onChange)
-            }
-          >
-            <option value="task">Show the task</option>
-            <option value="project">Show the project</option>
-          </select>
-        </label>
-      </div>
-      <p className="hint preview">
-        Now showing: <code>{trayPreview(snapshot)}</code>
-      </p>
+      <TrayLabelSettings snapshot={snapshot} onChange={onChange} />
 
       <h2>Workspace timezone</h2>
       <p className="hint">

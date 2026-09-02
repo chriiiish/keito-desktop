@@ -426,3 +426,50 @@ button[aria-busy="true"] { cursor: default; }
   background: var(--raised);
 }
 .hint.warn { color: var(--danger); }
+
+/* ── Menu bar label ──────────────────────────────────────── */
+.tray-label { max-width: 560px; }
+
+.tray-preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  margin-bottom: 14px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--raised);
+}
+.tray-preview-icon { color: var(--fg); font-size: 15px; line-height: 1; }
+.tray-preview-text { flex: 1; min-width: 0; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tray-preview-caption { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+
+.tray-choice { border: none; margin: 0 0 12px; padding: 0; }
+.tray-choice legend {
+  padding: 0 0 5px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.tray-choice label {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.tray-choice label:hover { background: var(--raised); }
+.tray-choice input { width: auto; margin: 0; accent-color: var(--accent); }
+.tray-choice-label { flex: none; font-size: 13px; }
+.tray-choice-example {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+  font-size: 12px;
+  color: var(--muted);
+}

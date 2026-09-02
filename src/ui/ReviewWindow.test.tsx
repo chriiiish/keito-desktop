@@ -276,6 +276,55 @@ describe("the shortcut recorder", () => {
   });
 });
 
+describe("the menu bar label settings", () => {
+  const openSettings = async () => {
+    const user = userEvent.setup();
+    render(<ReviewWindow />);
+    await user.click(await screen.findByRole("button", { name: "Settings" }));
+    return user;
+  };
+
+  it("offers radio buttons rather than dropdowns", async () => {
+    await openSettings();
+
+    expect(screen.getAllByRole("radio")).toHaveLength(5);
+    expect(screen.getByRole("radio", { name: /just the note/i })).toBeDefined();
+  });
+
+  it("checks the options currently in effect", async () => {
+    await openSettings();
+
+    expect((screen.getByRole("radio", { name: /just the note/i }) as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByRole("radio", { name: /show the task/i }) as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("shows what each option would produce", async () => {
+    await openSettings();
+
+    expect(screen.getByRole("radio", { name: /project, then the note/i })).toBeDefined();
+    expect(screen.getByText("Acme Rebuild: Sprint planning")).toBeDefined();
+  });
+
+  it("updates the preview as soon as a radio changes, not when the write returns", async () => {
+    const user = await openSettings();
+    // Never resolves: the preview must not be waiting on it.
+    api.setTrayLabel.mockReturnValue(new Promise(() => {}));
+
+    await user.click(screen.getByRole("radio", { name: /task, then the note/i }));
+
+    expect(screen.getByTestId("tray-preview").textContent).toBe("Development: Sprint planning");
+  });
+
+  it("saves both settings together so one cannot clobber the other", async () => {
+    const user = await openSettings();
+    api.setTrayLabel.mockResolvedValue(snapshot);
+
+    await user.click(screen.getByRole("radio", { name: /show the project/i }));
+
+    expect(api.setTrayLabel).toHaveBeenCalledWith({ prefix: "none", fallback: "project" });
+  });
+});
+
 describe("the connection tab", () => {
   it("leads with success, not with a disconnect button", async () => {
     const user = userEvent.setup();
