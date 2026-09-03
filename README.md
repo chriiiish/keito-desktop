@@ -134,12 +134,14 @@ If this made your life easier, consider buying me a coffee ❤️
   
 - **The running task in your menu bar.** Configurable: the note by default, falling back to
   the task when blank, or the project instead — optionally prefixed with either.  
-  <!--todo mac image -->
+  <img width="203" height="27" alt="image" src="https://github.com/user-attachments/assets/36a84d63-926c-412f-8bdb-337b3bd54935" />
   <img width="367" height="102" alt="image" src="https://github.com/user-attachments/assets/e18b3832-c26a-40e8-9e69-52ecdb6dafaa" />
 
 
 - **Idle detection.** Away for 10+ minutes? On return it offers to trim the idle span. A
-  timer left running past 10 hours is stopped automatically.  
+  timer left running past 10 hours is stopped automatically.
+  <img width="420" height="128" alt="image" src="https://github.com/user-attachments/assets/16624efc-bcf5-4489-a265-3ba252d5cdc9" />
+
   
 - **Switch off categories you never use**, per task or a whole project at once. Favourites
   and anything used in the last 30 days stay visible regardless.  
