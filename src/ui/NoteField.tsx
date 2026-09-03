@@ -3,6 +3,7 @@ import { searchWorkItems } from "../core/azure/search.js";
 import { workItemNote } from "../core/azure/note.js";
 import type { WorkItem } from "../core/azure/types.js";
 import { AzureLogo } from "./AzureLogo.js";
+import { scrollTopFor } from "./scroll.js";
 
 const optionId = (index: number) => `work-item-${index}`;
 
@@ -31,6 +32,7 @@ export const NoteField = forwardRef<NoteFieldHandle, {
 }>(function NoteField({ value, onChange, workItems, connected }, ref) {
   const inputRef = useRef<HTMLInputElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
   const [open, setOpen] = useState(false);
   const [cursor, setCursor] = useState(0);
 
@@ -49,6 +51,28 @@ export const NoteField = forwardRef<NoteFieldHandle, {
   useEffect(() => {
     setCursor((current) => (current < matches.length ? current : 0));
   }, [matches.length]);
+
+  /**
+   * Keep the highlighted row on screen.
+   *
+   * The list scrolls, and arrowing past its bottom edge moved the highlight without moving
+   * the list — so holding the down arrow walked the selection somewhere invisible and the
+   * next Enter picked a work item nobody could see.
+   *
+   * Runs after every cursor change including the ones a filter causes, since narrowing the
+   * list renumbers the rows underneath the highlight.
+   */
+  useEffect(() => {
+    const list = listRef.current;
+    const row = list?.children[cursor];
+    if (!list || !(row instanceof HTMLElement)) return;
+
+    const next = scrollTopFor(
+      { top: row.offsetTop, height: row.offsetHeight },
+      { scrollTop: list.scrollTop, height: list.clientHeight },
+    );
+    if (next !== null) list.scrollTop = next;
+  }, [cursor, open, matches.length]);
 
   // Clicking away closes the list without touching what was typed.
   useEffect(() => {
@@ -144,7 +168,7 @@ export const NoteField = forwardRef<NoteFieldHandle, {
         aria-activedescendant={open && matches[cursor] ? optionId(cursor) : undefined}
       />
       {open && matches.length > 0 && (
-        <ul role="listbox" id="work-item-listbox" className="work-item-list">
+        <ul ref={listRef} role="listbox" id="work-item-listbox" className="work-item-list">
           {matches.map((item, index) => (
             <li
               key={item.id}
