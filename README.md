@@ -21,11 +21,6 @@ Grab the latest build from the
 | **macOS**, Intel | `Keito-Timer-<version>-Intel-Mac.dmg` |
 | **Windows** | `Keito-Timer-<version>-Windows.exe` |
 
-Not sure which Mac you have? Apple menu → **About This Mac**. A chip named "Apple M1" or
-later means Apple Silicon; anything naming an Intel processor means the Intel build.
-
-Ignore the *Source code* archives — GitHub attaches those to every release and you do not
-need them to install the app.
 
 ### 2. Get past the first-launch warning
 
@@ -44,7 +39,8 @@ scroll down, and press **Open Anyway**.
 
 ### 3. Connect it to Keito
 
-The app opens its settings window on first launch and asks for two things.
+The app opens its settings window on first launch and asks for two things. You will
+need to get these from your Keito administrator.
 
 **An API key.** In Keito: Settings → Integrations → create a **full-access integration
 key**. It starts `kto_`.
@@ -52,23 +48,20 @@ key**. It starts `kto_`.
 > A *personal read-only sync key* will not work. It cannot create time entries, so the app
 > rejects it at setup rather than letting your first switch fail.
 
-**A Company ID.** Also in your Keito account settings. This is not optional and cannot be
-detected for you: Keito requires a `Keito-Account-Id` header on every request — including
-the `/users/me` call that would otherwise be used to look it up, which answers
-`400 Missing Keito-Account-Id header` without it.
+**A Company ID.** Also in your Keito account settings.
 
 You can change the Company ID later from Settings without re-entering the key.
 
 Your key is encrypted at rest by the operating system — Keychain on macOS, DPAPI on
-Windows — and is never written to `preferences.json` or to the log.
+Windows.
 
 ### 4. Use it
 
 The app lives in the **menu bar** (macOS) or the **system tray** (Windows), not the Dock or
 taskbar. There is no main window; closing the settings window does not quit it.
 
-Press **`⌘⇧K`** (macOS) or **`Ctrl+Shift+K`** (Windows) from anywhere, type a few letters to
-filter, press `⏎`. That is the whole loop.
+Press **`⌘⇧K`** (macOS) or **`Ctrl+Shift+K`** (Windows) from anywhere, enter in a note or
+just hit ENTER to start recording time.
 
 ### Something wrong?
 
@@ -91,6 +84,11 @@ curl -sS -i https://app.keito.ai/api/v2/users/me \
 
 ---
 
+If this made your life easier, consider buying me a coffee ❤️
+[!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/chris.lloyd)
+
+---
+
 ## What it does
 
 - **Tray popover on a global hotkey** (default `⌘⇧K` / `Ctrl+Shift+K`, changed by pressing
@@ -98,7 +96,7 @@ curl -sS -i https://app.keito.ai/api/v2/users/me \
   note, press `⏎`.
 - **Favourites first**, then your three most recent, then every project with its tasks
   beneath it. Filter by typing; star anything from inside the dropdown.
-- **Today and yesterday listed under the note.** Today's work resumes in one click;
+- **Today and yesterday listed.** Today's work resumes in one click;
   yesterday's copies the category and note onto a new entry dated today, so last night's
   timesheet is not reopened.
 - **One row per task, totalled.** Coming back to something after lunch adds to it rather
