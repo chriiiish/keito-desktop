@@ -1,7 +1,7 @@
 # Keito Timer
 
 A small cross-platform desktop app for switching time entries in [Keito](https://keito.ai)
-without leaving what you're doing. Press a global hotkey, type a note and hit enter. Boom -
+without leaving what you're doing. Press a global hotkey, type a note and hit Enter. Boom -
 you're recording your time.
 
 It is not an official Keito product. It is built on Keito's public API.
