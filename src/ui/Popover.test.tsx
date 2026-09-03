@@ -930,9 +930,27 @@ describe("a task worked on more than once in a day", () => {
 
 describe("the note field with Azure DevOps", () => {
   const workItems = [
-    { id: 1234, title: "Fix the login redirect", type: "Bug", state: "Active" },
-    { id: 1240, title: "Login page copy", type: "Task", state: "New" },
-    { id: 88, title: "Rework the timesheet export", type: "User Story", state: "Active" },
+    {
+      id: 1234,
+      title: "Fix the login redirect",
+      project: "Acme Web",
+      state: "Active",
+      changedDate: "2026-09-03T11:00:00Z",
+    },
+    {
+      id: 1240,
+      title: "Login page copy",
+      project: "Acme Web",
+      state: "New",
+      changedDate: "2026-09-03T10:00:00Z",
+    },
+    {
+      id: 88,
+      title: "Rework the timesheet export",
+      project: "Acme Billing",
+      state: "Active",
+      changedDate: "2026-09-02T09:00:00Z",
+    },
   ];
 
   const connected = (over: Partial<Snapshot["azure"]> = {}): Snapshot => ({
@@ -1080,5 +1098,88 @@ describe("the note field with Azure DevOps", () => {
     await user.type(await screen.findByPlaceholderText("What are you working on?"), "login");
 
     expect(screen.queryByRole("listbox")).toBeNull();
+  });
+});
+
+describe("browsing the work item list", () => {
+  const many = Array.from({ length: 40 }, (_, i) => ({
+    id: 100 + i,
+    title: `Work item ${100 + i}`,
+    project: i % 2 === 0 ? "Acme Web" : "Acme Billing",
+    state: "Active",
+    changedDate: `2026-09-03T${String(23 - (i % 24)).padStart(2, "0")}:00:00Z`,
+  }));
+
+  const withItems = (items: typeof many) =>
+    ({
+      ...snapshot,
+      azure: {
+        enabled: true,
+        status: "connected" as const,
+        organisationUrl: "https://dev.azure.com/acme",
+        hasToken: true,
+        workItems: items,
+        error: null,
+      },
+    }) satisfies Snapshot;
+
+  it("shows the project rather than the work item type", async () => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(withItems(many.slice(0, 2)));
+    render(<Popover />);
+
+    await user.click(await screen.findByPlaceholderText(/What are you working on/));
+    await user.keyboard("{ArrowDown}");
+
+    expect(screen.getByText("Acme Web")).toBeDefined();
+    expect(screen.getByText("Acme Billing")).toBeDefined();
+  });
+
+  it("offers every assigned item rather than a shortlist, and scrolls", async () => {
+    // The down arrow is the only way to browse what is assigned to you, so cutting the
+    // list to a handful would hide most of it.
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(withItems(many));
+    render(<Popover />);
+
+    await user.click(await screen.findByPlaceholderText(/What are you working on/));
+    await user.keyboard("{ArrowDown}");
+
+    expect(screen.getAllByRole("option")).toHaveLength(40);
+  });
+
+  it("opens the list when the Azure mark is clicked", async () => {
+    // The mark is the most obvious thing to click when you want to see your tickets.
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(withItems(many.slice(0, 3)));
+    render(<Popover />);
+
+    await user.click(await screen.findByRole("button", { name: /show your azure devops work items/i }));
+
+    expect(screen.getByRole("listbox")).toBeDefined();
+  });
+
+  it("closes it again on a second click", async () => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(withItems(many.slice(0, 3)));
+    render(<Popover />);
+    const mark = await screen.findByRole("button", { name: /show your azure devops work items/i });
+
+    await user.click(mark);
+    await user.click(screen.getByRole("button", { name: /hide your azure devops work items/i }));
+
+    expect(screen.queryByRole("listbox")).toBeNull();
+  });
+
+  it("keeps the caret in the note after the mark is clicked", async () => {
+    // Clicking the mark is a way into the list, not a way out of the field you were typing
+    // in — the next keystroke has to go where it would have gone anyway.
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(withItems(many.slice(0, 3)));
+    render(<Popover />);
+
+    await user.click(await screen.findByRole("button", { name: /show your azure devops work items/i }));
+
+    expect(document.activeElement).toBe(screen.getByPlaceholderText(/What are you working on/));
   });
 });

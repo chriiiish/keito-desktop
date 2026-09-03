@@ -11,7 +11,7 @@ import { entryStartMs } from "../src/core/time/elapsed.js";
 import { isNewerVersion, type ReleaseSummary } from "../src/core/version/version.js";
 import { AzureClient, normaliseOrganisationUrl } from "../src/core/azure/client.js";
 import { AzureError } from "../src/core/azure/errors.js";
-import type { WorkItem } from "../src/core/azure/types.js";
+import type { OrganisationDiscovery, WorkItem } from "../src/core/azure/types.js";
 import type { SecretStore } from "./secrets.js";
 import type { Logger } from "./logger.js";
 
@@ -113,6 +113,18 @@ export interface Snapshot {
   trayFallback: TrayFallback;
   trayPrefix: TrayPrefix;
   error: string | null;
+}
+
+/** What to tell the user when the organisation could not be settled on its own. */
+function describeDiscovery(found: Exclude<OrganisationDiscovery, { outcome: "found" }>): string {
+  switch (found.outcome) {
+    case "several":
+      return `That token reaches ${found.organisations.length} organisations (${found.organisations.join(", ")}). Enter the URL of the one you want below and press Connect again.`;
+    case "none":
+      return "That token does not appear to belong to any Azure DevOps organisation. Enter your Azure DevOps URL below and press Connect again.";
+    case "no-access":
+      return `Could not read your profile to find your organisation, so enter your Azure DevOps URL below and press Connect again. Azure DevOps said: ${found.reason}`;
+  }
 }
 
 /**
@@ -527,10 +539,13 @@ export class AppService {
     try {
       if (!client.organisationUrl) {
         const found = await client.discoverOrganisation();
-        if (!found) {
-          this.#azureError =
-            "Could not work out your organisation from that token. Enter your Azure DevOps URL below and press Connect again.";
+        if (found.outcome !== "found") {
+          // Each outcome asks the user a different question, so each says so. The old
+          // single message could not tell "you are in two organisations" from "that token
+          // cannot read your profile", which left the failure undiagnosable.
+          this.#azureError = describeDiscovery(found);
           this.#azureConnected = false;
+          this.#log.warn(`Azure DevOps discovery: ${found.outcome} — ${this.#azureError}`);
           return this.snapshot();
         }
         this.#log.info(`Azure DevOps organisation discovered: ${found.organisationUrl}`);

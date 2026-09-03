@@ -220,12 +220,19 @@ button.primary:hover { filter: brightness(1.08); }
 
 .note-azure {
   position: absolute;
-  left: 7px;
+  left: 5px;
   display: flex;
-  pointer-events: none;
+  align-items: center;
   /* Above the input's own background, but never in the way of the caret. */
   z-index: 1;
+  border: none;
+  background: none;
+  padding: 2px;
+  border-radius: 4px;
+  cursor: pointer;
 }
+.note-azure:hover { background: var(--accent-soft); }
+.note-azure:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
 .azure-logo { display: block; }
 .azure-logo.muted { opacity: 0.35; }
 
@@ -251,7 +258,7 @@ button.primary:hover { filter: brightness(1.08); }
   margin: 0;
   padding: 4px 0;
   list-style: none;
-  max-height: 208px;
+  max-height: 240px;
   overflow-y: auto;
   background: var(--bg);
   border: 1px solid var(--rule);
@@ -268,9 +275,9 @@ button.primary:hover { filter: brightness(1.08); }
 .work-item-list li.cursor { background: var(--accent); color: var(--on-accent); }
 .work-item-id { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12px; }
 .work-item-list li.cursor .work-item-id,
-.work-item-list li.cursor .work-item-type { color: var(--on-accent); opacity: 0.8; }
+.work-item-list li.cursor .work-item-project { color: var(--on-accent); opacity: 0.8; }
 .work-item-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.work-item-type { font-size: 11px; color: var(--muted); }
+.work-item-project { font-size: 11px; color: var(--muted); white-space: nowrap; }
 
 /* ── Integrations ────────────────────────────────────────── */
 .integration-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }

@@ -1,7 +1,13 @@
 import type { WorkItem } from "./types.js";
 
-/** How many suggestions the note dropdown shows at once. */
-export const WORK_ITEM_SUGGESTIONS = 8;
+/**
+ * Everything matching is offered and the list scrolls, rather than being cut to a handful.
+ *
+ * A truncated list is fine when it is a shortcut to something you already know the name of,
+ * and wrong when it is the only way to browse what is assigned to you — which is what the
+ * down arrow is for. The client already caps the whole list at 200.
+ */
+export const WORK_ITEM_SUGGESTIONS = Number.POSITIVE_INFINITY;
 
 /**
  * Work items matching what has been typed, best first.

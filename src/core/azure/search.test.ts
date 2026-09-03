@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { searchWorkItems, WORK_ITEM_SUGGESTIONS } from "./search.js";
+import { searchWorkItems } from "./search.js";
 import type { WorkItem } from "./types.js";
 
-const item = (id: number, title: string): WorkItem => ({ id, title, type: "Task", state: "Active" });
+const item = (id: number, title: string): WorkItem => ({
+  id,
+  title,
+  project: "Acme Web",
+  state: "Active",
+  changedDate: "2026-09-03T09:00:00Z",
+});
 
 const items: WorkItem[] = [
   item(1234, "Fix the login redirect"),
@@ -53,9 +59,18 @@ describe("searchWorkItems", () => {
     expect(searchWorkItems(items, "  1234  ").map((i) => i.id)).toEqual([1234]);
   });
 
-  it("caps the list so the dropdown cannot run off the popover", () => {
+  it("offers everything that matches, because the list is for browsing", () => {
+    // Truncating is right for a shortcut to something you already know the name of, and
+    // wrong for the only way to see what is assigned to you. The list scrolls instead.
     const many = Array.from({ length: 50 }, (_, i) => item(i + 1, `Item ${i + 1}`));
-    expect(searchWorkItems(many, "")).toHaveLength(WORK_ITEM_SUGGESTIONS);
-    expect(searchWorkItems(many, "item")).toHaveLength(WORK_ITEM_SUGGESTIONS);
+
+    expect(searchWorkItems(many, "")).toHaveLength(50);
+    expect(searchWorkItems(many, "item")).toHaveLength(50);
+  });
+
+  it("still honours a limit when one is asked for", () => {
+    const many = Array.from({ length: 50 }, (_, i) => item(i + 1, `Item ${i + 1}`));
+
+    expect(searchWorkItems(many, "", 5)).toHaveLength(5);
   });
 });

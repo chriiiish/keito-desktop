@@ -5,7 +5,7 @@ import {
   AzureOrganisationUnknownError,
   AzureRequestError,
 } from "./errors.js";
-import type { AzureConnection, WorkItem } from "./types.js";
+import type { OrganisationDiscovery, WorkItem } from "./types.js";
 
 /** Where cross-organisation identity lives. Not on dev.azure.com — a different host entirely. */
 const PROFILE_HOST = "https://app.vssps.visualstudio.com";
@@ -33,7 +33,13 @@ WHERE [System.AssignedTo] = @Me
 ORDER BY [System.ChangedDate] DESC`;
 
 /** The fields the note field needs. Asking for fewer keeps the response small. */
-const FIELDS = ["System.Id", "System.Title", "System.WorkItemType", "System.State"];
+const FIELDS = [
+  "System.Id",
+  "System.Title",
+  "System.TeamProject",
+  "System.State",
+  "System.ChangedDate",
+];
 
 export interface AzureClientOptions {
   personalAccessToken: string;
@@ -86,39 +92,59 @@ export class AzureClient {
   }
 
   /**
-   * The organisation the PAT belongs to, or null when it cannot be read.
+   * Which organisation the token belongs to, and — when that cannot be settled — which of
+   * the four reasons applies.
    *
-   * Two requests against a different host to the work item API, and they need the
-   * **Profile (Read)** scope on top of Work Items (Read). A PAT scoped to a single
-   * organisation, or one without that scope, simply cannot answer — which is not an error
-   * worth showing, it is the cue to ask the user to paste the URL instead. Null rather
-   * than a throw, because the caller's next move is the same either way.
+   * Two requests against a different host to the work item API, needing **User Profile
+   * (Read)** on top of Work Items (Read). A token scoped to a single organisation, or one
+   * without that scope, cannot answer at all. None of that is an error worth throwing over:
+   * every outcome ends in asking the user something, and the point of naming them
+   * separately is that the four questions are different.
    */
-  async discoverOrganisation(): Promise<AzureConnection | null> {
+  async discoverOrganisation(): Promise<OrganisationDiscovery> {
+    let profile: { id?: string; publicAlias?: string };
     try {
-      const profile = await this.#json<{ id?: string }>(
+      profile = await this.#json(
         "GET",
         `${PROFILE_HOST}/_apis/profile/profiles/me?api-version=${API_VERSION}`,
       );
-      if (!profile.id) return null;
-
-      const accounts = await this.#json<{ value?: Array<{ accountName?: string }> }>(
-        "GET",
-        `${PROFILE_HOST}/_apis/accounts?memberId=${encodeURIComponent(profile.id)}&api-version=${API_VERSION}`,
-      );
-
-      // Exactly one is the only unambiguous answer. Someone in several organisations has
-      // to say which, and guessing at the first would silently pick the wrong workplace.
-      const names = (accounts.value ?? []).map((a) => a.accountName).filter(Boolean);
-      if (names.length !== 1) return null;
-
-      const url = `https://dev.azure.com/${names[0]}`;
-      this.#organisationUrl = url;
-      return { organisationUrl: url, discovered: true };
-    } catch {
-      // Missing scope, org-scoped PAT, offline — all mean "ask the user".
-      return null;
+    } catch (error) {
+      return {
+        outcome: "no-access",
+        reason: error instanceof AzureError ? error.message : String(error),
+      };
     }
+
+    // Both are the same value in Microsoft's own example, but publicAlias is what the
+    // accounts API is documented to take, so it leads and `id` is the fallback.
+    const memberId = profile.publicAlias ?? profile.id;
+    if (!memberId) return { outcome: "no-access", reason: "That token cannot read your profile." };
+
+    let accounts: { value?: Array<{ accountName?: string }> };
+    try {
+      accounts = await this.#json(
+        "GET",
+        `${PROFILE_HOST}/_apis/accounts?memberId=${encodeURIComponent(memberId)}&api-version=${API_VERSION}`,
+      );
+    } catch (error) {
+      return {
+        outcome: "no-access",
+        reason: error instanceof AzureError ? error.message : String(error),
+      };
+    }
+
+    const names = (accounts.value ?? [])
+      .map((account) => account.accountName)
+      .filter((name): name is string => Boolean(name));
+
+    if (names.length === 0) return { outcome: "none" };
+    // Choosing for someone in several organisations could silently pick the wrong
+    // workplace, so the names go back for them to choose between.
+    if (names.length > 1) return { outcome: "several", organisations: names };
+
+    const url = `https://dev.azure.com/${names[0]}`;
+    this.#organisationUrl = url;
+    return { outcome: "found", organisationUrl: url };
   }
 
   /**
@@ -158,7 +184,13 @@ export class AzureClient {
       const item = toWorkItem(raw);
       if (item) byId.set(item.id, item);
     }
-    return ids.map((id) => byId.get(id)).filter((item): item is WorkItem => item !== undefined);
+    const items = ids
+      .map((id) => byId.get(id))
+      .filter((item): item is WorkItem => item !== undefined);
+
+    // WIQL already asks for most-recently-changed first, but the sort is repeated on the
+    // field itself so the order holds even if the query or the endpoint's ordering changes.
+    return items.sort((a, b) => changedAt(b) - changedAt(a));
   }
 
   /** Round-trips the credentials, so Connect fails at setup rather than silently later. */
@@ -240,6 +272,19 @@ export class AzureClient {
   }
 }
 
+/**
+ * When a work item last changed, as something sortable.
+ *
+ * A missing or unreadable date is `-Infinity` so it sorts *last*. Subtracting `NaN` — which
+ * is what `Date.parse(null)` gives — makes every comparison NaN, and a comparator returning
+ * NaN leaves the order untouched rather than putting the undated item anywhere in
+ * particular.
+ */
+function changedAt(item: WorkItem): number {
+  const parsed = item.changedDate ? Date.parse(item.changedDate) : NaN;
+  return Number.isNaN(parsed) ? -Infinity : parsed;
+}
+
 interface AzureWorkItemResponse {
   id?: number;
   fields?: Record<string, unknown>;
@@ -255,8 +300,9 @@ function toWorkItem(raw: AzureWorkItemResponse): WorkItem | null {
   return {
     id: raw.id,
     title: text("System.Title"),
-    type: text("System.WorkItemType"),
+    project: text("System.TeamProject"),
     state: text("System.State"),
+    changedDate: text("System.ChangedDate") || null,
   };
 }
 

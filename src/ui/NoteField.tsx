@@ -103,12 +103,28 @@ export const NoteField = forwardRef<NoteFieldHandle, {
   return (
     <div className={`note-field${offered ? " has-work-items" : ""}`} ref={rootRef}>
       {connected && (
-        <span
+        /*
+         * A button, not decoration: the mark is the most obvious thing to click when you
+         * want to see what is assigned to you, and a logo that looks clickable and is not
+         * is worse than no logo. `tabIndex={-1}` keeps it out of the tab order — the input
+         * beside it is the focusable thing, and Tab should not stop on an icon that only
+         * repeats what ↓ already does.
+         */
+        <button
+          type="button"
           className="note-azure"
+          tabIndex={-1}
+          aria-label={open ? "Hide your Azure DevOps work items" : "Show your Azure DevOps work items"}
           title="Azure DevOps — type to search the work items assigned to you, or press ↓"
+          onClick={() => {
+            if (!offered) return;
+            setOpen((wasOpen) => !wasOpen);
+            setCursor(0);
+            inputRef.current?.focus();
+          }}
         >
           <AzureLogo />
-        </span>
+        </button>
       )}
       <input
         ref={inputRef}
@@ -144,7 +160,7 @@ export const NoteField = forwardRef<NoteFieldHandle, {
             >
               <span className="work-item-id">{item.id}</span>
               <span className="work-item-title">{item.title}</span>
-              {item.type && <span className="work-item-type">{item.type}</span>}
+              {item.project && <span className="work-item-project">{item.project}</span>}
             </li>
           ))}
         </ul>

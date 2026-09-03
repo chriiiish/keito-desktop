@@ -1299,7 +1299,9 @@ describe("the integrations tab", () => {
         status: "connected",
         hasToken: true,
         organisationUrl: "https://dev.azure.com/acme",
-        workItems: [{ id: 1, title: "One", type: "Task", state: "Active" }],
+        workItems: [
+          { id: 1, title: "One", project: "Acme Web", state: "Active", changedDate: null },
+        ],
       }),
     );
     await openIntegrations();

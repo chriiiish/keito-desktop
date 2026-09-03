@@ -320,14 +320,24 @@ can be `1842: Login redirect drops the return URL` without typing it.
   than that is not one anybody scrolls.
 - **`project` is optional.** `POST https://dev.azure.com/{org}/_apis/wit/wiql` searches the
   whole organisation, so the user nominates an organisation and never a project.
+- **`System.ChangedDate` is fetched and sorted on**, rather than trusting WIQL's
+  `ORDER BY` to survive the second call. An item with no readable date sorts *last* —
+  `Date.parse(null)` is `NaN`, and a comparator that returns `NaN` leaves the order
+  untouched instead of putting the undated item anywhere in particular.
 - **The organisation cannot be read from the token alone without another scope.**
   Discovery is `profiles/me` then `/_apis/accounts?memberId=…` on **app.vssps.visualstudio.com**,
   a different host, and needs **User Profile (Read)** on top of Work Items (Read) *and* a token
   that is not scoped to a single organisation — which plenty of enterprises forbid. So
   discovery is attempted and its failure is not an error: it is the cue to ask for the URL.
-  `discoverOrganisation` returns null rather than throwing, and **refuses to choose when a
-  token reaches several organisations**, because guessing would silently pick the wrong
-  workplace.
+
+  `discoverOrganisation` answers with **which of four things happened** — `found`,
+  `several`, `none`, or `no-access` — rather than a URL or null. It returned null for all
+  of them once, and the single message that produced ("could not work out your
+  organisation") could not tell *you are in two organisations* from *that token cannot read
+  your profile*, which made a real failure undiagnosable from the outside. `several` carries
+  the names, because someone in two organisations needs to know which two. `publicAlias`
+  leads `id` as the `memberId`, being what the accounts API documents; the fake returns
+  different values for the two so reaching for the wrong one fails a test.
 
 **A URL, not an organisation name.** `azureOrganisationUrl` holds
 `https://dev.azure.com/acme` rather than `acme`, which costs nothing and is what lets an

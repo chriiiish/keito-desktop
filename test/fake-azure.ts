@@ -26,6 +26,7 @@ export interface FakeAzureRequest {
   method: string;
   path: string;
   authorization: string | null;
+  query: Record<string, string>;
 }
 
 export class FakeAzure {
@@ -57,13 +58,20 @@ export class FakeAzure {
     const method = init?.method ?? "GET";
     const headers = new Headers(init?.headers);
     const authorization = headers.get("Authorization");
-    this.requests.push({ method, path: url.pathname, authorization });
+    this.requests.push({
+      method,
+      path: url.pathname,
+      authorization,
+      query: Object.fromEntries(url.searchParams),
+    });
 
     if (!this.#authorised(authorization)) return this.#signInPage();
 
     if (url.pathname === "/_apis/profile/profiles/me") {
       if (!this.#options.profileReadable) return this.#signInPage();
-      return json({ id: "member-uuid" });
+      // Deliberately different values, so a client that reaches for the wrong one is
+      // caught. The live API returns the same uuid for both, which would hide the mistake.
+      return json({ id: "profile-id-uuid", publicAlias: "public-alias-uuid" });
     }
 
     if (url.pathname === "/_apis/accounts") {
@@ -95,8 +103,9 @@ export class FakeAzure {
           id: item.id,
           fields: {
             "System.Title": item.title,
-            "System.WorkItemType": item.type,
+            "System.TeamProject": item.project,
             "System.State": item.state,
+            "System.ChangedDate": item.changedDate,
           },
         }));
       return json({ count: found.length, value: this.#options.shuffleDetail ? found.reverse() : found });
