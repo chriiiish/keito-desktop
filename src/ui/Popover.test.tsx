@@ -986,6 +986,14 @@ describe("the note field with Azure DevOps", () => {
     expect(api.switchTo).toHaveBeenCalledWith("p_acme:t_qa", "Just a note");
   });
 
+  it("says what the mark means on hover", async () => {
+    api.getSnapshot.mockResolvedValue(connected());
+    render(<Popover />);
+
+    const mark = await screen.findByRole("button", { name: /azure devops work items/i });
+    expect(mark.getAttribute("title")).toBe("Connected to Azure DevOps");
+  });
+
   it("shows the Azure mark once connected", async () => {
     api.getSnapshot.mockResolvedValue(connected());
     render(<Popover />);

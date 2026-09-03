@@ -115,7 +115,9 @@ export const NoteField = forwardRef<NoteFieldHandle, {
           className="note-azure"
           tabIndex={-1}
           aria-label={open ? "Hide your Azure DevOps work items" : "Show your Azure DevOps work items"}
-          title="Azure DevOps — type to search the work items assigned to you, or press ↓"
+          // The tooltip says what the mark *means*; the placeholder beside it already says
+          // what to do with it, so repeating that here would be the third telling.
+          title="Connected to Azure DevOps"
           onClick={() => {
             if (!offered) return;
             setOpen((wasOpen) => !wasOpen);
