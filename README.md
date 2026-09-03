@@ -1,4 +1,10 @@
 # Keito Timer
+[![CI](https://github.com/chriiiish/keito-desktop/actions/workflows/ci.yml/badge.svg)](https://github.com/chriiiish/keito-desktop/actions/workflows/ci.yml)
+![GitHub Release](https://img.shields.io/github/v/release/chriiiish/keito-desktop?label=Latest%20Stable&color=bright%20green)
+![Static Badge](https://img.shields.io/badge/Buy%20me%20a%20Coffee%20%E2%98%95-Donate-bright%20green?link=https%3A%2F%2Fbuymeacoffee.com%2Fchris.lloyd)
+
+
+
 
 A small cross-platform desktop app for switching time entries in [Keito](https://keito.ai)
 without leaving what you're doing. Press a global hotkey, type a note and hit Enter. Boom -
