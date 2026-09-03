@@ -280,7 +280,27 @@ button.primary:hover { filter: brightness(1.08); }
 .work-item-project { font-size: 11px; color: var(--muted); white-space: nowrap; }
 
 /* ── Integrations ────────────────────────────────────────── */
-.integration-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.integration-row { display: flex; align-items: center; gap: 10px; padding: 4px 0; }
+.integration-row .disclosure { display: flex; align-items: center; gap: 7px; flex: 1; }
+.integration-name { font-weight: 500; }
+/*
+ * A mark, not an emoji. ⚠ renders as a colour glyph on macOS and would be the only one in
+ * the app; this is drawn, so it matches the tray and play icons rather than the keyboard.
+ */
+.integration-alert {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--danger);
+  color: var(--bg);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+#azure-panel { padding-top: 4px; }
 .integration-status { font-size: 12px; color: var(--muted); }
 .integration-status.connected { color: var(--success); }
 .integration-status.error { color: var(--danger); }

@@ -1194,7 +1194,17 @@ describe("the licence on the about tab", () => {
 });
 
 describe("the integrations tab", () => {
+  /** Opens the tab and expands the Azure section, which starts collapsed. */
   const openIntegrations = async () => {
+    const user = userEvent.setup();
+    render(<ReviewWindow />);
+    await user.click(await screen.findByRole("button", { name: "Integrations" }));
+    await user.click(screen.getByRole("button", { expanded: false }));
+    return user;
+  };
+
+  /** Opens the tab and leaves the Azure section as it is found. */
+  const openIntegrationsCollapsed = async () => {
     const user = userEvent.setup();
     render(<ReviewWindow />);
     await user.click(await screen.findByRole("button", { name: "Integrations" }));
@@ -1219,7 +1229,63 @@ describe("the integrations tab", () => {
     await openIntegrations();
 
     expect(screen.getByText("Azure DevOps")).toBeDefined();
-    expect(screen.queryByLabelText(/personal access token/i)).toBeNull();
+    expect(screen.queryByLabelText("Personal access token")).toBeNull();
+  });
+
+  it("starts collapsed, showing only whether it is working", async () => {
+    // Almost every visit is not a setup: the scopes and two credential fields are a wall
+    // in front of the one thing worth seeing at a glance.
+    api.getSnapshot.mockResolvedValue(azure({ enabled: true, status: "needs-token" }));
+    await openIntegrationsCollapsed();
+
+    expect(screen.getByRole("button", { expanded: false })).toBeDefined();
+    expect(screen.getByText("Azure DevOps")).toBeDefined();
+    expect(screen.getByText(/needs a personal access token/i)).toBeDefined();
+  });
+
+  it("expands to the setup form when the name is clicked", async () => {
+    api.getSnapshot.mockResolvedValue(azure({ enabled: true, status: "needs-token" }));
+    const user = await openIntegrationsCollapsed();
+
+    await user.click(screen.getByRole("button", { expanded: false }));
+
+    expect(screen.getByRole("button", { expanded: true })).toBeDefined();
+    expect(screen.getByLabelText("Personal access token")).toBeDefined();
+  });
+
+  it("marks the row when it is switched on but has no token", async () => {
+    // Collapsed, an integration that has quietly stopped feeding the note field would
+    // otherwise look exactly like one that is fine.
+    api.getSnapshot.mockResolvedValue(azure({ enabled: true, status: "needs-token" }));
+    await openIntegrationsCollapsed();
+
+    expect(screen.getByLabelText("Azure DevOps is not set up")).toBeDefined();
+  });
+
+  it("marks the row when the token has stopped working", async () => {
+    api.getSnapshot.mockResolvedValue(
+      azure({ enabled: true, status: "error", hasToken: true, error: "Token expired" }),
+    );
+    await openIntegrationsCollapsed();
+
+    expect(screen.getByLabelText("Azure DevOps is not connected")).toBeDefined();
+  });
+
+  it("leaves the row unmarked when it is working", async () => {
+    api.getSnapshot.mockResolvedValue(
+      azure({ enabled: true, status: "connected", hasToken: true }),
+    );
+    await openIntegrationsCollapsed();
+
+    expect(screen.queryByLabelText(/Azure DevOps is not/)).toBeNull();
+  });
+
+  it("leaves the row unmarked when it is deliberately switched off", async () => {
+    // Off is a decision, not a fault.
+    api.getSnapshot.mockResolvedValue(azure());
+    await openIntegrationsCollapsed();
+
+    expect(screen.queryByLabelText(/Azure DevOps is not/)).toBeNull();
   });
 
   it("names the one scope the token needs", async () => {
@@ -1247,14 +1313,14 @@ describe("the integrations tab", () => {
     await openIntegrations();
 
     expect(screen.getByLabelText(/organisation url/i)).toBeDefined();
-    expect(screen.getByLabelText(/personal access token/i)).toBeDefined();
+    expect(screen.getByLabelText("Personal access token")).toBeDefined();
   });
 
   it("cannot connect without a URL", async () => {
     api.getSnapshot.mockResolvedValue(azure({ enabled: true, status: "needs-token" }));
     const user = await openIntegrations();
 
-    await user.type(screen.getByLabelText(/personal access token/i), "pat_secret");
+    await user.type(screen.getByLabelText("Personal access token"), "pat_secret");
 
     expect(screen.getByRole("button", { name: "Connect" }).hasAttribute("disabled")).toBe(true);
   });
@@ -1265,7 +1331,7 @@ describe("the integrations tab", () => {
     const user = await openIntegrations();
 
     await user.type(screen.getByLabelText(/organisation url/i), "https://dev.azure.com/acme");
-    await user.type(screen.getByLabelText(/personal access token/i), "pat_secret");
+    await user.type(screen.getByLabelText("Personal access token"), "pat_secret");
     await user.click(screen.getByRole("button", { name: "Connect" }));
 
     expect(api.connectAzure).toHaveBeenCalledWith("pat_secret", "https://dev.azure.com/acme");
@@ -1315,7 +1381,7 @@ describe("the integrations tab", () => {
     );
     await openIntegrations();
 
-    const field = screen.getByLabelText(/personal access token/i) as HTMLInputElement;
+    const field = screen.getByLabelText("Personal access token") as HTMLInputElement;
     expect(field.value).toBe("");
     expect(field.type).toBe("password");
     expect(field.placeholder).toMatch(/a token is stored/i);

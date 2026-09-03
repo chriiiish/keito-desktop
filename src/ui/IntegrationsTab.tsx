@@ -15,23 +15,56 @@ export function IntegrationsTab({
 }): JSX.Element {
   const azure = snapshot.azure;
 
+  /**
+   * Collapsed to start with, like a project in Projects.
+   *
+   * Almost every visit to this tab is not about setting an integration up — it is already
+   * set up, or deliberately off — so the scopes, the instructions and two credential
+   * fields are a wall in front of the one thing worth seeing at a glance: whether the
+   * thing is working. The row says that; the panel is there when you want it.
+   */
+  const [open, setOpen] = useState(false);
+
+  /**
+   * Switched on but not working: no token yet, or one Azure has stopped accepting.
+   *
+   * Worth a mark on the collapsed row precisely because it is collapsed — an integration
+   * that has quietly stopped feeding the note field would otherwise look identical to one
+   * that is fine, and the first you would know is tickets no longer appearing.
+   */
+  const needsAttention = azure.enabled && (azure.status === "needs-token" || azure.status === "error");
+
   return (
     <section className="settings integrations">
-      <h2>Azure DevOps</h2>
-      <p className="hint">
-        Put a work item in the note without typing it. With this on, the note field lists
-        the open work items assigned to you — start typing to search them, or press{" "}
-        <kbd>↓</kbd> to see the list. A note is still just a note if you would rather type
-        one.
-      </p>
-
       <div className="integration-row">
-        <Toggle
-          checked={azure.enabled}
-          onChange={(next) => keito.setAzureEnabled(next).then(onChange)}
-          label="Azure DevOps"
-        />
-        <AzureLogo className={azure.status === "connected" ? "" : "muted"} />
+        <button
+          type="button"
+          className="disclosure"
+          aria-expanded={open}
+          aria-controls="azure-panel"
+          onClick={() => setOpen((wasOpen) => !wasOpen)}
+        >
+          <span className="chevron" aria-hidden="true">
+            ▸
+          </span>
+          <AzureLogo className={azure.status === "connected" ? "" : "muted"} />
+          <span className="integration-name">Azure DevOps</span>
+          {needsAttention && (
+            <span
+              className="integration-alert"
+              role="img"
+              aria-label={
+                azure.status === "error"
+                  ? "Azure DevOps is not connected"
+                  : "Azure DevOps is not set up"
+              }
+              title={azure.error ?? "Switched on, but not connected yet."}
+            >
+              !
+            </span>
+          )}
+        </button>
+
         <span className={`integration-status ${azure.status}`}>
           {azure.status === "connected"
             ? `Connected${azure.organisationUrl ? ` — ${organisationName(azure.organisationUrl)}` : ""}`
@@ -41,9 +74,24 @@ export function IntegrationsTab({
                 ? "Needs a personal access token"
                 : "Off"}
         </span>
+
+        <Toggle
+          checked={azure.enabled}
+          onChange={(next) => keito.setAzureEnabled(next).then(onChange)}
+          label="Azure DevOps"
+        />
       </div>
 
-      {azure.enabled && <AzureConnectionForm snapshot={snapshot} onChange={onChange} />}
+      <div id="azure-panel" hidden={!open}>
+        <p className="hint">
+          Put a work item in the note without typing it. With this on, the note field lists
+          the open work items assigned to you — start typing to search them, or press{" "}
+          <kbd>↓</kbd> to see the list. A note is still just a note if you would rather type
+          one.
+        </p>
+
+        {azure.enabled && <AzureConnectionForm snapshot={snapshot} onChange={onChange} />}
+      </div>
     </section>
   );
 }
