@@ -1016,6 +1016,20 @@ describe("the note field with Azure DevOps", () => {
     expect(screen.queryByText("Fix the login redirect")).toBeNull();
   });
 
+  it("keeps the most recently updated first while filtering", async () => {
+    // Matching decides what is offered, never the order. Ranking by how well something
+    // matched meant the list reshuffled with every keystroke.
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(connected());
+    render(<Popover />);
+
+    await user.type(await screen.findByPlaceholderText(/What are you working on/), "login");
+
+    const shown = screen.getAllByRole("option").map((row) => row.textContent);
+    expect(shown[0]).toContain("Fix the login redirect");
+    expect(shown[1]).toContain("Login page copy");
+  });
+
   it("finds a ticket by its number", async () => {
     const user = userEvent.setup();
     api.getSnapshot.mockResolvedValue(connected());

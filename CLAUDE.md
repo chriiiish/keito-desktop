@@ -320,6 +320,13 @@ can be `1842: Login redirect drops the return URL` without typing it.
   than that is not one anybody scrolls.
 - **`project` is optional.** `POST https://dev.azure.com/{org}/_apis/wit/wiql` searches the
   whole organisation, so the user nominates an organisation and never a project.
+- **Ordering is most-recently-updated first, everywhere, and matching never changes it.**
+  `searchWorkItems` filters; it does not rank. Ranking id matches above title-prefix matches
+  above substring matches meant the list reshuffled with every keystroke — the same tickets
+  in a different sequence depending on how far through the word you were. It sorts by
+  `changedDate` itself rather than relying on `AzureClient` having sorted first, because a
+  property that holds only because today's single caller happens to sort is not one worth
+  having.
 - **`System.ChangedDate` is fetched and sorted on**, rather than trusting WIQL's
   `ORDER BY` to survive the second call. An item with no readable date sorts *last* —
   `Date.parse(null)` is `NaN`, and a comparator that returns `NaN` leaves the order

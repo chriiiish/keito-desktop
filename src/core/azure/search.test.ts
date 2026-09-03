@@ -2,61 +2,68 @@ import { describe, expect, it } from "vitest";
 import { searchWorkItems } from "./search.js";
 import type { WorkItem } from "./types.js";
 
-const item = (id: number, title: string): WorkItem => ({
+/** `day` is the September date it last changed, so recency is readable in the fixtures. */
+const item = (id: number, title: string, day: number | null = 1): WorkItem => ({
   id,
   title,
   project: "Acme Web",
   state: "Active",
-  changedDate: "2026-09-03T09:00:00Z",
+  changedDate: day === null ? null : `2026-09-${String(day).padStart(2, "0")}T09:00:00Z`,
 });
 
+// Deliberately not in date order, so nothing can pass by preserving the input.
 const items: WorkItem[] = [
-  item(1234, "Fix the login redirect"),
-  item(1240, "Login page copy"),
-  item(88, "Rework the timesheet export"),
-  item(91, "Add a login audit trail"),
+  item(1234, "Fix the login redirect", 2),
+  item(1240, "Login page copy", 5),
+  item(88, "Rework the timesheet export", 9),
+  item(91, "Add a login audit trail", 7),
 ];
 
 describe("searchWorkItems", () => {
-  it("shows the most recent items when nothing has been typed", () => {
-    // The list arrives newest-changed first, so untouched it is already the right answer.
-    expect(searchWorkItems(items, "").map((i) => i.id)).toEqual([1234, 1240, 88, 91]);
+  it("lists everything most recently updated first when nothing has been typed", () => {
+    expect(searchWorkItems(items, "").map((i) => i.id)).toEqual([88, 91, 1240, 1234]);
+  });
+
+  it("orders matches by most recently updated, not by how well they matched", () => {
+    // An earlier version ranked id matches above title-prefix matches above substring
+    // matches, so typing reshuffled the list into an order that changed with every
+    // keystroke. One rule beats a cleverer one nobody can predict.
+    expect(searchWorkItems(items, "login").map((i) => i.id)).toEqual([91, 1240, 1234]);
   });
 
   it("finds a work item by the id someone typed", () => {
     expect(searchWorkItems(items, "1234").map((i) => i.id)).toEqual([1234]);
   });
 
-  it("puts an id match above a title match, since a bare number means the id", () => {
-    // "88" is the id of one item; nothing else should outrank it.
-    expect(searchWorkItems(items, "88").map((i) => i.id)[0]).toBe(88);
-  });
-
-  it("matches a partial id from the start", () => {
-    expect(searchWorkItems(items, "12").map((i) => i.id)).toEqual([1234, 1240]);
+  it("matches a partial id", () => {
+    expect(searchWorkItems(items, "12").map((i) => i.id)).toEqual([1240, 1234]);
   });
 
   it("matches titles case-insensitively", () => {
-    expect(searchWorkItems(items, "LOGIN").map((i) => i.id)).toEqual([1240, 1234, 91]);
+    expect(searchWorkItems(items, "LOGIN").map((i) => i.id)).toEqual([91, 1240, 1234]);
   });
 
-  it("ranks a title that starts with the query above one that merely contains it", () => {
-    const results = searchWorkItems(items, "login");
-    expect(results[0]!.id).toBe(1240);
-  });
-
-  it("keeps the server's order within a rank", () => {
-    // 1234 and 91 both merely contain "login"; 1234 came back first and stays first.
-    const results = searchWorkItems(items, "login").map((i) => i.id);
-    expect(results.indexOf(1234)).toBeLessThan(results.indexOf(91));
+  it("ignores surrounding whitespace", () => {
+    expect(searchWorkItems(items, "  1234  ").map((i) => i.id)).toEqual([1234]);
   });
 
   it("says nothing rather than guessing when nothing matches", () => {
     expect(searchWorkItems(items, "kubernetes")).toEqual([]);
   });
 
-  it("ignores surrounding whitespace", () => {
-    expect(searchWorkItems(items, "  1234  ").map((i) => i.id)).toEqual([1234]);
+  it("puts an item with no date last rather than at the top", () => {
+    const withUndated = [item(1, "Undated", null), item(2, "Dated", 1)];
+
+    expect(searchWorkItems(withUndated, "").map((i) => i.id)).toEqual([2, 1]);
+  });
+
+  it("does not reorder the list it was given", () => {
+    // A pure function that sorts its argument in place would quietly reorder the Snapshot.
+    const original = [...items];
+
+    searchWorkItems(items, "");
+
+    expect(items).toEqual(original);
   });
 
   it("offers everything that matches, because the list is for browsing", () => {
