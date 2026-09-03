@@ -6,6 +6,7 @@ import { AsyncButton, Spinner, useAsyncAction } from "./AsyncButton.js";
 import { HotkeyRecorder } from "./HotkeyRecorder.js";
 import { TrayLabelSettings } from "./TrayLabelSettings.js";
 import { ContributeTab } from "./ContributeTab.js";
+import { UpdateTab } from "./UpdateTab.js";
 import { ProjectsTab } from "./ProjectsTab.js";
 import { Toggle } from "./Toggle.js";
 import { useSnapshot } from "./useSnapshot.js";
@@ -19,7 +20,7 @@ function weekStart(today: string): string {
   return shiftDate(today, -weekday);
 }
 
-type Tab = "entries" | "projects" | "connection" | "settings" | "contribute";
+type Tab = "entries" | "projects" | "connection" | "settings" | "contribute" | "update";
 
 const TABS: ReadonlyArray<readonly [Tab, string]> = [
   ["entries", "Time Entries"],
@@ -28,6 +29,32 @@ const TABS: ReadonlyArray<readonly [Tab, string]> = [
   ["settings", "Settings"],
   ["contribute", "Contribute"],
 ];
+
+/**
+ * The update tab exists only while there is something to update to, so it is appended
+ * rather than living in TABS. A permanent tab that says "you are up to date" is a tab
+ * nobody opens twice; this one is only ever there when it has something to say.
+ *
+ * Dismissing the popover notice does not remove it — dismissal quietens the timer, it does
+ * not decide that the release is no longer worth finding.
+ */
+const UPDATE_TAB: readonly [Tab, string] = ["update", "Update Available"];
+
+/** Every tab this window can render, update included. */
+const ALL_TABS: ReadonlyArray<readonly [Tab, string]> = [...TABS, UPDATE_TAB];
+
+/**
+ * Is this one of the tabs this window renders?
+ *
+ * `show-tab` arrives over IPC as an arbitrary string, so it is checked rather than cast.
+ * An id with no matching pane would leave the window blank with nothing in the tab bar
+ * highlighted — a dead end a user could not click their way out of, since the state is
+ * only reachable through the event and no tab button sets it. Derived from the tab list
+ * itself so a tab added later cannot be forgotten here.
+ */
+function isTab(value: string): value is Tab {
+  return ALL_TABS.some(([id]) => id === value);
+}
 
 export function ReviewWindow(): JSX.Element {
   const [snapshot, setSnapshot] = useSnapshot();
@@ -62,6 +89,18 @@ export function ReviewWindow(): JSX.Element {
    * anything the main process set as soon as the page loaded. This also makes it
    * something the component tests can actually read.
    */
+  /**
+   * The popover's update notice opens this window on the update tab. An event rather than
+   * Snapshot state, so clicking away from the tab afterwards actually sticks.
+   */
+  useEffect(
+    () =>
+      keito.onShowTab((requested) => {
+        if (isTab(requested)) setTab(requested);
+      }),
+    [],
+  );
+
   const company = ready ? snapshot?.identity?.accountName?.trim() : undefined;
   useEffect(() => {
     document.title = company ? `Keito Timer - ${company}` : "Keito Timer";
@@ -69,14 +108,34 @@ export function ReviewWindow(): JSX.Element {
 
   if (!snapshot) return <div className="window loading">Loading…</div>;
 
-  // Nothing else can do anything useful until the connection works.
-  const active: Tab = snapshot.keyStatus === "ready" ? tab : "connection";
+  const update = snapshot.update;
+  const tabs = update ? ALL_TABS : TABS;
+
+  // The update tab is gone the moment the update is installed, so a window left open on
+  // it must fall back rather than render an empty pane.
+  const selected: Tab = tab === "update" && !update ? "entries" : tab;
+
+  /**
+   * Nothing else can do anything useful until the connection works — with one exception.
+   *
+   * The update tab is about the app, not the workspace: it needs no key, no catalog and no
+   * network beyond the check that already happened. Falling it back to the connection form
+   * would leave a tab in the bar that visibly does nothing when clicked, and would hide a
+   * release from the very user most likely to want it — someone whose key has just stopped
+   * working, for whom the newer version might be the fix.
+   */
+  const active: Tab =
+    snapshot.keyStatus === "ready" || selected === "update" ? selected : "connection";
 
   return (
     <div className="window">
       <nav className="tabs">
-        {TABS.map(([id, label]) => (
-          <button key={id} className={active === id ? "on" : ""} onClick={() => setTab(id)}>
+        {tabs.map(([id, label]) => (
+          <button
+            key={id}
+            className={`${active === id ? "on" : ""}${id === "update" ? " has-update" : ""}`.trim()}
+            onClick={() => setTab(id)}
+          >
             {label}
           </button>
         ))}
@@ -89,6 +148,7 @@ export function ReviewWindow(): JSX.Element {
       {active === "connection" && <Connection snapshot={snapshot} onChange={setSnapshot} />}
       {active === "settings" && <Settings snapshot={snapshot} onChange={setSnapshot} />}
       {active === "contribute" && <ContributeTab snapshot={snapshot} />}
+      {active === "update" && update && <UpdateTab snapshot={snapshot} update={update} />}
     </div>
   );
 }

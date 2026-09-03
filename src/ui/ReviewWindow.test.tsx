@@ -1,12 +1,12 @@
 /** @vitest-environment jsdom */
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { act, cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Snapshot } from "../../electron/service.js";
 
 const api = {
   getSnapshot: vi.fn(),
-  onSnapshot: vi.fn(() => () => {}),
+  onSnapshot: vi.fn((_handler: (snapshot: Snapshot) => void) => () => {}),
   listEntries: vi.fn(),
   setHidden: vi.fn(),
   toggleFavourite: vi.fn(),
@@ -19,6 +19,9 @@ const api = {
   resetAll: vi.fn(),
   openLog: vi.fn(),
   openExternal: vi.fn(),
+  openWindow: vi.fn(),
+  dismissUpdate: vi.fn(),
+  onShowTab: vi.fn((_handler: (tab: string) => void) => () => {}),
   updateEntry: vi.fn(),
   deleteEntry: vi.fn(),
 };
@@ -54,6 +57,7 @@ const snapshot: Snapshot = {
   canOpenAtLogin: true,
   platform: "darwin",
   appVersion: "0.1.0",
+  update: null,
   accountId: "co",
   apiKeyHint: "kto_••••••••abcd",
   trayFallback: "task",
@@ -957,5 +961,164 @@ describe("connecting", () => {
     await user.click(screen.getByRole("button", { name: "Settings" }));
 
     expect(screen.getByRole("heading", { name: "Danger Zone" })).toBeDefined();
+  });
+});
+
+const withUpdate = (over: Partial<NonNullable<Snapshot["update"]>> = {}) => ({
+  ...snapshot,
+  update: {
+    version: "0.4.0",
+    tag: "v0.4.0",
+    name: "0.4.0",
+    url: "https://github.com/chriiiish/keito-desktop/releases/tag/v0.4.0",
+    publishedAt: "2026-09-03T00:00:00Z",
+    notes: "## Download\n\nboilerplate the tab replaces\n\n## What's Changed\n* fix: fixed the thing by @chriiiish in https://github.com/x/pull/1",
+    dismissed: false,
+    ...over,
+  },
+});
+
+describe("the update tab", () => {
+  it("is not in the tab bar when there is nothing to update to", async () => {
+    api.getSnapshot.mockResolvedValue(snapshot);
+    render(<ReviewWindow />);
+    await screen.findByRole("button", { name: "Time Entries" });
+
+    expect(screen.queryByRole("button", { name: /Update Available/ })).toBeNull();
+  });
+
+  it("appears once a newer release is found", async () => {
+    api.getSnapshot.mockResolvedValue(withUpdate());
+    render(<ReviewWindow />);
+
+    expect(await screen.findByRole("button", { name: /Update Available/ })).toBeDefined();
+  });
+
+  it("shows both versions, so it is clear what the jump is", async () => {
+    api.getSnapshot.mockResolvedValue(withUpdate());
+    render(<ReviewWindow />);
+    await userEvent.setup().click(await screen.findByRole("button", { name: /Update Available/ }));
+
+    expect(screen.getByText(/Keito Timer 0\.4\.0 is available/)).toBeDefined();
+    expect(screen.getByText(/You are running 0\.1\.0/)).toBeDefined();
+  });
+
+  it("sends the download to the release page for that version", async () => {
+    api.getSnapshot.mockResolvedValue(withUpdate());
+    render(<ReviewWindow />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: /Update Available/ }));
+    await user.click(screen.getByRole("button", { name: /Download 0\.4\.0/ }));
+
+    expect(api.openExternal).toHaveBeenCalledWith(
+      "https://github.com/chriiiish/keito-desktop/releases/tag/v0.4.0",
+    );
+  });
+
+  it("says plainly that it does not update itself", async () => {
+    // These builds are ad-hoc signed, so there is no auto-updater and never silently
+    // will be. A user who downloads and then waits for something to happen is the
+    // failure this sentence exists to prevent.
+    api.getSnapshot.mockResolvedValue(withUpdate());
+    render(<ReviewWindow />);
+    await userEvent.setup().click(await screen.findByRole("button", { name: /Update Available/ }));
+
+    expect(screen.getByText(/does not update itself/)).toBeDefined();
+  });
+
+  it("stays available after the popover notice is dismissed", async () => {
+    // Dismissing quietens the timer; it does not decide the release is unfindable.
+    api.getSnapshot.mockResolvedValue(withUpdate({ dismissed: true }));
+    render(<ReviewWindow />);
+
+    expect(await screen.findByRole("button", { name: /Update Available/ })).toBeDefined();
+  });
+
+  it("shows what changed, without the download boilerplate the body leads with", async () => {
+    api.getSnapshot.mockResolvedValue(withUpdate());
+    render(<ReviewWindow />);
+    await userEvent.setup().click(await screen.findByRole("button", { name: /Update Available/ }));
+
+    expect(screen.getByText("fix: fixed the thing")).toBeDefined();
+    expect(screen.queryByText(/boilerplate the tab replaces/)).toBeNull();
+  });
+
+  it("omits the notes heading for a release with no changelog to show", async () => {
+    api.getSnapshot.mockResolvedValue(withUpdate({ notes: null }));
+    render(<ReviewWindow />);
+    await userEvent.setup().click(await screen.findByRole("button", { name: /Update Available/ }));
+
+    expect(screen.queryByText("What changed")).toBeNull();
+  });
+
+  it("falls back to the entries tab if the update goes away while it is open", async () => {
+    // Installing the update removes the tab. A window sitting on it must land somewhere
+    // real rather than render an empty pane.
+    api.getSnapshot.mockResolvedValue(withUpdate());
+    const { rerender } = render(<ReviewWindow />);
+    await userEvent.setup().click(await screen.findByRole("button", { name: /Update Available/ }));
+    expect(screen.getByText(/Keito Timer 0\.4\.0 is available/)).toBeDefined();
+
+    // The snapshot the window is holding is replaced by a broadcast, so drive the
+    // subscription the same way the main process would.
+    const push = api.onSnapshot.mock.calls[0]![0];
+    await act(async () => push(snapshot));
+    rerender(<ReviewWindow />);
+
+    expect(screen.queryByText(/Keito Timer 0\.4\.0 is available/)).toBeNull();
+    expect(screen.queryByRole("button", { name: /Update Available/ })).toBeNull();
+  });
+
+  it("ignores a tab id it does not render, rather than blanking the window", async () => {
+    // show-tab arrives over IPC as an arbitrary string. An unknown id would otherwise
+    // leave no pane rendered and nothing highlighted, and no tab button can set that
+    // state, so there would be no way to click out of it.
+    api.getSnapshot.mockResolvedValue(withUpdate());
+    render(<ReviewWindow />);
+    await screen.findByRole("button", { name: /Update Available/ });
+
+    const show = api.onShowTab.mock.calls[0]![0];
+    await act(async () => show("nonsense"));
+
+    expect(screen.getByRole("button", { name: "Time Entries" }).className).toContain("on");
+  });
+
+  it("selects the tab when the main process asks for it", async () => {
+    // How the popover notice gets here: an event, not Snapshot state.
+    api.getSnapshot.mockResolvedValue(withUpdate());
+    render(<ReviewWindow />);
+    await screen.findByRole("button", { name: /Update Available/ });
+
+    const show = api.onShowTab.mock.calls[0]![0];
+    await act(async () => show("update"));
+
+    expect(screen.getByText(/Keito Timer 0\.4\.0 is available/)).toBeDefined();
+  });
+});
+
+describe("the update tab without a working key", () => {
+  const noKey = (over: Partial<Snapshot> = {}) => ({
+    ...withUpdate(),
+    keyStatus: "missing" as const,
+    ...over,
+  });
+
+  it("is still reachable, since it needs nothing from Keito", async () => {
+    // Every other tab falls back to the connection form. This one does not: a user whose
+    // key has just stopped working is exactly who might want the newer version.
+    api.getSnapshot.mockResolvedValue(noKey());
+    render(<ReviewWindow />);
+    await userEvent.setup().click(await screen.findByRole("button", { name: /Update Available/ }));
+
+    expect(screen.getByText(/Keito Timer 0\.4\.0 is available/)).toBeDefined();
+  });
+
+  it("leaves every other tab falling back to the connection form", async () => {
+    api.getSnapshot.mockResolvedValue(noKey());
+    render(<ReviewWindow />);
+    await userEvent.setup().click(await screen.findByRole("button", { name: "Projects" }));
+
+    expect(screen.queryByText(/Keito Timer 0\.4\.0 is available/)).toBeNull();
+    expect(screen.getByRole("button", { name: "Connect" })).toBeDefined();
   });
 });

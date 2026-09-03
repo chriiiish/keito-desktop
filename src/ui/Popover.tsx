@@ -213,6 +213,32 @@ export function Popover(): JSX.Element {
         onStop={() => keito.stopTimer().then(setSnapshot)}
       />
 
+      {snapshot.update && !snapshot.update.dismissed && (
+        <div className="update-notice">
+          <button
+            className="update-notice-open"
+            onClick={() => void keito.openWindow("update")}
+            title={`Keito Timer ${snapshot.update.name} is available — you are on ${snapshot.appVersion}`}
+          >
+            <span aria-hidden="true">↑</span> Update available —{" "}
+            <strong>{snapshot.update.name}</strong>
+          </button>
+          {/*
+            Dismissal is recorded against this version, so waving it away silences this
+            release and not the next one. Not an AsyncButton: it writes a preference rather
+            than calling Keito, and the guidance about double-firing is about API calls.
+          */}
+          <button
+            className="update-notice-dismiss"
+            title="Dismiss until the next release"
+            aria-label="Dismiss update notice"
+            onClick={() => void keito.dismissUpdate().then(setSnapshot)}
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       <footer>
         <button className="link" onClick={() => void keito.openWindow()}>
           Entries &amp; settings

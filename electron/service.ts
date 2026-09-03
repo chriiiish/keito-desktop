@@ -8,8 +8,21 @@ import type { TrayFallback, TrayPrefix } from "../src/core/tray/label.js";
 import { Timer, type TimerState } from "../src/core/timer/timer.js";
 import { formatWorkspaceTime } from "../src/core/time/workspace-time.js";
 import { entryStartMs } from "../src/core/time/elapsed.js";
+import { isNewerVersion, type ReleaseSummary } from "../src/core/version/version.js";
 import type { SecretStore } from "./secrets.js";
 import type { Logger } from "./logger.js";
+
+/**
+ * A release newer than the one running, once one has been found.
+ *
+ * `dismissed` travels with it rather than being a separate Snapshot field, because the
+ * two are only ever meaningful together — there is nothing to dismiss when there is no
+ * update. The popover notice hides when it is true; the Update Available tab does not,
+ * so dismissing quietens the timer without hiding the release.
+ */
+export interface UpdateStatus extends ReleaseSummary {
+  dismissed: boolean;
+}
 
 /** Everything the renderer needs to draw either window. */
 export interface Snapshot {
@@ -46,6 +59,15 @@ export interface Snapshot {
   platform: string;
   /** Shown on the Contribute tab, so a bug report can say which build it came from. */
   appVersion: string;
+  /**
+   * A newer release, or null — which also covers "not checked yet" and "GitHub could not
+   * be reached". The UI treats all three the same way, by showing nothing.
+   *
+   * Always null in a development run: `app.getVersion()` there reports whatever
+   * package.json says, which the release workflow stamps from the tag rather than the
+   * other way round, so a dev build is routinely behind by design.
+   */
+  update: UpdateStatus | null;
   /** The company id sent as Keito-Account-Id, once known. */
   accountId: string | null;
   /** A masked stand-in for the stored key, so settings can show one without exposing it. */
@@ -111,6 +133,7 @@ export class AppService {
   #openAtLogin = false;
   #canOpenAtLogin = false;
   #appVersion: string;
+  #update: ReleaseSummary | null = null;
 
   private constructor(
     prefs: PreferencesStore,
@@ -168,6 +191,9 @@ export class AppService {
       canOpenAtLogin: this.#canOpenAtLogin,
       platform: process.platform,
       appVersion: this.#appVersion,
+      update: this.#update
+        ? { ...this.#update, dismissed: prefs.dismissedUpdate === this.#update.version }
+        : null,
       accountId: prefs.accountId ?? null,
       apiKeyHint: this.#apiKeyHint,
       trayFallback: prefs.trayFallback,
@@ -341,6 +367,35 @@ export class AppService {
 
   async setHotkey(hotkey: string): Promise<Snapshot> {
     await this.#prefs.update({ hotkey });
+    return this.snapshot();
+  }
+
+  /**
+   * Told by the main process what the release check found, the same way the hotkey and
+   * the login item are: this file performs no I/O of its own, so the fetch lives in
+   * `electron/updates.ts` and hands the answer here.
+   *
+   * Takes the newest release rather than a boolean, and does the "is it newer" comparison
+   * itself against the version it was constructed with, so there is one place that decides
+   * what "an update is available" means.
+   */
+  setLatestRelease(release: ReleaseSummary | null): void {
+    const previous = this.#update?.version ?? null;
+    this.#update = release && isNewerVersion(release.version, this.#appVersion) ? release : null;
+    if (this.#update && this.#update.version !== previous) {
+      this.#log.info(`Update available: ${this.#update.version} (running ${this.#appVersion})`);
+    }
+  }
+
+  /**
+   * Silences the popover notice for the release currently on offer.
+   *
+   * Records the version, not a flag, so the notice comes back by itself for the next
+   * release. A Danger Zone reset clears it along with every other preference, which is the
+   * intended behaviour: a fresh install has dismissed nothing.
+   */
+  async dismissUpdate(): Promise<Snapshot> {
+    if (this.#update) await this.#prefs.update({ dismissedUpdate: this.#update.version });
     return this.snapshot();
   }
 

@@ -24,6 +24,17 @@ export interface Preferences {
   trayFallback: TrayFallback;
   /** What, if anything, precedes the note in the tray. */
   trayPrefix: TrayPrefix;
+  /**
+   * The version of an update notice the user has dismissed, e.g. "0.3.0".
+   *
+   * Per version rather than a boolean, so dismissing 0.3.0 silences that release and
+   * nothing else: the notice returns of its own accord when 0.4.0 ships, instead of
+   * staying off forever because it was waved away once. Undefined means nothing dismissed.
+   *
+   * Only the popover notice honours it — the Update Available tab stays, so a dismissed
+   * update is still somewhere to be found rather than gone.
+   */
+  dismissedUpdate?: string | undefined;
 }
 
 const defaults = (): Preferences => ({
