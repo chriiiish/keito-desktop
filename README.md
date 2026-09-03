@@ -8,8 +8,6 @@ It is not an official Keito product. It is built on Keito's public API.
 
 <img width="428" height="526" alt="image" src="https://github.com/user-attachments/assets/183b6463-d252-4097-adf9-95d7e7ba3945" />
 
----
-
 ## Install
 
 ### 1. Download
@@ -30,7 +28,7 @@ These builds are signed, but not with a paid certificate — so both operating s
 stop the first launch. **This is expected, and only happens once.**
 
 <details>
-  <summary>macOS</summary>
+  <summary><b>macOS</b></summary>
   
   Open the `.dmg` and drag Keito Timer to Applications. The first launch is
   refused with *"Apple could not verify…"*. 
@@ -48,7 +46,7 @@ stop the first launch. **This is expected, and only happens once.**
 
 </details>
 <details>
-  <summary>Windows</summary>  
+  <summary><b>Windows</b></summary>  
 
   When downloading you may get told the exe is unsafe:  
   <img width="514" height="357" alt="image" src="https://github.com/user-attachments/assets/e5283ca4-0261-4c21-9fa4-080064b7c104" />  
@@ -116,7 +114,9 @@ If this made your life easier, consider buying me a coffee ❤️
 
 ---
 
-## What it does
+<br>
+
+## Features
 
 - **Tray popover on a global hotkey** (default `⌘⇧K` / `Ctrl+Shift+K`, changed by pressing
   the new combination in Settings): pick a category from the filterable dropdown, type a
@@ -152,6 +152,10 @@ If this made your life easier, consider buying me a coffee ❤️
 
 - **Tells you when a new version is out**, with a link to the download. It does not update
   itself — see [Known limits](#known-limits).
+  <img width="604" height="166" alt="image" src="https://github.com/user-attachments/assets/f7f8eef8-864c-40d3-9ac5-b13bb1c402a9" />
+  <img width="423" height="59" alt="image" src="https://github.com/user-attachments/assets/eb4c44da-b038-4ae9-be80-a34e36348885" />
+
+
   
 
 A "category" here is a **(project, task) pair**. Keito has no category resource, and a time
