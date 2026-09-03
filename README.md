@@ -4,7 +4,7 @@
 [![Static Badge](https://img.shields.io/badge/Buy%20me%20a%20Coffee%20%E2%98%95-Donate-bright%20green)](https://buymeacoffee.com/chris.lloyd)
 [![Licence](https://img.shields.io/badge/Licence-GPL--3.0-blue)](./LICENSE)
 
-[Install](#install) | [Features](#features) | [Build Locally](#developing-locally) | [Contribute](#contributing)
+[Install](#install) | [Features](#features) | [Integrations](#integrations) | [Build Locally](#developing-locally) | [Contribute](#contributing)
 
 A small cross-platform desktop app for switching time entries in [Keito](https://keito.ai)
 without leaving what you're doing. Press a global hotkey, type a note and hit Enter. Boom -
@@ -152,10 +152,10 @@ If this made your life easier, consider buying me a coffee ❤️
   <img width="587" height="389" alt="Change which categories are visible" src="https://github.com/user-attachments/assets/b5e4dacd-0fff-4e96-ba0e-fbddd9c98fc3" />
 
 - **Entries window** for correcting today's or this week's times and notes.  
-- **Azure DevOps work items as notes.** Switch it on in **Integrations** and the note field
-  offers the open work items assigned to you — type to search them or press `↓` to browse —
-  filling the note in as `1842: Login redirect drops the return URL`. Read-only, optional,
-  and off unless you turn it on.  
+- **Azure DevOps work items as notes.** Type to search the open work items assigned to you,
+  or press `↓` to browse, and the note fills in as `1842: Login redirect drops the return
+  URL`. Read-only, optional, and off unless you turn it on — see
+  [Integrations](#integrations).  
   <img width="895" height="275" alt="List of all entries for today" src="https://github.com/user-attachments/assets/7d5b25f2-5146-4d52-a40b-92c974b341e1" />
 
 - **Tells you when a new version is out**, with a link to the download. It does not update
@@ -165,31 +165,6 @@ If this made your life easier, consider buying me a coffee ❤️
 
 A "category" here is a **(project, task) pair**. Keito has no category resource, and a time
 entry requires both ids.
-
-### Azure DevOps
-
-Optional. **Integrations → Azure DevOps**, switch it on, paste a personal access token,
-press **Connect**.
-
-Create the token in Azure DevOps under your profile menu → **User settings** → **Personal
-access tokens** → **New Token**, with a single scope: **Work Items (Read)**.
-
-You are asked for your organisation URL and the token together — paste
-`https://dev.azure.com/your-org` and the token, then press **Connect**.
-
-Nothing is ever written back to Azure DevOps; the integration only reads. The token is
-encrypted by the operating system in its own file, exactly like the Keito key, and is never
-written to `preferences.json`. The work item list is held in memory only and never written
-to disk.
-
-Once connected, the note field carries the Azure DevOps mark. Type to search, or press `↓`
-to see everything assigned to you; picking one fills the note in as `1842: Title`. **You can
-still just type a note** — nothing about the existing behaviour changes, and `⏎` starts the
-timer exactly as before unless the ticket list is actually open.
-
-The list holds the 200 most recently changed open items assigned to you, and refreshes every
-10 minutes and when you open the popover. An on-premises Azure DevOps Server collection
-works too — paste its collection URL instead of a `dev.azure.com` one.
 
 ### Known limits
 
@@ -203,6 +178,60 @@ works too — paste its collection URL instead of a `dev.azure.com` one.
   two to rank recents correctly.
 
 ---
+
+---
+
+## Integrations
+
+Keito Timer can read from another system so you do not have to retype what is already in
+it. Integrations are **optional, off until you switch them on, and read-only** — nothing is
+ever written back.
+
+They live under **Integrations**, each as its own card. A card shows whether it is working
+at a glance, with a red mark beside the name if it is switched on but not connected;
+expand it to set it up.
+
+### Azure DevOps
+
+Puts a work item in your note without you typing it.
+
+Once connected, the note field carries the Azure DevOps mark. Type to search the open work
+items assigned to you, or press `↓` to see the lot; picking one fills the note in as
+`1842: Login redirect drops the return URL`.
+
+**You can still just type a note.** Nothing about the existing behaviour changes, and `⏎`
+starts the timer exactly as before unless the ticket list is actually open.
+
+#### Setting it up
+
+1. In Azure DevOps: your profile menu → **User settings** → **Personal access tokens** →
+   **New Token**. It needs one scope — **Work Items (Read)**.
+2. In Keito Timer: **Integrations → Azure DevOps**, switch it on and expand it.
+3. Paste your organisation URL (`https://dev.azure.com/your-org`) and the token, then press
+   **Connect**.
+
+Both are asked for together on purpose. Working the organisation out from the token alone
+only ever succeeds for a token created for *All accessible organizations*, so for most
+people it failed and asked for the URL anyway.
+
+#### What it reads, and what it keeps
+
+The list holds the **200 most recently changed open work items assigned to you**, newest
+first. It refreshes every 10 minutes, and again when you open the popover if it has gone
+stale — opening the popover is something you do constantly, so it does not re-fetch every
+single time. Items in a `Closed`, `Done` or `Removed` state are left out.
+
+The token is encrypted by the operating system in its own file — exactly like the Keito key
+— and is never written to `preferences.json`. **The work item list is held in memory only**
+and never written to disk: those titles are your workplace's, not this app's to leave lying
+around.
+
+An on-premises **Azure DevOps Server** collection works too; paste its collection URL
+instead of a `dev.azure.com` one.
+
+> The note is the only link. Keito has no custom fields, so nothing structured ties a time
+> entry back to a work item — edit the note afterwards and the connection to the ticket is
+> gone.
 
 ## Developing locally
 
