@@ -120,7 +120,6 @@ If this made your life easier, consider buying me a coffee ❤️
 
 ---
 
-<br>
 
 ## Features
 
@@ -140,8 +139,9 @@ If this made your life easier, consider buying me a coffee ❤️
   
 - **The running task in your menu bar.** Configurable: the note by default, falling back to
   the task when blank, or the project instead — optionally prefixed with either.  
-  <img width="203" height="27" alt="macOS menu bar icon" src="https://github.com/user-attachments/assets/36a84d63-926c-412f-8bdb-337b3bd54935" />
-  <img width="367" height="102" alt="Windows task bar icon" src="https://github.com/user-attachments/assets/e18b3832-c26a-40e8-9e69-52ecdb6dafaa" />
+  |macOS|windows|
+  |-|-|
+  |<img width="203" height="27" alt="macOS menu bar icon" src="https://github.com/user-attachments/assets/36a84d63-926c-412f-8bdb-337b3bd54935" />|<img width="367" height="102" alt="Windows task bar icon" src="https://github.com/user-attachments/assets/e18b3832-c26a-40e8-9e69-52ecdb6dafaa" />|
 
 - **Idle detection.** Away for 10+ minutes? On return it offers to trim the idle span. A
   timer left running past 10 hours is stopped automatically.
@@ -155,12 +155,9 @@ If this made your life easier, consider buying me a coffee ❤️
   <img width="895" height="275" alt="List of all entries for today" src="https://github.com/user-attachments/assets/7d5b25f2-5146-4d52-a40b-92c974b341e1" />
 
 - **Tells you when a new version is out**, with a link to the download. It does not update
-  itself — see [Known limits](#known-limits).
+  itself — see [Known limits](#known-limits).  
   <img width="604" height="166" alt="New version tab" src="https://github.com/user-attachments/assets/f7f8eef8-864c-40d3-9ac5-b13bb1c402a9" />
   <img width="423" height="59" alt="New version message" src="https://github.com/user-attachments/assets/eb4c44da-b038-4ae9-be80-a34e36348885" />
-
-
-  
 
 A "category" here is a **(project, task) pair**. Keito has no category resource, and a time
 entry requires both ids.
