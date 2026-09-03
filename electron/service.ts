@@ -11,7 +11,6 @@ import { entryStartMs } from "../src/core/time/elapsed.js";
 import { isNewerVersion, type ReleaseSummary } from "../src/core/version/version.js";
 import { AzureClient, normaliseOrganisationUrl } from "../src/core/azure/client.js";
 import { AzureError } from "../src/core/azure/errors.js";
-import { describeDiscovery } from "../src/core/azure/discovery.js";
 import type { WorkItem } from "../src/core/azure/types.js";
 import type { SecretStore } from "./secrets.js";
 import type { Logger } from "./logger.js";
@@ -50,14 +49,6 @@ export interface AzureState {
   /** Open work items assigned to the token's owner, most recently changed first. */
   workItems: WorkItem[];
   error: string | null;
-  /**
-   * True when `error` is a request for the organisation URL rather than a failure.
-   *
-   * Discovery not working is the normal path for a token created for one organisation, and
-   * the message says as much — so rendering it in the red box used for a rejected token
-   * contradicts its own first sentence.
-   */
-  needsUrl: boolean;
 }
 
 /** Everything the renderer needs to draw either window. */
@@ -186,7 +177,6 @@ export class AppService {
   #azureError: string | null = null;
   #azureCheckedAtMs = 0;
   #azureConnected = false;
-  #azureNeedsUrl = false;
   #azureToken: string | null = null;
 
   private constructor(
@@ -482,7 +472,6 @@ export class AppService {
       // broken connection would have the note field suggesting tickets it cannot refresh.
       workItems: status === "connected" ? this.#azureItems : [],
       error: this.#azureError,
-      needsUrl: this.#azureNeedsUrl,
     };
   }
 
@@ -506,12 +495,14 @@ export class AppService {
   }
 
   /**
-   * Stores a token and proves it works, in that order of importance.
+   * Stores a token and an organisation, and proves the pair works before keeping either.
    *
-   * The organisation is discovered when none was given — which needs the Profile (Read)
-   * scope and a token that can see across organisations. Where that fails the caller is
-   * told to ask for the URL, rather than being shown an error about a scope it was never
-   * told to grant.
+   * Both are asked for together. Looking the organisation up from the token was tried and
+   * removed: it only ever worked for a token created for *All accessible organizations*,
+   * because only that kind authenticates against the host that knows which organisations
+   * exist. For everyone else it failed, said something misleading about the token being
+   * refused, and then asked for the URL anyway — two round trips to reach the one field
+   * that always works.
    */
   async connectAzure(token: string, organisationUrl?: string): Promise<Snapshot> {
     const pat = token.trim();
@@ -523,6 +514,11 @@ export class AppService {
     const typed = organisationUrl?.trim()
       ? normaliseOrganisationUrl(organisationUrl)
       : (this.#prefs.get().azureOrganisationUrl ?? undefined);
+
+    if (!typed) {
+      this.#azureError = "Enter your Azure DevOps organisation URL.";
+      return this.snapshot();
+    }
 
     const client = new AzureClient({
       personalAccessToken: pat,
@@ -536,21 +532,6 @@ export class AppService {
     });
 
     try {
-      if (!client.organisationUrl) {
-        const found = await client.discoverOrganisation();
-        if (found.outcome !== "found") {
-          // Each outcome asks the user a different question, so each says so. The old
-          // single message could not tell "you are in two organisations" from "that token
-          // cannot read your profile", which left the failure undiagnosable.
-          this.#azureError = describeDiscovery(found);
-          this.#azureNeedsUrl = true;
-          this.#azureConnected = false;
-          this.#log.warn(`Azure DevOps discovery: ${found.outcome} — ${this.#azureError}`);
-          return this.snapshot();
-        }
-        this.#log.info(`Azure DevOps organisation discovered: ${found.organisationUrl}`);
-      }
-
       const items = await client.verify();
 
       this.#azureToken = pat;
@@ -563,7 +544,6 @@ export class AppService {
       this.#azureItems = items;
       this.#azureConnected = true;
       this.#azureError = null;
-      this.#azureNeedsUrl = false;
       this.#azureCheckedAtMs = Date.now();
       this.#log.info(`Azure DevOps connected: ${items.length} work items assigned`);
     } catch (error) {
@@ -584,7 +564,6 @@ export class AppService {
     this.#azureItems = [];
     this.#azureConnected = false;
     this.#azureError = null;
-    this.#azureNeedsUrl = false;
     this.#revision++;
     return this.snapshot();
   }

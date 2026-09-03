@@ -14,10 +14,6 @@ export interface FakeAzureOptions {
   personalAccessToken?: string;
   organisation?: string;
   workItems?: WorkItem[];
-  /** Organisations the profile endpoint reports. Empty means the scope is missing. */
-  accounts?: string[];
-  /** Set false to simulate a PAT without the Profile (Read) scope. */
-  profileReadable?: boolean;
   /** Return detail rows in a deliberately different order to the ids requested. */
   shuffleDetail?: boolean;
 }
@@ -38,8 +34,6 @@ export class FakeAzure {
       personalAccessToken: "pat_good",
       organisation: "acme",
       workItems: [],
-      accounts: ["acme"],
-      profileReadable: true,
       shuffleDetail: false,
       ...options,
     };
@@ -66,21 +60,6 @@ export class FakeAzure {
     });
 
     if (!this.#authorised(authorization)) return this.#signInPage();
-
-    if (url.pathname === "/_apis/profile/profiles/me") {
-      if (!this.#options.profileReadable) return this.#signInPage();
-      // Deliberately different values, so a client that reaches for the wrong one is
-      // caught. The live API returns the same uuid for both, which would hide the mistake.
-      return json({ id: "profile-id-uuid", publicAlias: "public-alias-uuid" });
-    }
-
-    if (url.pathname === "/_apis/accounts") {
-      if (!this.#options.profileReadable) return this.#signInPage();
-      return json({
-        count: this.#options.accounts.length,
-        value: this.#options.accounts.map((accountName) => ({ accountName })),
-      });
-    }
 
     if (url.pathname === `/${this.#options.organisation}/_apis/wit/wiql` && method === "POST") {
       const top = Number(url.searchParams.get("$top") ?? "200");

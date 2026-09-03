@@ -331,30 +331,17 @@ can be `1842: Login redirect drops the return URL` without typing it.
   `ORDER BY` to survive the second call. An item with no readable date sorts *last* —
   `Date.parse(null)` is `NaN`, and a comparator that returns `NaN` leaves the order
   untouched instead of putting the undated item anywhere in particular.
-- **The organisation cannot be read from the token alone without another scope.**
-  Discovery is `profiles/me` then `/_apis/accounts?memberId=…` on **app.vssps.visualstudio.com**,
-  a different host, and needs **User Profile (Read)** on top of Work Items (Read) *and* a token
-  that is not scoped to a single organisation — which plenty of enterprises forbid. So
-  discovery is attempted and its failure is not an error: it is the cue to ask for the URL.
-
-  **The scope is not the whole story, and this cost a round trip to find out.** A token is
-  created either for one organisation or for *All accessible organizations*, and only the
-  second kind authenticates against `app.vssps.visualstudio.com` at all. A token scoped to
-  one organisation is refused there **with User Profile (Read) granted**, while working
-  perfectly against `dev.azure.com` for the work items it was made to read. So the failure
-  message must not say the token was refused: it works, it just cannot answer this one
-  question. `describeDiscovery` lives in `src/core/azure/discovery.ts` and is tested,
-  because getting that wording wrong sends someone to regenerate a token that was never the
-  problem.
-
-  `discoverOrganisation` answers with **which of four things happened** — `found`,
-  `several`, `none`, or `no-access` — rather than a URL or null. It returned null for all
-  of them once, and the single message that produced ("could not work out your
-  organisation") could not tell *you are in two organisations* from *that token cannot read
-  your profile*, which made a real failure undiagnosable from the outside. `several` carries
-  the names, because someone in two organisations needs to know which two. `publicAlias`
-  leads `id` as the `memberId`, being what the accounts API documents; the fake returns
-  different values for the two so reaching for the wrong one fails a test.
+- **Looking the organisation up from the token was built, then removed. Do not rebuild
+  it.** It is `profiles/me` then `/_apis/accounts?memberId=…` on
+  **app.vssps.visualstudio.com** — a different host — needing **User Profile (Read)** on top
+  of Work Items (Read). That is not the part that kills it: a token is created either for
+  one organisation or for *All accessible organizations*, and **only the second kind
+  authenticates against that host at all**. A token scoped to one organisation is refused
+  there with the scope granted, while working perfectly against `dev.azure.com` for the
+  work items it was made to read — so the lookup failed for most real tokens, said
+  something misleading about the token being refused, and then asked for the URL anyway.
+  Two round trips to reach the one field that always works. The URL and the token are now
+  asked for together, and **Work Items (Read) is the only scope this needs.**
 
 **A URL, not an organisation name.** `azureOrganisationUrl` holds
 `https://dev.azure.com/acme` rather than `acme`, which costs nothing and is what lets an

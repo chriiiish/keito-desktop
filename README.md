@@ -172,12 +172,10 @@ Optional. **Integrations → Azure DevOps**, switch it on, paste a personal acce
 press **Connect**.
 
 Create the token in Azure DevOps under your profile menu → **User settings** → **Personal
-access tokens** → **New Token**, with:
+access tokens** → **New Token**, with a single scope: **Work Items (Read)**.
 
-| Scope | | Why |
-|---|---|---|
-| **Work Items (Read)** | required | Reading the work items assigned to you. |
-| **User Profile (Read)** | optional | Only saves you pasting a URL. You may need to click **Show all scopes** at the bottom of the token form before it appears, and it only works if the token's **Organization** is set to **All accessible organizations** — a token made for a single organisation cannot look up which one it belongs to, whatever scopes it has. Skip it and paste your `https://dev.azure.com/your-org` URL instead; the integration works exactly the same either way. |
+You are asked for your organisation URL and the token together — paste
+`https://dev.azure.com/your-org` and the token, then press **Connect**.
 
 Nothing is ever written back to Azure DevOps; the integration only reads. The token is
 encrypted by the operating system in its own file, exactly like the Keito key, and is never

@@ -68,7 +68,6 @@ const snapshot: Snapshot = {
     hasToken: false,
     workItems: [],
     error: null,
-    needsUrl: false,
   },
   accountId: "co",
   apiKeyHint: "kto_••••••••abcd",
@@ -1211,7 +1210,6 @@ describe("the integrations tab", () => {
       hasToken: false,
       workItems: [],
       error: null,
-      needsUrl: false,
       ...over,
     },
   });
@@ -1224,26 +1222,14 @@ describe("the integrations tab", () => {
     expect(screen.queryByLabelText(/personal access token/i)).toBeNull();
   });
 
-  it("names the scopes exactly as Azure DevOps does, and which is optional", async () => {
-    // A security team refusing User Profile (Read) should cost the user one text field,
-    // not the feature — so the page has to say which is which. The names have to match
-    // the checkboxes on the token form character for character, or the user is hunting
-    // for a scope that is not called that.
+  it("names the one scope the token needs", async () => {
+    // One scope, and the list says so rather than leaving the reader wondering what else
+    // might be required.
     api.getSnapshot.mockResolvedValue(azure({ enabled: true, status: "needs-token" }));
     await openIntegrations();
 
     expect(screen.getByText("Work Items (Read)")).toBeDefined();
-    expect(screen.getByText("User Profile (Read)")).toBeDefined();
-    expect(screen.getByText(/optional/i)).toBeDefined();
-  });
-
-  it("says where the optional scope is hiding", async () => {
-    // Azure DevOps collapses the scope list, and User Profile is not in the short one —
-    // without this the instruction reads as naming a scope that does not exist.
-    api.getSnapshot.mockResolvedValue(azure({ enabled: true, status: "needs-token" }));
-    await openIntegrations();
-
-    expect(screen.getByText("Show all scopes")).toBeDefined();
+    expect(screen.getByText(/that is the whole list/i)).toBeDefined();
   });
 
   it("says plainly that it only ever reads", async () => {
@@ -1253,74 +1239,36 @@ describe("the integrations tab", () => {
     expect(screen.getByText(/only ever reads/i)).toBeDefined();
   });
 
-  it("says the optional scope also needs an all-organisations token", async () => {
-    // The scope alone is not enough, which is how a token with User Profile (Read)
-    // granted still failed to find its organisation. Saying only "grant this scope"
-    // sends someone to regenerate a token that was never the problem.
+  it("asks for the URL and the token together", async () => {
+    // Looking the organisation up from the token only ever worked for a token created for
+    // all organisations, so it cost everyone else a failed attempt to reach a field that
+    // always works. Both are asked for at once.
     api.getSnapshot.mockResolvedValue(azure({ enabled: true, status: "needs-token" }));
-    await openIntegrations();
-
-    expect(screen.getByText("All accessible organizations")).toBeDefined();
-  });
-
-  it("does not ask for a URL until one is actually needed", async () => {
-    // The common case is a token that finds its own organisation; asking up front would
-    // make one thing look like two.
-    api.getSnapshot.mockResolvedValue(azure({ enabled: true, status: "needs-token" }));
-    await openIntegrations();
-
-    expect(screen.queryByLabelText(/organisation url/i)).toBeNull();
-  });
-
-  it("asks for the URL once discovery has asked for it", async () => {
-    api.getSnapshot.mockResolvedValue(
-      azure({
-        enabled: true,
-        status: "error",
-        needsUrl: true,
-        error: "Your token works — add your Azure DevOps URL and press Connect again.",
-      }),
-    );
     await openIntegrations();
 
     expect(screen.getByLabelText(/organisation url/i)).toBeDefined();
-    expect(screen.getByText(/add your Azure DevOps URL/i)).toBeDefined();
+    expect(screen.getByLabelText(/personal access token/i)).toBeDefined();
   });
 
-  it("asking for the URL does not look like a failure", async () => {
-    // The message opens by saying the token works, so dressing it in the box used for a
-    // rejected token contradicts its own first sentence.
-    api.getSnapshot.mockResolvedValue(
-      azure({ enabled: true, status: "error", needsUrl: true, error: "Your token works — …" }),
-    );
-    await openIntegrations();
+  it("cannot connect without a URL", async () => {
+    api.getSnapshot.mockResolvedValue(azure({ enabled: true, status: "needs-token" }));
+    const user = await openIntegrations();
 
-    expect(screen.getByText(/Your token works/).className).toBe("notice");
+    await user.type(screen.getByLabelText(/personal access token/i), "pat_secret");
+
+    expect(screen.getByRole("button", { name: "Connect" }).hasAttribute("disabled")).toBe(true);
   });
 
-  it("a token Azure actually rejected still looks like a failure", async () => {
-    api.getSnapshot.mockResolvedValue(
-      azure({
-        enabled: true,
-        status: "error",
-        needsUrl: false,
-        error: "Azure DevOps refused the personal access token.",
-      }),
-    );
-    await openIntegrations();
-
-    expect(screen.getByText(/refused the personal access token/).className).toBe("error");
-  });
-
-  it("connects with the token typed in", async () => {
+  it("connects with both of them at once", async () => {
     api.getSnapshot.mockResolvedValue(azure({ enabled: true, status: "needs-token" }));
     api.connectAzure.mockResolvedValue(azure({ enabled: true, status: "connected" }));
     const user = await openIntegrations();
 
+    await user.type(screen.getByLabelText(/organisation url/i), "https://dev.azure.com/acme");
     await user.type(screen.getByLabelText(/personal access token/i), "pat_secret");
     await user.click(screen.getByRole("button", { name: "Connect" }));
 
-    expect(api.connectAzure).toHaveBeenCalledWith("pat_secret", undefined);
+    expect(api.connectAzure).toHaveBeenCalledWith("pat_secret", "https://dev.azure.com/acme");
   });
 
   it("cannot connect with an empty token", async () => {

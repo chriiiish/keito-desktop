@@ -5,10 +5,7 @@ import {
   AzureOrganisationUnknownError,
   AzureRequestError,
 } from "./errors.js";
-import type { OrganisationDiscovery, WorkItem } from "./types.js";
-
-/** Where cross-organisation identity lives. Not on dev.azure.com — a different host entirely. */
-const PROFILE_HOST = "https://app.vssps.visualstudio.com";
+import type { WorkItem } from "./types.js";
 
 const API_VERSION = "7.1";
 
@@ -89,62 +86,6 @@ export class AzureClient {
 
   get organisationUrl(): string | null {
     return this.#organisationUrl;
-  }
-
-  /**
-   * Which organisation the token belongs to, and — when that cannot be settled — which of
-   * the four reasons applies.
-   *
-   * Two requests against a different host to the work item API, needing **User Profile
-   * (Read)** on top of Work Items (Read). A token scoped to a single organisation, or one
-   * without that scope, cannot answer at all. None of that is an error worth throwing over:
-   * every outcome ends in asking the user something, and the point of naming them
-   * separately is that the four questions are different.
-   */
-  async discoverOrganisation(): Promise<OrganisationDiscovery> {
-    let profile: { id?: string; publicAlias?: string };
-    try {
-      profile = await this.#json(
-        "GET",
-        `${PROFILE_HOST}/_apis/profile/profiles/me?api-version=${API_VERSION}`,
-      );
-    } catch (error) {
-      return {
-        outcome: "no-access",
-        reason: error instanceof AzureError ? error.message : String(error),
-      };
-    }
-
-    // Both are the same value in Microsoft's own example, but publicAlias is what the
-    // accounts API is documented to take, so it leads and `id` is the fallback.
-    const memberId = profile.publicAlias ?? profile.id;
-    if (!memberId) return { outcome: "no-access", reason: "That token cannot read your profile." };
-
-    let accounts: { value?: Array<{ accountName?: string }> };
-    try {
-      accounts = await this.#json(
-        "GET",
-        `${PROFILE_HOST}/_apis/accounts?memberId=${encodeURIComponent(memberId)}&api-version=${API_VERSION}`,
-      );
-    } catch (error) {
-      return {
-        outcome: "no-access",
-        reason: error instanceof AzureError ? error.message : String(error),
-      };
-    }
-
-    const names = (accounts.value ?? [])
-      .map((account) => account.accountName)
-      .filter((name): name is string => Boolean(name));
-
-    if (names.length === 0) return { outcome: "none" };
-    // Choosing for someone in several organisations could silently pick the wrong
-    // workplace, so the names go back for them to choose between.
-    if (names.length > 1) return { outcome: "several", organisations: names };
-
-    const url = `https://dev.azure.com/${names[0]}`;
-    this.#organisationUrl = url;
-    return { outcome: "found", organisationUrl: url };
   }
 
   /**

@@ -145,62 +145,6 @@ describe("a personal access token Azure will not accept", () => {
   });
 });
 
-describe("discoverOrganisation", () => {
-  it("finds the organisation when the token can read the profile", async () => {
-    const azure = new FakeAzure({ accounts: ["acme"] });
-
-    const found = await clientFor(azure, { url: undefined }).discoverOrganisation();
-
-    expect(found).toEqual({ outcome: "found", organisationUrl: ORG });
-  });
-
-  it("uses what it found for the work item calls that follow", async () => {
-    const azure = new FakeAzure({ accounts: ["acme"], workItems: [item(1, "One")] });
-    const client = clientFor(azure, { url: undefined });
-
-    await client.discoverOrganisation();
-
-    expect(client.organisationUrl).toBe(ORG);
-    expect(await client.listAssignedWorkItems()).toHaveLength(1);
-  });
-
-  it("says the profile could not be read when the token lacks the scope", async () => {
-    // Not merely "failed": a token with only Work Items (Read) cannot answer this, and
-    // saying so is the difference between a user fixing it and a user guessing.
-    const azure = new FakeAzure({ profileReadable: false });
-
-    const found = await clientFor(azure, { url: undefined }).discoverOrganisation();
-
-    expect(found.outcome).toBe("no-access");
-    expect(found).toHaveProperty("reason");
-  });
-
-  it("names the organisations when a token reaches several", async () => {
-    // Choosing would silently pick the wrong workplace, so the names go back to be
-    // chosen between rather than being collapsed into "could not work it out".
-    const azure = new FakeAzure({ accounts: ["acme", "acme-labs"] });
-
-    const found = await clientFor(azure, { url: undefined }).discoverOrganisation();
-
-    expect(found).toEqual({ outcome: "several", organisations: ["acme", "acme-labs"] });
-  });
-
-  it("distinguishes belonging to none from being unable to look", async () => {
-    const azure = new FakeAzure({ accounts: [] });
-
-    expect((await clientFor(azure, { url: undefined }).discoverOrganisation()).outcome).toBe("none");
-  });
-
-  it("prefers publicAlias as the member id, which is what the accounts API documents", async () => {
-    const azure = new FakeAzure({ accounts: ["acme"] });
-
-    await clientFor(azure, { url: undefined }).discoverOrganisation();
-
-    const accounts = azure.requests.find((r) => r.path === "/_apis/accounts");
-    expect(accounts?.query?.memberId).toBe("public-alias-uuid");
-  });
-});
-
 describe("ordering by when a work item last changed", () => {
   it("puts the most recently changed first, whatever order it arrived in", async () => {
     const azure = new FakeAzure({

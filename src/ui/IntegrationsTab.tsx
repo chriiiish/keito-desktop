@@ -65,18 +65,11 @@ function AzureConnectionForm({
   const [token, setToken] = useState("");
   const [url, setUrl] = useState(azure.organisationUrl ?? "");
 
-  /**
-   * The URL field appears once it is actually needed: discovery has asked for it, or a URL
-   * is already stored. Asking up front would make the common case — a token that can find
-   * its own organisation — look like it needs two things when it needs one.
-   */
-  const needsUrl = azure.needsUrl || Boolean(azure.organisationUrl);
-
   const [connecting, connect] = useAsyncAction(async () => {
-    const next = await keito.connectAzure(token.trim(), url.trim() || undefined);
+    const next = await keito.connectAzure(token.trim(), url.trim());
     onChange(next);
-    // Keep the box populated only while it is still wanted; a working connection has no
-    // more use for the token, and the renderer never gets it back.
+    // A working connection has no further use for the token, and the renderer never gets
+    // it back — so the box is emptied rather than left holding a credential.
     if (next.azure.status === "connected") setToken("");
     if (next.azure.organisationUrl) setUrl(next.azure.organisationUrl);
   });
@@ -92,23 +85,25 @@ function AzureConnectionForm({
       <h3>What the token needs</h3>
       <ul className="scope-list">
         <li>
-          <strong>Work Items (Read)</strong> — required. Without it there is nothing to list.
-        </li>
-        <li>
-          <strong>User Profile (Read)</strong> — optional, and only saves you pasting a URL.
-          You may need to click <strong>Show all scopes</strong> at the bottom of the token
-          form before it appears. It also only works if the token's{" "}
-          <strong>Organization</strong> is set to <strong>All accessible organizations</strong>{" "}
-          — a token made for a single organisation cannot look up which one it belongs to,
-          whatever scopes it has. Skip all of that and paste your URL instead; the
-          integration works exactly the same either way.
+          <strong>Work Items (Read)</strong> — that is the whole list. Nothing is written
+          back to Azure DevOps; this only ever reads.
         </li>
       </ul>
       <p className="hint">
         In Azure DevOps: your profile menu → <strong>User settings</strong> →{" "}
-        <strong>Personal access tokens</strong> → <strong>New Token</strong>. Nothing is
-        written back to Azure DevOps — this only ever reads.
+        <strong>Personal access tokens</strong> → <strong>New Token</strong>.
       </p>
+
+      <label>
+        Organisation URL
+        <input
+          placeholder="https://dev.azure.com/your-org"
+          autoComplete="off"
+          spellCheck={false}
+          value={url}
+          onChange={(event) => setUrl(event.target.value)}
+        />
+      </label>
 
       <label>
         Personal access token
@@ -122,29 +117,14 @@ function AzureConnectionForm({
         />
       </label>
 
-      {needsUrl && (
-        <label>
-          Organisation URL
-          <input
-            placeholder="https://dev.azure.com/your-org"
-            autoComplete="off"
-            spellCheck={false}
-            value={url}
-            onChange={(event) => setUrl(event.target.value)}
-          />
-        </label>
-      )}
-
-      {/*
-        A request for the URL is not a failure — the message it carries opens by saying the
-        token works — so it must not be dressed in the red box that a rejected token gets.
-      */}
-      {azure.error && (
-        <p className={azure.needsUrl ? "notice" : "error"}>{azure.error}</p>
-      )}
+      {azure.error && <p className="error">{azure.error}</p>}
 
       <div className="connect-actions">
-        <button type="submit" aria-busy={connecting} disabled={connecting || !token.trim()}>
+        <button
+          type="submit"
+          aria-busy={connecting}
+          disabled={connecting || !token.trim() || !url.trim()}
+        >
           {connecting ? "Connecting…" : "Connect"}
         </button>
         {azure.hasToken && (
