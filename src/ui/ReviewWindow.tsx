@@ -5,7 +5,7 @@ import { keito } from "./keito-api.js";
 import { AsyncButton, Spinner, useAsyncAction } from "./AsyncButton.js";
 import { HotkeyRecorder } from "./HotkeyRecorder.js";
 import { TrayLabelSettings } from "./TrayLabelSettings.js";
-import { ContributeTab } from "./ContributeTab.js";
+import { AboutTab } from "./AboutTab.js";
 import { UpdateTab } from "./UpdateTab.js";
 import { ProjectsTab } from "./ProjectsTab.js";
 import { Toggle } from "./Toggle.js";
@@ -20,14 +20,14 @@ function weekStart(today: string): string {
   return shiftDate(today, -weekday);
 }
 
-type Tab = "entries" | "projects" | "connection" | "settings" | "contribute" | "update";
+type Tab = "entries" | "projects" | "connection" | "settings" | "about" | "update";
 
 const TABS: ReadonlyArray<readonly [Tab, string]> = [
   ["entries", "Time Entries"],
   ["projects", "Projects"],
   ["connection", "Keito Connection"],
   ["settings", "Settings"],
-  ["contribute", "Contribute"],
+  ["about", "About"],
 ];
 
 /**
@@ -65,12 +65,12 @@ export function ReviewWindow(): JSX.Element {
    *
    * Until a key works every tab renders the connection form, but the click is
    * still recorded — so a new user who poked at the tabs while setting up would
-   * land on whichever one they poked, usually Contribute. The first thing to
+   * land on whichever one they poked, usually About. The first thing to
    * see after connecting is the work you have logged.
    *
    * Adjusted during render rather than in an effect. An effect runs *after* the commit,
    * so the first render with a working key would still use the old tab — mounting, say,
-   * the Contribute tab for a frame before replacing it. Setting state during render makes
+   * the About tab for a frame before replacing it. Setting state during render makes
    * React re-run this function before it commits anything, so that frame never exists.
    */
   const ready = snapshot?.keyStatus === "ready";
@@ -147,7 +147,7 @@ export function ReviewWindow(): JSX.Element {
       {active === "projects" && <ProjectsTab snapshot={snapshot} onChange={setSnapshot} />}
       {active === "connection" && <Connection snapshot={snapshot} onChange={setSnapshot} />}
       {active === "settings" && <Settings snapshot={snapshot} onChange={setSnapshot} />}
-      {active === "contribute" && <ContributeTab snapshot={snapshot} />}
+      {active === "about" && <AboutTab snapshot={snapshot} />}
       {active === "update" && update && <UpdateTab snapshot={snapshot} update={update} />}
     </div>
   );

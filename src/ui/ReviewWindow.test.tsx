@@ -84,7 +84,7 @@ describe("the review window", () => {
       "Projects",
       "Keito Connection",
       "Settings",
-      "Contribute",
+      "About",
     ]);
   });
 
@@ -526,22 +526,22 @@ describe("the menu bar label settings", () => {
   });
 });
 
-describe("the contribute tab", () => {
-  const openContribute = async () => {
+describe("the about tab", () => {
+  const openAbout = async () => {
     const user = userEvent.setup();
     render(<ReviewWindow />);
-    await user.click(await screen.findByRole("button", { name: "Contribute" }));
+    await user.click(await screen.findByRole("button", { name: "About" }));
     return user;
   };
 
   it("says the project is open source", async () => {
-    await openContribute();
+    await openAbout();
 
     expect(screen.getByText(/free and open source/i)).toBeDefined();
   });
 
   it("opens the repository in the real browser, not in the app", async () => {
-    const user = await openContribute();
+    const user = await openAbout();
     api.openExternal.mockResolvedValue(undefined);
 
     await user.click(screen.getByRole("button", { name: /browse the source/i }));
@@ -550,7 +550,7 @@ describe("the contribute tab", () => {
   });
 
   it("links to issues and pull requests as well", async () => {
-    const user = await openContribute();
+    const user = await openAbout();
     api.openExternal.mockResolvedValue(undefined);
 
     await user.click(screen.getByRole("button", { name: /report a bug/i }));
@@ -561,7 +561,7 @@ describe("the contribute tab", () => {
   });
 
   it("offers the tip jar", async () => {
-    const user = await openContribute();
+    const user = await openAbout();
     api.openExternal.mockResolvedValue(undefined);
 
     await user.click(screen.getByRole("button", { name: /^☕ Buy me a/i }));
@@ -570,35 +570,37 @@ describe("the contribute tab", () => {
   });
 
   it("makes clear the app is free", async () => {
-    await openContribute();
+    await openAbout();
 
     expect(screen.getByText(/Keito Timer is free\./i)).toBeDefined();
   });
 
-  it("asks for money, then code, then tells you what you are running", async () => {
+  it("leads with the licence, then money, then code, then what you are running", async () => {
     // Ordered by how many people can act on the ask: the tip jar is one click, a pull
     // request is an afternoon. The build details are not a contribution at all — they are
     // what you copy into a bug report — so they come last.
-    await openContribute();
+    await openAbout();
 
     const headings = screen.getAllByRole("heading", { level: 2 });
 
     expect(headings.map((heading) => heading.textContent)).toEqual([
+      "Licence",
       "Say thanks",
       "Open source",
       "About this build",
     ]);
   });
 
-  it("leads with the disclaimer, which is context for the whole tab", async () => {
-    await openContribute();
+  it("says it is unaffiliated with Keito, under the licence heading", async () => {
+    // What this app is and what you may do with it are the same question, so the
+    // disclaimer sits with the licence rather than in a section of its own.
+    await openAbout();
 
-    // Before the first heading, and carrying no heading of its own.
     expect(screen.getByText(/not an official Keito product/i)).toBeDefined();
   });
 
   it("shows the build version, so a bug report can name it", async () => {
-    await openContribute();
+    await openAbout();
 
     expect(screen.getByText("0.1.0")).toBeDefined();
   });
@@ -967,7 +969,7 @@ describe("connecting", () => {
   // the page they landed on afterwards.
   it("still opens on Time Entries when another tab was clicked while disconnected", async () => {
     const user = await connect();
-    await user.click(screen.getByRole("button", { name: "Contribute" }));
+    await user.click(screen.getByRole("button", { name: "About" }));
 
     await fillAndSubmit(user);
 
@@ -1142,5 +1144,39 @@ describe("the update tab without a working key", () => {
 
     expect(screen.queryByText(/Keito Timer 0\.4\.0 is available/)).toBeNull();
     expect(screen.getByRole("button", { name: "Connect" })).toBeDefined();
+  });
+});
+
+describe("the licence on the about tab", () => {
+  const openAboutTab = async () => {
+    const user = userEvent.setup();
+    render(<ReviewWindow />);
+    await user.click(await screen.findByRole("button", { name: "About" }));
+    return user;
+  };
+
+  it("names the licence, since a GPL app that never says so invites misunderstanding", async () => {
+    await openAboutTab();
+
+    expect(screen.getByText(/GNU General Public License v3\.0/)).toBeDefined();
+  });
+
+  it("says plainly that using it at work is allowed", async () => {
+    // The common misreading of copyleft is that it bans commercial use. It does not, and
+    // for a timesheet app almost every user is billing someone.
+    await openAboutTab();
+
+    expect(screen.getByText(/including work you bill for/i)).toBeDefined();
+  });
+
+  it("opens the licence on GitHub rather than in the app", async () => {
+    const user = await openAboutTab();
+    api.openExternal.mockResolvedValue(undefined);
+
+    await user.click(screen.getByRole("button", { name: /read the licence/i }));
+
+    expect(api.openExternal).toHaveBeenCalledWith(
+      "https://github.com/chriiiish/keito-desktop/blob/main/LICENSE",
+    );
   });
 });

@@ -181,9 +181,10 @@ settles. The re-entry guard is a **ref, not state**: two events in the same tick
 read a stale `pending` and both fire. Adding a bare `<button onClick={() => keito.x()}>` is
 a regression — it can be double-fired.
 
-The window has four tabs: Time Entries, Projects (favourites + visibility), Keito
-Connection, Settings (preferences only). Without a working key everything falls back to
-Keito Connection.
+The window has five tabs: Time Entries, Projects (favourites + visibility), Keito
+Connection, Settings (preferences only) and About (licence, tip jar, source links, build
+version) — plus **Update Available**, which appears only when there is one. Without a
+working key everything falls back to Keito Connection, except the update tab.
 
 The renderer never receives the API key. `Snapshot.apiKeyHint` is a masked stand-in
 (`kto_••••••••abcd`); the connection form pre-fills it, and a value still equal to the hint
@@ -378,6 +379,17 @@ all, and the tab shows whatever the title says.
 release asset to a full stop. `${arch}` is only ever `arm64` or `x64`, so
 `build/afterAllArtifactBuild.cjs` maps those to *Apple-Silicon* and *Intel-Mac* — in a
 hook, so `npm run package` and CI produce the same names.
+
+**The licence ships inside the app, not just in the repository.** GPL-3.0 section 4 wants
+the licence conveyed *with* the binary, and a `.dmg` downloaded from a release page carries
+nothing the repository says. `build.extraResources` puts `LICENSE` in the app's resources
+directory — `Contents/Resources/LICENSE` on macOS, `resources/LICENSE` on Windows — rather
+than in `build.files`, which would bury it inside `app.asar` where no recipient could
+reasonably find it. Verified on a real `--dir` build: the copied file is byte-identical to
+the repository's, and `codesign --verify --deep --strict` still passes, because
+`extraResources` is copied during packaging and `build/afterPack.cjs` signs after that.
+Adding files to `Contents/` *after* signing would break the seal and the app would report
+as damaged.
 
 **"Source code (zip)" cannot be removed.** GitHub attaches it and the tarball to every
 release from the tag itself. They are not assets the workflow uploads, no API deletes

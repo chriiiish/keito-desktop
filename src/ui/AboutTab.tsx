@@ -3,6 +3,7 @@ import { AsyncButton } from "./AsyncButton.js";
 import { keito } from "./keito-api.js";
 
 const REPO = "https://github.com/chriiiish/keito-desktop";
+const LICENCE = `${REPO}/blob/main/LICENSE`;
 const COFFEE = "https://buymeacoffee.com/chris.lloyd";
 
 const LINKS: ReadonlyArray<readonly [string, string, string]> = [
@@ -19,26 +20,20 @@ const LINKS: ReadonlyArray<readonly [string, string, string]> = [
   ],
 ];
 
-/**
- * Where to find the project, and the two ways to help with it.
- *
- * Money first, then code, then the build details.
- *
- * Money leads because it is the ask almost everyone reading this can actually act on:
- * putting something in the tip jar takes one click, whereas opening a pull request takes
- * an afternoon. Ordering the page by how many people can say yes puts the smallest ask at
- * the top. The build details go last because they are not a contribution at all — they are
- * what you copy into a bug report once you have decided to file one.
- *
- * The lead paragraph carries no heading of its own. "Not an official Keito product" is
- * context for the whole tab rather than a section of it, and it has to be read before
- * either ask makes sense.
- */
-export function ContributeTab({ snapshot }: { snapshot: Snapshot }): JSX.Element {
+export function AboutTab({ snapshot }: { snapshot: Snapshot }): JSX.Element {
   const open = (url: string) => keito.openExternal(url);
 
   return (
     <section className="settings contribute">
+      <h2>Licence</h2>
+      <p className="hint">
+        Released under the <strong>GNU General Public License v3.0</strong>. Use it at home
+        or at work, including work you bill for. Share a modified version and you share your
+        source under the same licence, so whoever gets it has the freedoms you did.
+      </p>
+      <AsyncButton className="link contribute-link" onClick={() => open(LICENCE)}>
+        Read the licence ↗
+      </AsyncButton>
       <p className="hint">
         Keito Timer is free and open source. It is not an official Keito product — it is a
         small app built on Keito’s public API, and anyone is welcome to read it, change it,
