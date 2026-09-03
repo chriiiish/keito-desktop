@@ -220,6 +220,74 @@ Startup is **3 requests**; a popover open is normally **1**. Keep it that way.
 seen against the live workspace. The client retries 429/502/503/504 up to `MAX_ATTEMPTS`
 with linear backoff. That retry now matters mainly for `/projects` and `/time_entries`.
 
+## Update notice
+
+The app tells you when a newer release exists. It is a **notice, not an updater**, and the
+distinction is a constraint rather than a preference.
+
+**There is no auto-updater, and adding one is not a small change.** `electron-updater` is
+not a dependency and the release workflow deliberately does not upload the `.blockmap` and
+`latest*.yml` files that exist only to feed it — those are the only files it drops, and
+every build regenerates them, so restoring them is a two-line change to the upload globs.
+The blocker is not the library. Electron's own `autoUpdater` is backed by Squirrel, which
+on macOS needs a `.zip` target (this builds `dmg` only) and validates a **Developer ID
+signature** on the downloaded update — and `build/afterPack.cjs` ad-hoc signs, because
+there is no certificate. `electron-updater` wraps Squirrel.Mac too, so it needs the same
+things. On Windows the built-in updater needs Squirrel.Windows packaging, which `nsis` is
+not. Auto-update therefore costs an Apple Developer ID and a change of Windows installer
+format, whichever library does it. Until then the honest ceiling is a link to the download
+page, and the tab says so in as many words so nobody waits for an install that is not
+coming.
+
+**`GET /releases/latest` answers 404 for this repo and always will**, because it excludes
+drafts *and* pre-releases and every release here is published as a pre-release. The check
+lists `/releases` and takes the newest **non-draft** — `pickLatestRelease` in
+`src/core/version/version.ts`. Drafts are excluded because they are invisible to anyone
+without write access, so offering one would point users at a 404. Pre-releases are kept
+because they are the thing on the download page.
+
+**Ordering is SemVer, not string comparison.** `"0.10.0" < "0.9.0"` lexically, so a naive
+comparison would stop offering updates the moment a minor version reached double digits.
+`compareVersions` implements SemVer precedence including pre-release identifiers, and
+`/releases` is sorted by it rather than trusted in the order GitHub returns — that order is
+by creation date, which stops matching version order the moment a patch is cut for an older
+line. An unparseable tag is skipped rather than failing the check, so one `nightly` tag
+cannot switch the feature off.
+
+**Packaged builds only.** `app.getVersion()` in a dev run reports whatever `package.json`
+says, and the release workflow stamps that from the tag *after* a release is cut — so a dev
+build is legitimately behind whatever shipped and would show a notice on every `npm run
+dev`. `startUpdateChecks` in `main.ts` returns early when `app.isPackaged` is false. To see
+the notice while working on it, temporarily drop that guard and pass a lower version to
+`AppService.create`; do not commit an environment-variable escape hatch for it.
+
+**Checked at launch and once a day**, cached on the Snapshot. A popover open costs nothing
+— it reads the answer that is already there. GitHub allows 60 unauthenticated requests an
+hour per IP and this asks for one a day. A failed check is logged and shows nothing: an
+unreachable GitHub is not an error the user can act on, and `fetchLatestRelease` never
+throws.
+
+**The notice is dismissible per version.** `Preferences.dismissedUpdate` holds a version
+string rather than a flag, so waving away 0.3.0 silences that release and the notice
+returns by itself for 0.4.0. Dismissal hides only the popover notice — the **Update
+Available** tab stays, so a dismissed release is still findable. A Danger Zone reset clears
+it with every other preference, which is correct: a fresh install has dismissed nothing.
+
+**The tab exists only while an update does.** It is appended to `TABS` rather than living
+in it, and `ReviewWindow` falls back to the entries tab if the update disappears while the
+tab is open. Which tab is showing is sent as a `show-tab` **event**, not put on the
+Snapshot — a Snapshot field would re-select the tab on every broadcast, so clicking away
+from it would not stick. That is the exception to "new UI state belongs on `Snapshot`":
+this is a navigation command, not state.
+
+**The release body is not shown as-is.** The workflow prepends a download table and
+first-launch instructions to every release, and `generate_release_notes: true` appends
+GitHub's list underneath — so only the `## What's Changed` section is a changelog.
+`releaseHighlights` in `src/core/version/notes.ts` extracts it and strips the
+` by @who in <url>` tail. The lines render as text, not Markdown: the body is content this
+app did not write, and rendering arbitrary remote markup is a bigger commitment than a
+notice warrants.
+
 ## Platform rules
 
 Both macOS and Windows are supported targets, and the two differ in ways that fail

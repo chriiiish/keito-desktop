@@ -174,11 +174,69 @@ button.primary:hover { filter: brightness(1.08); }
   font-size: 11px;
 }
 
+/*
+ * The update notice sits directly above the footer, so it reads as part of the bottom of
+ * the popover rather than as another list. Tinted rather than coloured in: it is news, not
+ * a warning, and the timer above it is what the window is for.
+ */
+.update-notice {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 8px 5px 12px;
+  background: var(--tint);
+  border-top: 1px solid var(--line);
+}
+
+.update-notice-open {
+  flex: 1;
+  border: none;
+  background: none;
+  text-align: left;
+  padding: 2px 4px;
+  color: var(--accent);
+  font-size: 12px;
+}
+.update-notice-open:hover { text-decoration: underline; }
+.update-notice-open strong { font-weight: 600; }
+
+.update-notice-dismiss {
+  border: none;
+  background: none;
+  color: var(--muted);
+  padding: 0 6px;
+  font-size: 15px;
+  line-height: 1;
+}
+.update-notice-dismiss:hover { color: var(--fg); }
+
 /* ── Review window ───────────────────────────────────────── */
 .window { padding: 0 0 24px; }
 .tabs { display: flex; gap: 4px; padding: 12px 20px 0; border-bottom: var(--rule-width) solid var(--rule); }
 .tabs button { border: none; background: none; border-bottom: 2px solid transparent; border-radius: 0; }
 .tabs button.on { border-bottom-color: var(--accent); color: var(--accent); }
+/* The update tab is only ever present when there is an update, so it can afford to ask
+   for attention — a dot, rather than a colour the eye has to decode. */
+.tabs button.has-update::before { content: "● "; color: var(--accent); font-size: 9px; vertical-align: 2px; }
+
+.update-tab .primary { margin-bottom: 4px; }
+/*
+ * The changed-things list. A max height so a busy release cannot push the rest of the tab
+ * off the screen, and `anywhere` so a long commit subject wraps rather than scrolling the
+ * window sideways.
+ */
+.release-notes {
+  margin: 0 0 8px;
+  padding: 8px 12px 8px 28px;
+  max-height: 240px;
+  overflow-y: auto;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.release-notes li { padding: 2px 0; }
 
 .entries, .settings { padding: 16px 20px; }
 .range { display: flex; gap: 6px; margin-bottom: 12px; }

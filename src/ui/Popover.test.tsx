@@ -22,6 +22,8 @@ const api = {
   setHidden: vi.fn(),
   closePopover: vi.fn(),
   openWindow: vi.fn(),
+  openExternal: vi.fn(),
+  dismissUpdate: vi.fn(),
   resolveIdle: vi.fn(),
   resumeEntry: vi.fn(),
 };
@@ -55,6 +57,7 @@ const snapshot: Snapshot = {
   canOpenAtLogin: true,
   platform: "darwin",
   appVersion: "0.1.0",
+  update: null,
   accountId: "co_9",
   apiKeyHint: "kto_••••••••abcd",
   trayFallback: "task",
@@ -775,5 +778,67 @@ describe("yesterday's entries", () => {
 
     const play = await screen.findByLabelText(/^Start Unknown task again today$/);
     expect(play.hasAttribute("disabled")).toBe(true);
+  });
+});
+
+const available = (over: Partial<NonNullable<Snapshot["update"]>> = {}) => ({
+  ...snapshot,
+  update: {
+    version: "0.4.0",
+    tag: "v0.4.0",
+    name: "0.4.0",
+    url: "https://github.com/chriiiish/keito-desktop/releases/tag/v0.4.0",
+    publishedAt: "2026-09-03T00:00:00Z",
+    notes: "Fixed the thing.",
+    dismissed: false,
+    ...over,
+  },
+});
+
+describe("the update notice", () => {
+  it("says nothing at all when there is no newer release", async () => {
+    render(<Popover />);
+    await screen.findByText("QA");
+
+    expect(screen.queryByText(/Update available/)).toBeNull();
+  });
+
+  it("names the release that is waiting", async () => {
+    api.getSnapshot.mockResolvedValue(available());
+    render(<Popover />);
+
+    expect(await screen.findByText("0.4.0")).toBeDefined();
+    expect(screen.getByText(/Update available/)).toBeDefined();
+  });
+
+  it("opens the window on the update tab rather than a browser", async () => {
+    // The decision was to keep the user in the app: the tab has the notes and the
+    // download link, so the notice is a way in rather than a shortcut past it.
+    api.getSnapshot.mockResolvedValue(available());
+    render(<Popover />);
+
+    await userEvent.setup().click(await screen.findByText(/Update available/));
+
+    expect(api.openWindow).toHaveBeenCalledWith("update");
+    expect(api.openExternal).not.toHaveBeenCalled();
+  });
+
+  it("stays quiet once this version has been dismissed", async () => {
+    api.getSnapshot.mockResolvedValue(available({ dismissed: true }));
+    render(<Popover />);
+    await screen.findByText("QA");
+
+    expect(screen.queryByText(/Update available/)).toBeNull();
+  });
+
+  it("dismisses on the cross", async () => {
+    api.getSnapshot.mockResolvedValue(available());
+    api.dismissUpdate.mockResolvedValue(available({ dismissed: true }));
+    render(<Popover />);
+
+    await userEvent.setup().click(await screen.findByLabelText("Dismiss update notice"));
+
+    expect(api.dismissUpdate).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(/Update available/)).toBeNull();
   });
 });

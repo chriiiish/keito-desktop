@@ -20,6 +20,7 @@ const api = {
   setHidden: (pairIds: string[], hidden: boolean): Promise<Snapshot> =>
     ipcRenderer.invoke("set-hidden", pairIds, hidden),
   setHotkey: (hotkey: string): Promise<Snapshot> => ipcRenderer.invoke("set-hotkey", hotkey),
+  dismissUpdate: (): Promise<Snapshot> => ipcRenderer.invoke("dismiss-update"),
   setOpenAtLogin: (openAtLogin: boolean): Promise<Snapshot> =>
     ipcRenderer.invoke("set-open-at-login", openAtLogin),
   setTrayLabel: (options: {
@@ -37,7 +38,7 @@ const api = {
   openExternal: (url: string): Promise<void> => ipcRenderer.invoke("open-external", url),
   logPath: (): Promise<string> => ipcRenderer.invoke("log-path"),
   closePopover: (): Promise<void> => ipcRenderer.invoke("close-popover"),
-  openWindow: (): Promise<void> => ipcRenderer.invoke("open-window"),
+  openWindow: (tab?: string): Promise<void> => ipcRenderer.invoke("open-window", tab),
   resolveIdle: (keep: boolean, awaySinceMs: number): Promise<Snapshot> =>
     ipcRenderer.invoke("resolve-idle", keep, awaySinceMs),
 
@@ -46,6 +47,14 @@ const api = {
     ipcRenderer.on("snapshot", listener);
     return () => {
       ipcRenderer.off("snapshot", listener);
+    };
+  },
+  /** The main process asking the settings window to select a tab — see openMainWindow. */
+  onShowTab: (handler: (tab: string) => void) => {
+    const listener = (_event: unknown, tab: string) => handler(tab);
+    ipcRenderer.on("show-tab", listener);
+    return () => {
+      ipcRenderer.off("show-tab", listener);
     };
   },
   onPopoverShown: (handler: () => void) => {

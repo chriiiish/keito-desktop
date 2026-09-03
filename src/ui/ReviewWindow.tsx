@@ -6,6 +6,7 @@ import { AsyncButton, Spinner, useAsyncAction } from "./AsyncButton.js";
 import { HotkeyRecorder } from "./HotkeyRecorder.js";
 import { TrayLabelSettings } from "./TrayLabelSettings.js";
 import { ContributeTab } from "./ContributeTab.js";
+import { UpdateTab } from "./UpdateTab.js";
 import { ProjectsTab } from "./ProjectsTab.js";
 import { Toggle } from "./Toggle.js";
 import { useSnapshot } from "./useSnapshot.js";
@@ -19,7 +20,7 @@ function weekStart(today: string): string {
   return shiftDate(today, -weekday);
 }
 
-type Tab = "entries" | "projects" | "connection" | "settings" | "contribute";
+type Tab = "entries" | "projects" | "connection" | "settings" | "contribute" | "update";
 
 const TABS: ReadonlyArray<readonly [Tab, string]> = [
   ["entries", "Time Entries"],
@@ -28,6 +29,16 @@ const TABS: ReadonlyArray<readonly [Tab, string]> = [
   ["settings", "Settings"],
   ["contribute", "Contribute"],
 ];
+
+/**
+ * The update tab exists only while there is something to update to, so it is appended
+ * rather than living in TABS. A permanent tab that says "you are up to date" is a tab
+ * nobody opens twice; this one is only ever there when it has something to say.
+ *
+ * Dismissing the popover notice does not remove it — dismissal quietens the timer, it does
+ * not decide that the release is no longer worth finding.
+ */
+const UPDATE_TAB: readonly [Tab, string] = ["update", "Update Available"];
 
 export function ReviewWindow(): JSX.Element {
   const [snapshot, setSnapshot] = useSnapshot();
@@ -62,6 +73,12 @@ export function ReviewWindow(): JSX.Element {
    * anything the main process set as soon as the page loaded. This also makes it
    * something the component tests can actually read.
    */
+  /**
+   * The popover's update notice opens this window on the update tab. An event rather than
+   * Snapshot state, so clicking away from the tab afterwards actually sticks.
+   */
+  useEffect(() => keito.onShowTab((requested) => setTab(requested as Tab)), []);
+
   const company = ready ? snapshot?.identity?.accountName?.trim() : undefined;
   useEffect(() => {
     document.title = company ? `Keito Timer - ${company}` : "Keito Timer";
@@ -69,14 +86,24 @@ export function ReviewWindow(): JSX.Element {
 
   if (!snapshot) return <div className="window loading">Loading…</div>;
 
-  // Nothing else can do anything useful until the connection works.
-  const active: Tab = snapshot.keyStatus === "ready" ? tab : "connection";
+  const update = snapshot.update;
+  const tabs = update ? [...TABS, UPDATE_TAB] : TABS;
+
+  // Nothing else can do anything useful until the connection works. The update tab is
+  // also gone the moment the update is installed, so a window left open on it must fall
+  // back rather than render an empty pane.
+  const selected: Tab = tab === "update" && !update ? "entries" : tab;
+  const active: Tab = snapshot.keyStatus === "ready" ? selected : "connection";
 
   return (
     <div className="window">
       <nav className="tabs">
-        {TABS.map(([id, label]) => (
-          <button key={id} className={active === id ? "on" : ""} onClick={() => setTab(id)}>
+        {tabs.map(([id, label]) => (
+          <button
+            key={id}
+            className={`${active === id ? "on" : ""}${id === "update" ? " has-update" : ""}`.trim()}
+            onClick={() => setTab(id)}
+          >
             {label}
           </button>
         ))}
@@ -89,6 +116,7 @@ export function ReviewWindow(): JSX.Element {
       {active === "connection" && <Connection snapshot={snapshot} onChange={setSnapshot} />}
       {active === "settings" && <Settings snapshot={snapshot} onChange={setSnapshot} />}
       {active === "contribute" && <ContributeTab snapshot={snapshot} />}
+      {active === "update" && update && <UpdateTab snapshot={snapshot} update={update} />}
     </div>
   );
 }

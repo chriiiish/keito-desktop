@@ -17,6 +17,7 @@ import { formatTrayLabel } from "../src/core/tray/label.js";
 import { AppService, type Snapshot } from "./service.js";
 import { SecretStore } from "./secrets.js";
 import { Logger } from "./logger.js";
+import { fetchLatestRelease, UPDATE_CHECK_INTERVAL_MS } from "./updates.js";
 
 const POPOVER_SIZE = { width: 420, height: 520 };
 
@@ -155,10 +156,28 @@ function togglePopover(): void {
   showPopover();
 }
 
-function openMainWindow(): void {
+/**
+ * Opens the settings window, optionally on a particular tab.
+ *
+ * The tab is sent as an event rather than put on the Snapshot: which tab is showing is the
+ * window's own business, and a Snapshot field would keep re-selecting it on every
+ * broadcast — clicking away from the tab would not stick. A freshly created window has to
+ * wait for its renderer, since nothing is listening until the page has loaded.
+ */
+function openMainWindow(tab?: string): void {
+  const selectTab = (window: BrowserWindow): void => {
+    if (!tab) return;
+    if (window.webContents.isLoading()) {
+      window.webContents.once("did-finish-load", () => window.webContents.send("show-tab", tab));
+    } else {
+      window.webContents.send("show-tab", tab);
+    }
+  };
+
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.show();
     mainWindow.focus();
+    selectTab(mainWindow);
     return;
   }
   mainWindow = new BrowserWindow({
@@ -173,6 +192,7 @@ function openMainWindow(): void {
     return { action: "deny" };
   });
   loadRenderer(mainWindow, "/window");
+  selectTab(mainWindow);
 }
 
 /**
@@ -198,7 +218,7 @@ function createTray(): void {
         { label: "Switch task…", click: showPopover },
         { label: "Stop timer", click: () => void service.stopTimer().then(broadcast) },
         { type: "separator" },
-        { label: "Entries & settings…", click: openMainWindow },
+        { label: "Entries & settings…", click: () => openMainWindow() },
         { label: "Open log…", click: () => void shell.openPath(service.logPath) },
         { type: "separator" },
         { label: "Quit Keito Timer", role: "quit" },
@@ -263,6 +283,8 @@ function registerIpc(): void {
   handle("resolve-idle", async (keep: boolean, awaySinceMs: number) =>
     keep ? service.snapshot() : service.discardIdleSince(new Date(awaySinceMs)),
   );
+
+  handle("dismiss-update", async () => service.dismissUpdate());
 
   handle("set-tray-label", async (options: Parameters<AppService["setTrayLabel"]>[0]) =>
     service.setTrayLabel(options),
@@ -330,9 +352,9 @@ function registerIpc(): void {
     popover?.hide();
     return undefined;
   });
-  handle("open-window", async () => {
+  handle("open-window", async (tab?: string) => {
     popover?.hide();
-    openMainWindow();
+    openMainWindow(tab);
     return undefined;
   });
 }
@@ -360,6 +382,33 @@ function startMonitors(): void {
   }, IDLE_POLL_MS);
 
   setInterval(() => void service.refresh().then(broadcast), REFRESH_MS);
+}
+
+/**
+ * Asks GitHub for the newest release at startup and once a day after it.
+ *
+ * **Packaged builds only.** `app.getVersion()` in a development run reports whatever
+ * package.json holds, and the release workflow stamps that from the tag *after* a release
+ * is cut — so a dev build is legitimately behind whatever has shipped, and would show a
+ * notice on every `npm run dev`, pointing at an update that is not one.
+ *
+ * Daily rather than on every popover open: the popover reads the answer off the Snapshot,
+ * so opening it costs nothing, and CLAUDE.md's request budget is about a frugal app rather
+ * than only about Keito's own endpoints.
+ */
+function startUpdateChecks(): void {
+  if (!app.isPackaged) {
+    log.info("Update check skipped: not a packaged build");
+    return;
+  }
+
+  const check = async (): Promise<void> => {
+    service.setLatestRelease(await fetchLatestRelease(log));
+    broadcast(service.snapshot());
+  };
+
+  void check();
+  setInterval(() => void check(), UPDATE_CHECK_INTERVAL_MS);
 }
 
 // One tray icon, one set of global shortcuts, one writer of preferences.json. Without
@@ -404,6 +453,7 @@ async function start(): Promise<void> {
   service.setHotkeyRegistered(registerHotkey(prefs.get().hotkey));
   service.setOpenAtLogin(readOpenAtLogin(), app.isPackaged);
   startMonitors();
+  startUpdateChecks();
 
   started = true;
 
