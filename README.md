@@ -280,7 +280,7 @@ Issues and pull requests are welcome: <https://github.com/chriiiish/keito-deskto
 
 - **Found a bug?** [Open an issue](https://github.com/chriiiish/keito-desktop/issues) and
   attach the log. Settings → Diagnostics → **Open log file**; keys are masked in it. The
-  **Contribute** tab shows the exact build version, which is worth quoting.
+  **About** tab shows the exact build version, which is worth quoting.
 - **Want to fix something?** The domain logic lives in `src/core/` and runs under
   `npm test` in seconds with no window and no network, so a change is quick to make and
   quick to prove.
@@ -291,5 +291,5 @@ Issues and pull requests are welcome: <https://github.com/chriiiish/keito-deskto
   convention here, and pull requests say so.
 - `npm test` and `npm run typecheck` must pass; CI also runs CodeQL and Trivy.
 
-If the app has saved you the daily fight with a browser tab, the **Contribute** tab has a
+If the app has saved you the daily fight with a browser tab, the **About** tab has a
 tip jar. It is free and will stay that way either way.

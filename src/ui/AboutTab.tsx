@@ -3,6 +3,7 @@ import { AsyncButton } from "./AsyncButton.js";
 import { keito } from "./keito-api.js";
 
 const REPO = "https://github.com/chriiiish/keito-desktop";
+const LICENCE = `${REPO}/blob/main/LICENSE`;
 const COFFEE = "https://buymeacoffee.com/chris.lloyd";
 
 const LINKS: ReadonlyArray<readonly [string, string, string]> = [
@@ -20,9 +21,14 @@ const LINKS: ReadonlyArray<readonly [string, string, string]> = [
 ];
 
 /**
- * Where to find the project, and the two ways to help with it.
+ * What this app is, what you may do with it, and the two ways to help.
  *
- * Money first, then code, then the build details.
+ * Licence first, then money, then code, then the build details.
+ *
+ * The licence leads because it is the question a stranger arrives with — what am I allowed
+ * to do with this? — and because a GPL app that never says so anywhere in its own interface
+ * is asking to be misunderstood. It is also the shortest section, so it costs the asks
+ * below it almost nothing.
  *
  * Money leads because it is the ask almost everyone reading this can actually act on:
  * putting something in the tip jar takes one click, whereas opening a pull request takes
@@ -30,15 +36,24 @@ const LINKS: ReadonlyArray<readonly [string, string, string]> = [
  * the top. The build details go last because they are not a contribution at all — they are
  * what you copy into a bug report once you have decided to file one.
  *
- * The lead paragraph carries no heading of its own. "Not an official Keito product" is
- * context for the whole tab rather than a section of it, and it has to be read before
- * either ask makes sense.
+ * "Not an official Keito product" sits under the licence heading rather than in a section
+ * of its own: what this app is and what you may do with it are the same question, and the
+ * disclaimer has to be read before either ask below makes sense.
  */
-export function ContributeTab({ snapshot }: { snapshot: Snapshot }): JSX.Element {
+export function AboutTab({ snapshot }: { snapshot: Snapshot }): JSX.Element {
   const open = (url: string) => keito.openExternal(url);
 
   return (
     <section className="settings contribute">
+      <h2>Licence</h2>
+      <p className="hint">
+        Released under the <strong>GNU General Public License v3.0</strong>. Use it at home
+        or at work, including work you bill for. Share a modified version and you share your
+        source under the same licence, so whoever gets it has the freedoms you did.
+      </p>
+      <AsyncButton className="link contribute-link" onClick={() => open(LICENCE)}>
+        Read the licence ↗
+      </AsyncButton>
       <p className="hint">
         Keito Timer is free and open source. It is not an official Keito product — it is a
         small app built on Keito’s public API, and anyone is welcome to read it, change it,

@@ -181,9 +181,10 @@ settles. The re-entry guard is a **ref, not state**: two events in the same tick
 read a stale `pending` and both fire. Adding a bare `<button onClick={() => keito.x()}>` is
 a regression — it can be double-fired.
 
-The window has four tabs: Time Entries, Projects (favourites + visibility), Keito
-Connection, Settings (preferences only). Without a working key everything falls back to
-Keito Connection.
+The window has five tabs: Time Entries, Projects (favourites + visibility), Keito
+Connection, Settings (preferences only) and About (licence, tip jar, source links, build
+version) — plus **Update Available**, which appears only when there is one. Without a
+working key everything falls back to Keito Connection, except the update tab.
 
 The renderer never receives the API key. `Snapshot.apiKeyHint` is a masked stand-in
 (`kto_••••••••abcd`); the connection form pre-fills it, and a value still equal to the hint
