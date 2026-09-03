@@ -1,5 +1,11 @@
 name: Release
 
+# The Actions list is otherwise a column of runs all called "Release", which is no help
+# at all when you are looking for the one that shipped a particular version. Evaluated
+# before any job starts, so it cannot use the resolved version from `meta` — it reads the
+# same two places that job does: the dispatch input, or the tag that was pushed.
+run-name: Release ${{ inputs.tag || github.ref_name }}
+
 on:
   push:
     tags:
