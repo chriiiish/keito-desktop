@@ -564,15 +564,15 @@ describe("the contribute tab", () => {
     const user = await openContribute();
     api.openExternal.mockResolvedValue(undefined);
 
-    await user.click(screen.getByRole("button", { name: /buy me a coffee/i }));
+    await user.click(screen.getByRole("button", { name: /^☕ Buy me a/i }));
 
     expect(api.openExternal).toHaveBeenCalledWith("https://buymeacoffee.com/chris.lloyd");
   });
 
-  it("makes clear the app stays free", async () => {
+  it("makes clear the app is free", async () => {
     await openContribute();
 
-    expect(screen.getByText(/free, and will stay that way/i)).toBeDefined();
+    expect(screen.getByText(/Keito Timer is free\./i)).toBeDefined();
   });
 
   it("asks for money, then code, then tells you what you are running", async () => {
@@ -586,7 +586,7 @@ describe("the contribute tab", () => {
     expect(headings.map((heading) => heading.textContent)).toEqual([
       "Say thanks",
       "Open source",
-      "This build",
+      "About this build",
     ]);
   });
 
