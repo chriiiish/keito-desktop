@@ -1,10 +1,13 @@
 name: Release
 
 # The Actions list is otherwise a column of runs all called "Release", which is no help
-# at all when you are looking for the one that shipped a particular version. Evaluated
-# before any job starts, so it cannot use the resolved version from `meta` — it reads the
-# same two places that job does: the dispatch input, or the tag that was pushed.
-run-name: Release ${{ inputs.tag || github.ref_name }}
+# at all when you are looking for the one that shipped a particular version.
+#
+# Evaluated before any job starts, so it cannot use the version `meta` resolves, and
+# expressions have no substring or replace to strip a "v" with. A manual run therefore
+# reads its bare input directly; a tag push has only the ref name to go on and keeps the
+# "v" it was pushed with.
+run-name: Release ${{ inputs.version || github.ref_name }}
 
 on:
   push:
@@ -12,8 +15,8 @@ on:
       - "v*"
   workflow_dispatch:
     inputs:
-      tag:
-        description: "Tag to cut from main and release (e.g. v0.1.0)"
+      version:
+        description: "Version to release, without the v (e.g. 0.1.2)"
         required: true
         type: string
 
@@ -39,7 +42,12 @@ jobs:
     steps:
       - id: resolve
         run: |
-          TAG="${{ inputs.tag || github.ref_name }}"
+          # A manual run supplies the bare version and the tag is formed from it; a tag
+          # push supplies the tag and the version is taken off it. Either way both exist
+          # by the time anything is built.
+          supplied="${{ inputs.version }}"
+          TAG="${supplied:+v$supplied}"
+          TAG="${TAG:-${{ github.ref_name }}}"
           # SemVer's own grammar rather than an approximation of it: numeric identifiers
           # carry no leading zeros, and a pre-release is dot-separated identifiers that
           # are each non-empty. A looser pattern lets "v1.2.3-beta..1" and "v1.2.3-."
@@ -47,7 +55,7 @@ jobs:
           NUM='(0|[1-9][0-9]*)'
           ID="($NUM|[0-9]*[A-Za-z-][0-9A-Za-z-]*)"
           if ! printf '%s' "$TAG" | grep -Eq "^v$NUM\.$NUM\.$NUM(-$ID(\.$ID)*)?$"; then
-            echo "::error::Tag '$TAG' is not vMAJOR.MINOR.PATCH with an optional SemVer pre-release — refusing to release."
+            echo "::error::Tag '$TAG' is not vMAJOR.MINOR.PATCH with an optional SemVer pre-release — refusing to release. A manual run takes the version without the v, so 0.1.2 rather than v0.1.2."
             exit 1
           fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
