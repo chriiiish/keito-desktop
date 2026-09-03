@@ -575,6 +575,28 @@ describe("the contribute tab", () => {
     expect(screen.getByText(/free, and will stay that way/i)).toBeDefined();
   });
 
+  it("asks for money, then code, then tells you what you are running", async () => {
+    // Ordered by how many people can act on the ask: the tip jar is one click, a pull
+    // request is an afternoon. The build details are not a contribution at all — they are
+    // what you copy into a bug report — so they come last.
+    await openContribute();
+
+    const headings = screen.getAllByRole("heading", { level: 2 });
+
+    expect(headings.map((heading) => heading.textContent)).toEqual([
+      "Say thanks",
+      "Open source",
+      "This build",
+    ]);
+  });
+
+  it("leads with the disclaimer, which is context for the whole tab", async () => {
+    await openContribute();
+
+    // Before the first heading, and carrying no heading of its own.
+    expect(screen.getByText(/not an official Keito product/i)).toBeDefined();
+  });
+
   it("shows the build version, so a bug report can name it", async () => {
     await openContribute();
 
