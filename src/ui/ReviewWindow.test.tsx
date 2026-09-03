@@ -591,10 +591,11 @@ describe("the about tab", () => {
     ]);
   });
 
-  it("leads with the disclaimer, which is context for the whole tab", async () => {
+  it("says it is unaffiliated with Keito, under the licence heading", async () => {
+    // What this app is and what you may do with it are the same question, so the
+    // disclaimer sits with the licence rather than in a section of its own.
     await openAbout();
 
-    // Before the first heading, and carrying no heading of its own.
     expect(screen.getByText(/not an official Keito product/i)).toBeDefined();
   });
 
