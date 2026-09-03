@@ -95,8 +95,10 @@ function AzureConnectionForm({
           <strong>Work Items (Read)</strong> — required. Without it there is nothing to list.
         </li>
         <li>
-          <strong>Profile (Read)</strong> — optional. Grant it and your organisation is found
-          for you; leave it out and you paste the URL below instead.
+          <strong>User Profile (Read)</strong> — optional. Grant it and your organisation is
+          found for you; leave it out and you paste the URL below instead. You may need to
+          click <strong>Show all scopes</strong> at the bottom of the token form before this
+          one appears.
         </li>
       </ul>
       <p className="hint">

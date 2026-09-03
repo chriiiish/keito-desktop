@@ -177,7 +177,7 @@ access tokens** → **New Token**, with:
 | Scope | | Why |
 |---|---|---|
 | **Work Items (Read)** | required | Reading the work items assigned to you. |
-| **Profile (Read)** | optional | Finding your organisation for you. Leave it out and you paste your `https://dev.azure.com/your-org` URL instead — the feature works either way. |
+| **User Profile (Read)** | optional | Finding your organisation for you. Leave it out and you paste your `https://dev.azure.com/your-org` URL instead — the feature works either way. You may need to click **Show all scopes** at the bottom of the token form before this one appears. |
 
 Nothing is ever written back to Azure DevOps; the integration only reads. The token is
 encrypted by the operating system in its own file, exactly like the Keito key, and is never

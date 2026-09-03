@@ -322,7 +322,7 @@ can be `1842: Login redirect drops the return URL` without typing it.
   whole organisation, so the user nominates an organisation and never a project.
 - **The organisation cannot be read from the token alone without another scope.**
   Discovery is `profiles/me` then `/_apis/accounts?memberId=…` on **app.vssps.visualstudio.com**,
-  a different host, and needs **Profile (Read)** on top of Work Items (Read) *and* a token
+  a different host, and needs **User Profile (Read)** on top of Work Items (Read) *and* a token
   that is not scoped to a single organisation — which plenty of enterprises forbid. So
   discovery is attempted and its failure is not an error: it is the cue to ask for the URL.
   `discoverOrganisation` returns null rather than throwing, and **refuses to choose when a

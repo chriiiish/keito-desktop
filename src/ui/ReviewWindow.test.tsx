@@ -1222,15 +1222,26 @@ describe("the integrations tab", () => {
     expect(screen.queryByLabelText(/personal access token/i)).toBeNull();
   });
 
-  it("names the scopes, and which of them is optional", async () => {
-    // A security team refusing Profile (Read) should cost the user one text field, not
-    // the feature — so the page has to say which is which.
+  it("names the scopes exactly as Azure DevOps does, and which is optional", async () => {
+    // A security team refusing User Profile (Read) should cost the user one text field,
+    // not the feature — so the page has to say which is which. The names have to match
+    // the checkboxes on the token form character for character, or the user is hunting
+    // for a scope that is not called that.
     api.getSnapshot.mockResolvedValue(azure({ enabled: true, status: "needs-token" }));
     await openIntegrations();
 
-    expect(screen.getByText(/Work Items \(Read\)/)).toBeDefined();
-    expect(screen.getByText(/Profile \(Read\)/)).toBeDefined();
+    expect(screen.getByText("Work Items (Read)")).toBeDefined();
+    expect(screen.getByText("User Profile (Read)")).toBeDefined();
     expect(screen.getByText(/optional/i)).toBeDefined();
+  });
+
+  it("says where the optional scope is hiding", async () => {
+    // Azure DevOps collapses the scope list, and User Profile is not in the short one —
+    // without this the instruction reads as naming a scope that does not exist.
+    api.getSnapshot.mockResolvedValue(azure({ enabled: true, status: "needs-token" }));
+    await openIntegrations();
+
+    expect(screen.getByText("Show all scopes")).toBeDefined();
   });
 
   it("says plainly that it only ever reads", async () => {
