@@ -380,6 +380,17 @@ release asset to a full stop. `${arch}` is only ever `arm64` or `x64`, so
 `build/afterAllArtifactBuild.cjs` maps those to *Apple-Silicon* and *Intel-Mac* — in a
 hook, so `npm run package` and CI produce the same names.
 
+**The licence ships inside the app, not just in the repository.** GPL-3.0 section 4 wants
+the licence conveyed *with* the binary, and a `.dmg` downloaded from a release page carries
+nothing the repository says. `build.extraResources` puts `LICENSE` in the app's resources
+directory — `Contents/Resources/LICENSE` on macOS, `resources/LICENSE` on Windows — rather
+than in `build.files`, which would bury it inside `app.asar` where no recipient could
+reasonably find it. Verified on a real `--dir` build: the copied file is byte-identical to
+the repository's, and `codesign --verify --deep --strict` still passes, because
+`extraResources` is copied during packaging and `build/afterPack.cjs` signs after that.
+Adding files to `Contents/` *after* signing would break the seal and the app would report
+as damaged.
+
 **"Source code (zip)" cannot be removed.** GitHub attaches it and the tarball to every
 release from the tag itself. They are not assets the workflow uploads, no API deletes
 them, and there is no setting. The release notes therefore lead with the three installers,

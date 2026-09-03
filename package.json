@@ -50,6 +50,9 @@
       "out/**",
       "build/tray*.png"
     ],
+    "extraResources": [
+      "LICENSE"
+    ],
     "afterPack": "build/afterPack.cjs",
     "afterAllArtifactBuild": "build/afterAllArtifactBuild.cjs",
     "mac": {
