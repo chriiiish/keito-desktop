@@ -185,6 +185,12 @@ jobs:
           # The builds are ad-hoc signed, not notarised, so macOS refuses the
           # first launch. Saying so here is the difference between a user who
           # opens the app and one who assumes the download is broken.
+          #
+          # One line per paragraph, however long. GitHub renders a release body with hard
+          # line breaks, so a newline inside a paragraph becomes a visible one — wrapping
+          # this text to a tidy width is what put the ragged breaks in the last release.
+          # Folded YAML (`>`) would fix the prose and wreck the table, whose rows have to
+          # stay one per line.
           body: |
             ## Download
 
@@ -194,18 +200,13 @@ jobs:
             | **macOS** — Intel | [`Keito-Timer-${{ needs.meta.outputs.version }}-Intel-Mac.dmg`](https://github.com/${{ github.repository }}/releases/download/${{ needs.meta.outputs.tag }}/Keito-Timer-${{ needs.meta.outputs.version }}-Intel-Mac.dmg) |
             | **Windows** | [`Keito-Timer-${{ needs.meta.outputs.version }}-Windows.exe`](https://github.com/${{ github.repository }}/releases/download/${{ needs.meta.outputs.tag }}/Keito-Timer-${{ needs.meta.outputs.version }}-Windows.exe) |
 
-            The *Source code* archives below are added by GitHub to every
-            release and are not needed to install the app.
+            The *Source code* archives below are added by GitHub to every release and are not needed to install the app.
 
             ## First launch
 
-            **macOS** — drag the app to Applications. The first launch is
-            refused with "Apple could not verify…" because these builds are not
-            notarised; open **System Settings → Privacy & Security** and press
-            **Open Anyway**. Only needed once.
+            **macOS** — drag the app to Applications. The first launch is refused with "Apple could not verify…" because these builds are not notarised; open **System Settings → Privacy & Security** and press **Open Anyway**. Only needed once.
 
-            **Windows** — run the `.exe`. SmartScreen shows "Windows protected
-            your PC"; choose **More info → Run anyway**.
+            **Windows** — run the `.exe`. SmartScreen shows "Windows protected your PC"; choose **More info → Run anyway**.
 
           files: |
             dist/*.dmg
