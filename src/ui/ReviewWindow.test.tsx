@@ -19,6 +19,9 @@ const api = {
   resetAll: vi.fn(),
   openLog: vi.fn(),
   openExternal: vi.fn(),
+  disconnectAzure: vi.fn(),
+  connectAzure: vi.fn(),
+  setAzureEnabled: vi.fn(),
   openWindow: vi.fn(),
   dismissUpdate: vi.fn(),
   onShowTab: vi.fn((_handler: (tab: string) => void) => () => {}),
@@ -58,6 +61,14 @@ const snapshot: Snapshot = {
   platform: "darwin",
   appVersion: "0.1.0",
   update: null,
+  azure: {
+    enabled: false,
+    status: "off" as const,
+    organisationUrl: null,
+    hasToken: false,
+    workItems: [],
+    error: null,
+  },
   accountId: "co",
   apiKeyHint: "kto_••••••••abcd",
   trayFallback: "task",
@@ -84,6 +95,7 @@ describe("the review window", () => {
       "Projects",
       "Keito Connection",
       "Settings",
+      "Integrations",
       "About",
     ]);
   });
@@ -1178,5 +1190,145 @@ describe("the licence on the about tab", () => {
     expect(api.openExternal).toHaveBeenCalledWith(
       "https://github.com/chriiiish/keito-desktop/blob/main/LICENSE",
     );
+  });
+});
+
+describe("the integrations tab", () => {
+  const openIntegrations = async () => {
+    const user = userEvent.setup();
+    render(<ReviewWindow />);
+    await user.click(await screen.findByRole("button", { name: "Integrations" }));
+    return user;
+  };
+
+  const azure = (over: Partial<Snapshot["azure"]> = {}): Snapshot => ({
+    ...snapshot,
+    azure: {
+      enabled: false,
+      status: "off",
+      organisationUrl: null,
+      hasToken: false,
+      workItems: [],
+      error: null,
+      ...over,
+    },
+  });
+
+  it("keeps the form out of the way until the integration is switched on", async () => {
+    api.getSnapshot.mockResolvedValue(azure());
+    await openIntegrations();
+
+    expect(screen.getByText("Azure DevOps")).toBeDefined();
+    expect(screen.queryByLabelText(/personal access token/i)).toBeNull();
+  });
+
+  it("names the scopes, and which of them is optional", async () => {
+    // A security team refusing Profile (Read) should cost the user one text field, not
+    // the feature — so the page has to say which is which.
+    api.getSnapshot.mockResolvedValue(azure({ enabled: true, status: "needs-token" }));
+    await openIntegrations();
+
+    expect(screen.getByText(/Work Items \(Read\)/)).toBeDefined();
+    expect(screen.getByText(/Profile \(Read\)/)).toBeDefined();
+    expect(screen.getByText(/optional/i)).toBeDefined();
+  });
+
+  it("says plainly that it only ever reads", async () => {
+    api.getSnapshot.mockResolvedValue(azure({ enabled: true, status: "needs-token" }));
+    await openIntegrations();
+
+    expect(screen.getByText(/only ever reads/i)).toBeDefined();
+  });
+
+  it("does not ask for a URL until one is actually needed", async () => {
+    // The common case is a token that finds its own organisation; asking up front would
+    // make one thing look like two.
+    api.getSnapshot.mockResolvedValue(azure({ enabled: true, status: "needs-token" }));
+    await openIntegrations();
+
+    expect(screen.queryByLabelText(/organisation url/i)).toBeNull();
+  });
+
+  it("asks for the URL once discovery has failed", async () => {
+    api.getSnapshot.mockResolvedValue(
+      azure({
+        enabled: true,
+        status: "error",
+        error: "Could not work out your organisation from that token. Enter your Azure DevOps URL below and press Connect again.",
+      }),
+    );
+    await openIntegrations();
+
+    expect(screen.getByLabelText(/organisation url/i)).toBeDefined();
+    expect(screen.getByText(/Enter your Azure DevOps URL/)).toBeDefined();
+  });
+
+  it("connects with the token typed in", async () => {
+    api.getSnapshot.mockResolvedValue(azure({ enabled: true, status: "needs-token" }));
+    api.connectAzure.mockResolvedValue(azure({ enabled: true, status: "connected" }));
+    const user = await openIntegrations();
+
+    await user.type(screen.getByLabelText(/personal access token/i), "pat_secret");
+    await user.click(screen.getByRole("button", { name: "Connect" }));
+
+    expect(api.connectAzure).toHaveBeenCalledWith("pat_secret", undefined);
+  });
+
+  it("cannot connect with an empty token", async () => {
+    api.getSnapshot.mockResolvedValue(azure({ enabled: true, status: "needs-token" }));
+    await openIntegrations();
+
+    expect(screen.getByRole("button", { name: "Connect" }).hasAttribute("disabled")).toBe(true);
+  });
+
+  it("says which organisation it is connected to", async () => {
+    api.getSnapshot.mockResolvedValue(
+      azure({
+        enabled: true,
+        status: "connected",
+        hasToken: true,
+        organisationUrl: "https://dev.azure.com/acme",
+        workItems: [{ id: 1, title: "One", type: "Task", state: "Active" }],
+      }),
+    );
+    await openIntegrations();
+
+    expect(screen.getByText(/Connected — acme/)).toBeDefined();
+    expect(screen.getByText(/1 work item assigned to you/)).toBeDefined();
+  });
+
+  it("offers to forget the token once one is stored", async () => {
+    api.getSnapshot.mockResolvedValue(
+      azure({ enabled: true, status: "connected", hasToken: true }),
+    );
+    api.disconnectAzure.mockResolvedValue(azure());
+    const user = await openIntegrations();
+
+    await user.click(screen.getByRole("button", { name: "Disconnect" }));
+
+    expect(api.disconnectAzure).toHaveBeenCalledTimes(1);
+  });
+
+  it("never shows the stored token back, only that there is one", async () => {
+    // The renderer is never given the token, the same as the Keito key.
+    api.getSnapshot.mockResolvedValue(
+      azure({ enabled: true, status: "connected", hasToken: true }),
+    );
+    await openIntegrations();
+
+    const field = screen.getByLabelText(/personal access token/i) as HTMLInputElement;
+    expect(field.value).toBe("");
+    expect(field.type).toBe("password");
+    expect(field.placeholder).toMatch(/a token is stored/i);
+  });
+
+  it("switches the integration on from the toggle", async () => {
+    api.getSnapshot.mockResolvedValue(azure());
+    api.setAzureEnabled.mockResolvedValue(azure({ enabled: true, status: "needs-token" }));
+    const user = await openIntegrations();
+
+    await user.click(screen.getByRole("checkbox", { name: "Azure DevOps" }));
+
+    expect(api.setAzureEnabled).toHaveBeenCalledWith(true);
   });
 });

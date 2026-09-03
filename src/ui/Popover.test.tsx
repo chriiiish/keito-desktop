@@ -58,6 +58,14 @@ const snapshot: Snapshot = {
   platform: "darwin",
   appVersion: "0.1.0",
   update: null,
+  azure: {
+    enabled: false,
+    status: "off" as const,
+    organisationUrl: null,
+    hasToken: false,
+    workItems: [],
+    error: null,
+  },
   accountId: "co_9",
   apiKeyHint: "kto_••••••••abcd",
   trayFallback: "task",
@@ -917,5 +925,160 @@ describe("a task worked on more than once in a day", () => {
 
     // 00:40:00 rather than 00:10:00 — the half hour before the current stretch counts.
     expect(await screen.findByText(/^00:40:0\d$/)).toBeDefined();
+  });
+});
+
+describe("the note field with Azure DevOps", () => {
+  const workItems = [
+    { id: 1234, title: "Fix the login redirect", type: "Bug", state: "Active" },
+    { id: 1240, title: "Login page copy", type: "Task", state: "New" },
+    { id: 88, title: "Rework the timesheet export", type: "User Story", state: "Active" },
+  ];
+
+  const connected = (over: Partial<Snapshot["azure"]> = {}): Snapshot => ({
+    ...snapshot,
+    azure: {
+      enabled: true,
+      status: "connected",
+      organisationUrl: "https://dev.azure.com/acme",
+      hasToken: true,
+      workItems,
+      error: null,
+      ...over,
+    },
+  });
+
+  it("shows no mark and no listbox when the integration is off", async () => {
+    render(<Popover />);
+    await screen.findByText("QA");
+
+    expect(screen.queryByLabelText("Azure DevOps")).toBeNull();
+    expect(screen.getByPlaceholderText("What are you working on?")).toBeDefined();
+  });
+
+  it("leaves Enter starting the timer when no tickets are offered", async () => {
+    // The whole loop of this app is type a note, press Enter. An integration nobody
+    // switched on must not put a step in front of it.
+    const user = userEvent.setup();
+    api.switchTo.mockResolvedValue(snapshot);
+    render(<Popover />);
+
+    await user.type(await screen.findByPlaceholderText("What are you working on?"), "Just a note{Enter}");
+
+    expect(api.switchTo).toHaveBeenCalledWith("p_acme:t_qa", "Just a note");
+  });
+
+  it("shows the Azure mark once connected", async () => {
+    api.getSnapshot.mockResolvedValue(connected());
+    render(<Popover />);
+
+    expect(await screen.findByLabelText("Azure DevOps")).toBeDefined();
+  });
+
+  it("opens the assigned tickets on the down arrow", async () => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(connected());
+    render(<Popover />);
+
+    await user.click(await screen.findByPlaceholderText(/What are you working on/));
+    await user.keyboard("{ArrowDown}");
+
+    expect(screen.getByRole("listbox")).toBeDefined();
+    expect(screen.getByText("Fix the login redirect")).toBeDefined();
+  });
+
+  it("filters the tickets as you type", async () => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(connected());
+    render(<Popover />);
+
+    await user.type(await screen.findByPlaceholderText(/What are you working on/), "timesheet");
+
+    expect(screen.getByText("Rework the timesheet export")).toBeDefined();
+    expect(screen.queryByText("Fix the login redirect")).toBeNull();
+  });
+
+  it("finds a ticket by its number", async () => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(connected());
+    render(<Popover />);
+
+    await user.type(await screen.findByPlaceholderText(/What are you working on/), "1234");
+
+    expect(screen.getByText("Fix the login redirect")).toBeDefined();
+    expect(screen.queryByText("Login page copy")).toBeNull();
+  });
+
+  it("puts the ticket in the note as number and title", async () => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(connected());
+    render(<Popover />);
+    const input = await screen.findByPlaceholderText(/What are you working on/);
+
+    await user.type(input, "timesheet");
+    await user.keyboard("{Enter}");
+
+    expect((input as HTMLInputElement).value).toBe("88: Rework the timesheet export");
+  });
+
+  it("picks with Enter rather than starting the timer, so the next Enter starts it", async () => {
+    // Enter means "pick" only while the list is open. This is the one keystroke the
+    // integration takes over, and it hands it straight back.
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(connected());
+    api.switchTo.mockResolvedValue(snapshot);
+    render(<Popover />);
+    const input = await screen.findByPlaceholderText(/What are you working on/);
+
+    await user.type(input, "timesheet");
+    await user.keyboard("{Enter}");
+    expect(api.switchTo).not.toHaveBeenCalled();
+
+    await user.keyboard("{Enter}");
+    expect(api.switchTo).toHaveBeenCalledWith("p_acme:t_qa", "88: Rework the timesheet export");
+  });
+
+  it("closes the list on Escape and keeps what was typed", async () => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(connected());
+    render(<Popover />);
+    const input = await screen.findByPlaceholderText(/What are you working on/);
+
+    await user.type(input, "login");
+    await user.keyboard("{Escape}");
+
+    expect(screen.queryByRole("listbox")).toBeNull();
+    expect((input as HTMLInputElement).value).toBe("login");
+    // Escape closed the list, not the popover.
+    expect(api.closePopover).not.toHaveBeenCalled();
+  });
+
+  it("still lets you type a note that is not a ticket at all", async () => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(connected());
+    api.switchTo.mockResolvedValue(snapshot);
+    render(<Popover />);
+
+    await user.type(
+      await screen.findByPlaceholderText(/What are you working on/),
+      "Reviewing a pull request",
+    );
+    await user.keyboard("{Enter}");
+
+    expect(api.switchTo).toHaveBeenCalledWith("p_acme:t_qa", "Reviewing a pull request");
+  });
+
+  it("offers nothing while the connection is broken", async () => {
+    // A stale list behind a connection that has stopped working would suggest tickets it
+    // cannot refresh.
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(
+      connected({ status: "error", workItems: [], error: "Token expired" }),
+    );
+    render(<Popover />);
+
+    await user.type(await screen.findByPlaceholderText("What are you working on?"), "login");
+
+    expect(screen.queryByRole("listbox")).toBeNull();
   });
 });

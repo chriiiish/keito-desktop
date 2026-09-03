@@ -152,6 +152,10 @@ If this made your life easier, consider buying me a coffee ❤️
   <img width="587" height="389" alt="Change which categories are visible" src="https://github.com/user-attachments/assets/b5e4dacd-0fff-4e96-ba0e-fbddd9c98fc3" />
 
 - **Entries window** for correcting today's or this week's times and notes.  
+- **Azure DevOps work items as notes.** Switch it on in **Integrations** and the note field
+  offers the open work items assigned to you — type to search them or press `↓` to browse —
+  filling the note in as `1842: Login redirect drops the return URL`. Read-only, optional,
+  and off unless you turn it on.  
   <img width="895" height="275" alt="List of all entries for today" src="https://github.com/user-attachments/assets/7d5b25f2-5146-4d52-a40b-92c974b341e1" />
 
 - **Tells you when a new version is out**, with a link to the download. It does not update
@@ -161,6 +165,33 @@ If this made your life easier, consider buying me a coffee ❤️
 
 A "category" here is a **(project, task) pair**. Keito has no category resource, and a time
 entry requires both ids.
+
+### Azure DevOps
+
+Optional. **Integrations → Azure DevOps**, switch it on, paste a personal access token,
+press **Connect**.
+
+Create the token in Azure DevOps under your profile menu → **User settings** → **Personal
+access tokens** → **New Token**, with:
+
+| Scope | | Why |
+|---|---|---|
+| **Work Items (Read)** | required | Reading the work items assigned to you. |
+| **Profile (Read)** | optional | Finding your organisation for you. Leave it out and you paste your `https://dev.azure.com/your-org` URL instead — the feature works either way. |
+
+Nothing is ever written back to Azure DevOps; the integration only reads. The token is
+encrypted by the operating system in its own file, exactly like the Keito key, and is never
+written to `preferences.json`. The work item list is held in memory only and never written
+to disk.
+
+Once connected, the note field carries the Azure DevOps mark. Type to search, or press `↓`
+to see everything assigned to you; picking one fills the note in as `1842: Title`. **You can
+still just type a note** — nothing about the existing behaviour changes, and `⏎` starts the
+timer exactly as before unless the ticket list is actually open.
+
+The list holds the 200 most recently changed open items assigned to you, and refreshes every
+10 minutes and when you open the popover. An on-premises Azure DevOps Server collection
+works too — paste its collection URL instead of a `dev.azure.com` one.
 
 ### Known limits
 
