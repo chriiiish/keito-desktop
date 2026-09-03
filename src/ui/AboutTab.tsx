@@ -20,26 +20,6 @@ const LINKS: ReadonlyArray<readonly [string, string, string]> = [
   ],
 ];
 
-/**
- * What this app is, what you may do with it, and the two ways to help.
- *
- * Licence first, then money, then code, then the build details.
- *
- * The licence leads because it is the question a stranger arrives with — what am I allowed
- * to do with this? — and because a GPL app that never says so anywhere in its own interface
- * is asking to be misunderstood. It is also the shortest section, so it costs the asks
- * below it almost nothing.
- *
- * Money leads because it is the ask almost everyone reading this can actually act on:
- * putting something in the tip jar takes one click, whereas opening a pull request takes
- * an afternoon. Ordering the page by how many people can say yes puts the smallest ask at
- * the top. The build details go last because they are not a contribution at all — they are
- * what you copy into a bug report once you have decided to file one.
- *
- * "Not an official Keito product" sits under the licence heading rather than in a section
- * of its own: what this app is and what you may do with it are the same question, and the
- * disclaimer has to be read before either ask below makes sense.
- */
 export function AboutTab({ snapshot }: { snapshot: Snapshot }): JSX.Element {
   const open = (url: string) => keito.openExternal(url);
 
