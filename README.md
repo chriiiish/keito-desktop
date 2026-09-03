@@ -50,10 +50,10 @@ stop the first launch. **This is expected, and only happens once.**
 <details>
   <summary>Windows</summary>  
 
-  When downloading you may get told the exe is unsafe:
-  
-  <!-- WINDOWS IMAGE -->
-  
+  When downloading you may get told the exe is unsafe:  
+  <img width="514" height="357" alt="image" src="https://github.com/user-attachments/assets/e5283ca4-0261-4c21-9fa4-080064b7c104" />  
+  <img width="363" height="447" alt="image" src="https://github.com/user-attachments/assets/faf0409e-066f-4473-90ee-b1ee6f0c6cb7" />
+
   Run the `.exe`. SmartScreen shows *"Windows protected your PC"*. Choose
   **More info → Run anyway**. The installer is per-user and lets you pick the directory.
 </details>
