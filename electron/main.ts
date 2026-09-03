@@ -25,6 +25,8 @@ const POPOVER_SIZE = { width: 420, height: 520 };
 const EXTERNAL_HOSTS = new Set(["github.com", "buymeacoffee.com", "www.buymeacoffee.com"]);
 const IDLE_POLL_MS = 30_000;
 const REFRESH_MS = 5 * 60_000;
+/** How often the Azure DevOps work item list is reloaded while the app is running. */
+const AZURE_REFRESH_MS = 10 * 60_000;
 
 let tray: Tray | null = null;
 let popover: BrowserWindow | null = null;
@@ -137,6 +139,9 @@ function showPopover(): void {
   popover.webContents.focus();
   popover.webContents.send("popover-shown");
   void service.refresh().then(broadcast);
+  // Reloads the assigned work items only if the list has gone stale — opening the popover
+  // is the app's whole loop, and each refresh is two Azure requests.
+  void service.refreshWorkItems().then(broadcast);
 }
 
 /**
@@ -286,6 +291,12 @@ function registerIpc(): void {
 
   handle("dismiss-update", async () => service.dismissUpdate());
 
+  handle("set-azure-enabled", async (enabled: boolean) => service.setAzureEnabled(enabled));
+  handle("connect-azure", async (token: string, organisationUrl?: string) =>
+    service.connectAzure(token, organisationUrl),
+  );
+  handle("disconnect-azure", async () => service.disconnectAzure());
+
   handle("set-tray-label", async (options: Parameters<AppService["setTrayLabel"]>[0]) =>
     service.setTrayLabel(options),
   );
@@ -382,6 +393,16 @@ function startMonitors(): void {
   }, IDLE_POLL_MS);
 
   setInterval(() => void service.refresh().then(broadcast), REFRESH_MS);
+
+  /**
+   * The assigned work items, every ten minutes. Opening the popover also reloads them, but
+   * only when the list has gone stale — see `refreshWorkItems`. A machine left alone all
+   * afternoon still has a current list when its owner comes back.
+   */
+  setInterval(
+    () => void service.refreshWorkItems({ force: true }).then(broadcast),
+    AZURE_REFRESH_MS,
+  );
 }
 
 /**
@@ -446,7 +467,10 @@ async function start(): Promise<void> {
 
   const prefs = await PreferencesStore.open(join(app.getPath("userData"), "preferences.json"));
   const secrets = new SecretStore(join(app.getPath("userData"), "credentials.bin"));
-  service = await AppService.create(prefs, secrets, log, app.getVersion());
+  // A second store rather than a second field: SecretStore is one encrypted value at one
+  // path, and the Azure token has a different lifetime to the Keito key.
+  const azureSecrets = new SecretStore(join(app.getPath("userData"), "azure.bin"));
+  service = await AppService.create(prefs, secrets, log, app.getVersion(), azureSecrets);
 
   createTray();
   registerIpc();

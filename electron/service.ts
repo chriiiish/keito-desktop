@@ -9,6 +9,9 @@ import { Timer, type TimerState } from "../src/core/timer/timer.js";
 import { formatWorkspaceTime } from "../src/core/time/workspace-time.js";
 import { entryStartMs } from "../src/core/time/elapsed.js";
 import { isNewerVersion, type ReleaseSummary } from "../src/core/version/version.js";
+import { AzureClient, normaliseOrganisationUrl } from "../src/core/azure/client.js";
+import { AzureError } from "../src/core/azure/errors.js";
+import type { WorkItem } from "../src/core/azure/types.js";
 import type { SecretStore } from "./secrets.js";
 import type { Logger } from "./logger.js";
 
@@ -22,6 +25,30 @@ import type { Logger } from "./logger.js";
  */
 export interface UpdateStatus extends ReleaseSummary {
   dismissed: boolean;
+}
+
+/**
+ * The Azure DevOps integration as the UI sees it.
+ *
+ * `workItems` rides on the Snapshot rather than behind an IPC call of its own, so the note
+ * field filters locally on every keystroke — the same arrangement as the category picker.
+ * It is never written to disk: work item titles are somebody's internal project data, and
+ * a list worth one request on launch is not worth leaving in a plain-text file.
+ */
+export interface AzureState {
+  /** The toggle in Integrations. Off means the note field is a plain note field. */
+  enabled: boolean;
+  /**
+   * `off` — switched off. `needs-token` — on, but nothing usable stored yet.
+   * `connected` — the last refresh worked. `error` — it did not, and `error` says why.
+   */
+  status: "off" | "needs-token" | "connected" | "error";
+  organisationUrl: string | null;
+  /** Whether a token is stored, so the form can say so without ever sending it. */
+  hasToken: boolean;
+  /** Open work items assigned to the token's owner, most recently changed first. */
+  workItems: WorkItem[];
+  error: string | null;
 }
 
 /** Everything the renderer needs to draw either window. */
@@ -68,6 +95,8 @@ export interface Snapshot {
    * other way round, so a dev build is routinely behind by design.
    */
   update: UpdateStatus | null;
+  /** Azure DevOps: the toggle, the connection and the tickets the note field offers. */
+  azure: AzureState;
   /** The company id sent as Keito-Account-Id, once known. */
   accountId: string | null;
   /** A masked stand-in for the stored key, so settings can show one without exposing it. */
@@ -96,6 +125,15 @@ function maskKey(key: string): string {
 
 /** Projects and tasks change rarely; the popover is opened constantly. */
 const CATALOG_TTL_MS = 15 * 60_000;
+
+/**
+ * How old the work item list may be before opening the popover reloads it.
+ *
+ * Short enough that a ticket assigned to you minutes ago is there when you go looking,
+ * long enough that opening the popover repeatedly — which is the whole app — does not
+ * spend two Azure requests each time.
+ */
+const AZURE_STALE_MS = 2 * 60_000;
 
 /**
  * When a timer began, in epoch ms. Shared with the renderer through `src/core`, so the
@@ -134,6 +172,12 @@ export class AppService {
   #canOpenAtLogin = false;
   #appVersion: string;
   #update: ReleaseSummary | null = null;
+  #azureSecrets: SecretStore | null = null;
+  #azureItems: WorkItem[] = [];
+  #azureError: string | null = null;
+  #azureCheckedAtMs = 0;
+  #azureConnected = false;
+  #azureToken: string | null = null;
 
   private constructor(
     prefs: PreferencesStore,
@@ -152,8 +196,12 @@ export class AppService {
     secrets: SecretStore,
     log: Logger,
     appVersion = "0.0.0",
+    azureSecrets?: SecretStore,
   ): Promise<AppService> {
     const service = new AppService(prefs, secrets, log, appVersion);
+    service.#azureSecrets = azureSecrets ?? null;
+    // Read back, never shown: the renderer only ever learns whether one exists.
+    service.#azureToken = (await azureSecrets?.read()) ?? null;
     const key = await secrets.read();
     log.info("Starting", { hasStoredKey: Boolean(key), accountId: prefs.get().accountId ?? null });
     if (key) {
@@ -194,6 +242,7 @@ export class AppService {
       update: this.#update
         ? { ...this.#update, dismissed: prefs.dismissedUpdate === this.#update.version }
         : null,
+      azure: this.#azureState(),
       accountId: prefs.accountId ?? null,
       apiKeyHint: this.#apiKeyHint,
       trayFallback: prefs.trayFallback,
@@ -397,6 +446,172 @@ export class AppService {
   async dismissUpdate(): Promise<Snapshot> {
     if (this.#update) await this.#prefs.update({ dismissedUpdate: this.#update.version });
     return this.snapshot();
+  }
+
+  // ── Azure DevOps ──────────────────────────────────────────────────────────────
+
+  #azureState(): AzureState {
+    const prefs = this.#prefs.get();
+    const hasToken = this.#azureToken !== null;
+    const status: AzureState["status"] = !prefs.azureEnabled
+      ? "off"
+      : !hasToken
+        ? "needs-token"
+        : this.#azureError
+          ? "error"
+          : this.#azureConnected
+            ? "connected"
+            : "needs-token";
+
+    return {
+      enabled: prefs.azureEnabled,
+      status,
+      organisationUrl: prefs.azureOrganisationUrl ?? null,
+      hasToken,
+      // Only offered while the integration is actually working — a stale list behind a
+      // broken connection would have the note field suggesting tickets it cannot refresh.
+      workItems: status === "connected" ? this.#azureItems : [],
+      error: this.#azureError,
+    };
+  }
+
+  /**
+   * Switches the integration on or off.
+   *
+   * Switching off keeps the stored token and organisation, so switching back on does not
+   * mean finding a PAT again — Disconnect is the gesture that forgets them.
+   */
+  async setAzureEnabled(enabled: boolean): Promise<Snapshot> {
+    await this.#prefs.update({ azureEnabled: enabled });
+    if (!enabled) {
+      this.#azureItems = [];
+      this.#azureConnected = false;
+      this.#azureError = null;
+    } else if (this.#azureToken) {
+      await this.#refreshWorkItems({ force: true });
+    }
+    this.#revision++;
+    return this.snapshot();
+  }
+
+  /**
+   * Stores a token and proves it works, in that order of importance.
+   *
+   * The organisation is discovered when none was given — which needs the Profile (Read)
+   * scope and a token that can see across organisations. Where that fails the caller is
+   * told to ask for the URL, rather than being shown an error about a scope it was never
+   * told to grant.
+   */
+  async connectAzure(token: string, organisationUrl?: string): Promise<Snapshot> {
+    const pat = token.trim();
+    if (!pat) {
+      this.#azureError = "Enter a personal access token.";
+      return this.snapshot();
+    }
+
+    const typed = organisationUrl?.trim()
+      ? normaliseOrganisationUrl(organisationUrl)
+      : (this.#prefs.get().azureOrganisationUrl ?? undefined);
+
+    const client = new AzureClient({
+      personalAccessToken: pat,
+      fetch: globalThis.fetch,
+      organisationUrl: typed,
+      onRequest: (record) => {
+        const line = `${record.method} ${record.path} -> ${record.status ?? "no response"} (${record.durationMs}ms)`;
+        if (record.ok) this.#log.info(line);
+        else this.#log.warn(line, record.error ? { error: record.error } : undefined);
+      },
+    });
+
+    try {
+      if (!client.organisationUrl) {
+        const found = await client.discoverOrganisation();
+        if (!found) {
+          this.#azureError =
+            "Could not work out your organisation from that token. Enter your Azure DevOps URL below and press Connect again.";
+          this.#azureConnected = false;
+          return this.snapshot();
+        }
+        this.#log.info(`Azure DevOps organisation discovered: ${found.organisationUrl}`);
+      }
+
+      const items = await client.verify();
+
+      this.#azureToken = pat;
+      await this.#azureSecrets?.write(pat);
+      await this.#prefs.update({
+        azureEnabled: true,
+        azureOrganisationUrl: client.organisationUrl ?? undefined,
+      });
+
+      this.#azureItems = items;
+      this.#azureConnected = true;
+      this.#azureError = null;
+      this.#azureCheckedAtMs = Date.now();
+      this.#log.info(`Azure DevOps connected: ${items.length} work items assigned`);
+    } catch (error) {
+      this.#azureConnected = false;
+      this.#azureError = error instanceof AzureError ? error.message : String(error);
+      this.#log.warn(`Azure DevOps connect failed: ${this.#azureError}`);
+    }
+
+    this.#revision++;
+    return this.snapshot();
+  }
+
+  /** Forgets the token and the organisation. The Integrations form starts from nothing. */
+  async disconnectAzure(): Promise<Snapshot> {
+    this.#azureToken = null;
+    await this.#azureSecrets?.clear();
+    await this.#prefs.update({ azureEnabled: false, azureOrganisationUrl: undefined });
+    this.#azureItems = [];
+    this.#azureConnected = false;
+    this.#azureError = null;
+    this.#revision++;
+    return this.snapshot();
+  }
+
+  /**
+   * Reloads the assigned work items, unless the list is young enough not to bother.
+   *
+   * `force` is the timer and an explicit reconnect; everything else — notably the popover
+   * opening — respects the staleness window. Opening the popover is the app's whole loop
+   * and each refresh is two Azure requests, so putting them on that path unconditionally
+   * would spend the request budget CLAUDE.md is careful about on a list that changes a
+   * handful of times a day.
+   */
+  async refreshWorkItems(options: { force?: boolean } = {}): Promise<Snapshot> {
+    await this.#refreshWorkItems(options);
+    return this.snapshot();
+  }
+
+  async #refreshWorkItems({ force = false }: { force?: boolean } = {}): Promise<void> {
+    const prefs = this.#prefs.get();
+    if (!prefs.azureEnabled || !this.#azureToken || !prefs.azureOrganisationUrl) return;
+    if (!force && Date.now() - this.#azureCheckedAtMs < AZURE_STALE_MS) return;
+
+    const client = new AzureClient({
+      personalAccessToken: this.#azureToken,
+      fetch: globalThis.fetch,
+      organisationUrl: prefs.azureOrganisationUrl,
+    });
+
+    try {
+      this.#azureItems = await client.listAssignedWorkItems();
+      this.#azureConnected = true;
+      this.#azureError = null;
+    } catch (error) {
+      // A failed refresh must never stop the timer, so this is recorded and shown in
+      // Integrations rather than raised. The previous list is dropped: offering tickets
+      // from a connection that has stopped working is worse than offering none.
+      this.#azureConnected = false;
+      this.#azureItems = [];
+      this.#azureError = error instanceof AzureError ? error.message : String(error);
+      this.#log.warn(`Azure DevOps refresh failed: ${this.#azureError}`);
+    }
+    this.#azureCheckedAtMs = Date.now();
+    this.#revision++;
   }
 
   /** Told by the main process whether the OS actually accepted the accelerator. */

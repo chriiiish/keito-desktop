@@ -35,6 +35,17 @@ export interface Preferences {
    * update is still somewhere to be found rather than gone.
    */
   dismissedUpdate?: string | undefined;
+  /** Whether the Azure DevOps integration is switched on in Integrations. */
+  azureEnabled: boolean;
+  /**
+   * e.g. "https://dev.azure.com/acme" — discovered from the token where the Profile scope
+   * allows it, otherwise typed. A URL rather than an organisation name, so an on-premises
+   * Azure DevOps Server collection works without a second field.
+   *
+   * The token itself is never here: preferences.json is plain text, so it lives in its own
+   * SecretStore beside the Keito key.
+   */
+  azureOrganisationUrl?: string | undefined;
 }
 
 const defaults = (): Preferences => ({
@@ -44,6 +55,7 @@ const defaults = (): Preferences => ({
   hotkey: DEFAULT_HOTKEY,
   trayFallback: "task",
   trayPrefix: "none",
+  azureEnabled: false,
 });
 
 /** Favourites and settings on disk. The API key is not here — that lives in the OS keychain. */

@@ -21,6 +21,11 @@ const api = {
     ipcRenderer.invoke("set-hidden", pairIds, hidden),
   setHotkey: (hotkey: string): Promise<Snapshot> => ipcRenderer.invoke("set-hotkey", hotkey),
   dismissUpdate: (): Promise<Snapshot> => ipcRenderer.invoke("dismiss-update"),
+  setAzureEnabled: (enabled: boolean): Promise<Snapshot> =>
+    ipcRenderer.invoke("set-azure-enabled", enabled),
+  connectAzure: (token: string, organisationUrl?: string): Promise<Snapshot> =>
+    ipcRenderer.invoke("connect-azure", token, organisationUrl),
+  disconnectAzure: (): Promise<Snapshot> => ipcRenderer.invoke("disconnect-azure"),
   setOpenAtLogin: (openAtLogin: boolean): Promise<Snapshot> =>
     ipcRenderer.invoke("set-open-at-login", openAtLogin),
   setTrayLabel: (options: {
