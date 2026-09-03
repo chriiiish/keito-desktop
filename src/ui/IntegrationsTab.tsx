@@ -66,11 +66,11 @@ function AzureConnectionForm({
   const [url, setUrl] = useState(azure.organisationUrl ?? "");
 
   /**
-   * The URL field appears once it is actually needed: either discovery has already failed,
-   * or a URL is stored. Asking for it up front would make the common case — a token that
-   * can find its own organisation — look like it needs two things when it needs one.
+   * The URL field appears once it is actually needed: discovery has asked for it, or a URL
+   * is already stored. Asking up front would make the common case — a token that can find
+   * its own organisation — look like it needs two things when it needs one.
    */
-  const needsUrl = Boolean(azure.error) || Boolean(azure.organisationUrl);
+  const needsUrl = azure.needsUrl || Boolean(azure.organisationUrl);
 
   const [connecting, connect] = useAsyncAction(async () => {
     const next = await keito.connectAzure(token.trim(), url.trim() || undefined);
@@ -95,10 +95,13 @@ function AzureConnectionForm({
           <strong>Work Items (Read)</strong> — required. Without it there is nothing to list.
         </li>
         <li>
-          <strong>User Profile (Read)</strong> — optional. Grant it and your organisation is
-          found for you; leave it out and you paste the URL below instead. You may need to
-          click <strong>Show all scopes</strong> at the bottom of the token form before this
-          one appears.
+          <strong>User Profile (Read)</strong> — optional, and only saves you pasting a URL.
+          You may need to click <strong>Show all scopes</strong> at the bottom of the token
+          form before it appears. It also only works if the token's{" "}
+          <strong>Organization</strong> is set to <strong>All accessible organizations</strong>{" "}
+          — a token made for a single organisation cannot look up which one it belongs to,
+          whatever scopes it has. Skip all of that and paste your URL instead; the
+          integration works exactly the same either way.
         </li>
       </ul>
       <p className="hint">
@@ -132,7 +135,13 @@ function AzureConnectionForm({
         </label>
       )}
 
-      {azure.error && <p className="error">{azure.error}</p>}
+      {/*
+        A request for the URL is not a failure — the message it carries opens by saying the
+        token works — so it must not be dressed in the red box that a rejected token gets.
+      */}
+      {azure.error && (
+        <p className={azure.needsUrl ? "notice" : "error"}>{azure.error}</p>
+      )}
 
       <div className="connect-actions">
         <button type="submit" aria-busy={connecting} disabled={connecting || !token.trim()}>

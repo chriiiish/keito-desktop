@@ -65,6 +65,7 @@ const snapshot: Snapshot = {
     hasToken: false,
     workItems: [],
     error: null,
+    needsUrl: false,
   },
   accountId: "co_9",
   apiKeyHint: "kto_••••••••abcd",
@@ -962,6 +963,7 @@ describe("the note field with Azure DevOps", () => {
       hasToken: true,
       workItems,
       error: null,
+      needsUrl: false,
       ...over,
     },
   });
@@ -1134,6 +1136,7 @@ describe("browsing the work item list", () => {
         hasToken: true,
         workItems: items,
         error: null,
+        needsUrl: false,
       },
     }) satisfies Snapshot;
 

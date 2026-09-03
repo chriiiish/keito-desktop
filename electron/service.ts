@@ -11,7 +11,8 @@ import { entryStartMs } from "../src/core/time/elapsed.js";
 import { isNewerVersion, type ReleaseSummary } from "../src/core/version/version.js";
 import { AzureClient, normaliseOrganisationUrl } from "../src/core/azure/client.js";
 import { AzureError } from "../src/core/azure/errors.js";
-import type { OrganisationDiscovery, WorkItem } from "../src/core/azure/types.js";
+import { describeDiscovery } from "../src/core/azure/discovery.js";
+import type { WorkItem } from "../src/core/azure/types.js";
 import type { SecretStore } from "./secrets.js";
 import type { Logger } from "./logger.js";
 
@@ -49,6 +50,14 @@ export interface AzureState {
   /** Open work items assigned to the token's owner, most recently changed first. */
   workItems: WorkItem[];
   error: string | null;
+  /**
+   * True when `error` is a request for the organisation URL rather than a failure.
+   *
+   * Discovery not working is the normal path for a token created for one organisation, and
+   * the message says as much — so rendering it in the red box used for a rejected token
+   * contradicts its own first sentence.
+   */
+  needsUrl: boolean;
 }
 
 /** Everything the renderer needs to draw either window. */
@@ -115,18 +124,6 @@ export interface Snapshot {
   error: string | null;
 }
 
-/** What to tell the user when the organisation could not be settled on its own. */
-function describeDiscovery(found: Exclude<OrganisationDiscovery, { outcome: "found" }>): string {
-  switch (found.outcome) {
-    case "several":
-      return `That token reaches ${found.organisations.length} organisations (${found.organisations.join(", ")}). Enter the URL of the one you want below and press Connect again.`;
-    case "none":
-      return "That token does not appear to belong to any Azure DevOps organisation. Enter your Azure DevOps URL below and press Connect again.";
-    case "no-access":
-      return `Could not read your profile to find your organisation, so enter your Azure DevOps URL below and press Connect again. Azure DevOps said: ${found.reason}`;
-  }
-}
-
 /**
  * Enough of the key to recognise it, and not enough to use it. The plaintext key never
  * leaves the main process — the renderer only ever sees this.
@@ -189,6 +186,7 @@ export class AppService {
   #azureError: string | null = null;
   #azureCheckedAtMs = 0;
   #azureConnected = false;
+  #azureNeedsUrl = false;
   #azureToken: string | null = null;
 
   private constructor(
@@ -484,6 +482,7 @@ export class AppService {
       // broken connection would have the note field suggesting tickets it cannot refresh.
       workItems: status === "connected" ? this.#azureItems : [],
       error: this.#azureError,
+      needsUrl: this.#azureNeedsUrl,
     };
   }
 
@@ -544,6 +543,7 @@ export class AppService {
           // single message could not tell "you are in two organisations" from "that token
           // cannot read your profile", which left the failure undiagnosable.
           this.#azureError = describeDiscovery(found);
+          this.#azureNeedsUrl = true;
           this.#azureConnected = false;
           this.#log.warn(`Azure DevOps discovery: ${found.outcome} — ${this.#azureError}`);
           return this.snapshot();
@@ -563,6 +563,7 @@ export class AppService {
       this.#azureItems = items;
       this.#azureConnected = true;
       this.#azureError = null;
+      this.#azureNeedsUrl = false;
       this.#azureCheckedAtMs = Date.now();
       this.#log.info(`Azure DevOps connected: ${items.length} work items assigned`);
     } catch (error) {
@@ -583,6 +584,7 @@ export class AppService {
     this.#azureItems = [];
     this.#azureConnected = false;
     this.#azureError = null;
+    this.#azureNeedsUrl = false;
     this.#revision++;
     return this.snapshot();
   }

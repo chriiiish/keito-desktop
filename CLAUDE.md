@@ -337,6 +337,16 @@ can be `1842: Login redirect drops the return URL` without typing it.
   that is not scoped to a single organisation — which plenty of enterprises forbid. So
   discovery is attempted and its failure is not an error: it is the cue to ask for the URL.
 
+  **The scope is not the whole story, and this cost a round trip to find out.** A token is
+  created either for one organisation or for *All accessible organizations*, and only the
+  second kind authenticates against `app.vssps.visualstudio.com` at all. A token scoped to
+  one organisation is refused there **with User Profile (Read) granted**, while working
+  perfectly against `dev.azure.com` for the work items it was made to read. So the failure
+  message must not say the token was refused: it works, it just cannot answer this one
+  question. `describeDiscovery` lives in `src/core/azure/discovery.ts` and is tested,
+  because getting that wording wrong sends someone to regenerate a token that was never the
+  problem.
+
   `discoverOrganisation` answers with **which of four things happened** — `found`,
   `several`, `none`, or `no-access` — rather than a URL or null. It returned null for all
   of them once, and the single message that produced ("could not work out your
