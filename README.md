@@ -1,14 +1,14 @@
 # Keito Timer
 
 A small cross-platform desktop app for switching time entries in [Keito](https://keito.ai)
-without leaving what you're doing. Press a global hotkey, type a few letters, hit Enter —
-the running timer is replaced.
+without leaving what you're doing. Press a global hotkey, type a note and hit enter. Boom -
+you're recording your time.
 
 It is not an official Keito product. It is built on Keito's public API.
 
 ---
 
-## Install it
+## Install
 
 ### 1. Download
 
@@ -17,9 +17,9 @@ Grab the latest build from the
 
 | Your machine | File |
 |---|---|
-| **macOS**, Apple Silicon (M1 and later) | `Keito-Timer-<version>-Apple-Silicon.dmg` |
-| **macOS**, Intel | `Keito-Timer-<version>-Intel-Mac.dmg` |
-| **Windows** | `Keito-Timer-<version>-Windows.exe` |
+| **macOS**, Apple Silicon (M1 and later) | [`Keito-Timer-<version>-Apple-Silicon.dmg`](https://github.com/chriiiish/keito-desktop/releases/latest) |
+| **macOS**, Intel | [`Keito-Timer-<version>-Intel-Mac.dmg`](https://github.com/chriiiish/keito-desktop/releases/latest) |
+| **Windows** | [`Keito-Timer-<version>-Windows.exe`](https://github.com/chriiiish/keito-desktop/releases/latest) |
 
 
 ### 2. Get past the first-launch warning
@@ -27,28 +27,36 @@ Grab the latest build from the
 These builds are signed, but not with a paid certificate — so both operating systems
 stop the first launch. **This is expected, and only happens once.**
 
-**macOS** — open the `.dmg` and drag Keito Timer to Applications. The first launch is
-refused with *"Apple could not verify…"*. Open **System Settings → Privacy & Security**,
-scroll down, and press **Open Anyway**.
-
-> Double-clicking again will not help, and neither will right-click → Open. The
-> Privacy & Security panel is the only route.
-
-**Windows** — run the `.exe`. SmartScreen shows *"Windows protected your PC"*. Choose
-**More info → Run anyway**. The installer is per-user and lets you pick the directory.
+<details>
+  <summary>macOS</summary>
+  
+  Open the `.dmg` and drag Keito Timer to Applications. The first launch is
+  refused with *"Apple could not verify…"*. Open **System Settings → Privacy & Security**,
+  scroll down, and press **Open Anyway**.
+  
+  > Double-clicking again will not help, and neither will right-click → Open. The
+  > Privacy & Security panel is the only route.
+</details>
+<details>
+  <summary>Windows</summary>  
+  
+  Run the `.exe`. SmartScreen shows *"Windows protected your PC"*. Choose
+  **More info → Run anyway**. The installer is per-user and lets you pick the directory.
+</details>
 
 ### 3. Connect it to Keito
 
-The app opens its settings window on first launch and asks for two things. You will
-need to get these from your Keito administrator.
+The app opens its settings window on first launch and asks for two things. **You will
+need to get these from your Keito administrator.**
 
-**An API key.** In Keito: Settings → Integrations → create a **full-access integration
+* **An API key.** In Keito: Settings → Integrations → create a **full-access integration
 key**. It starts `kto_`.
 
+* **A Company ID.** Also in your Keito account settings.
+
+> [!IMPORTANT] 
 > A *personal read-only sync key* will not work. It cannot create time entries, so the app
 > rejects it at setup rather than letting your first switch fail.
-
-**A Company ID.** Also in your Keito account settings.
 
 You can change the Company ID later from Settings without re-entering the key.
 
@@ -85,6 +93,7 @@ curl -sS -i https://app.keito.ai/api/v2/users/me \
 ---
 
 If this made your life easier, consider buying me a coffee ❤️
+
 [!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/chris.lloyd)
 
 ---
