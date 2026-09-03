@@ -5,6 +5,8 @@
   "private": true,
   "type": "module",
   "description": "Desktop task-switching timer for Keito",
+  "license": "GPL-3.0-only",
+  "author": "Chris Lloyd",
   "scripts": {
     "test": "vitest run --exclude 'test/contract/**'",
     "test:watch": "vitest --exclude 'test/contract/**'",

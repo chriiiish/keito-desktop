@@ -2,6 +2,7 @@
 [![CI](https://github.com/chriiiish/keito-desktop/actions/workflows/ci.yml/badge.svg)](https://github.com/chriiiish/keito-desktop/actions/workflows/ci.yml)
 [![GitHub Release](https://img.shields.io/github/v/release/chriiiish/keito-desktop?label=Latest%20Stable&color=bright%20green)](https://github.com/chriiiish/keito-desktop/releases/latest)
 [![Static Badge](https://img.shields.io/badge/Buy%20me%20a%20Coffee%20%E2%98%95-Donate-bright%20green)](https://buymeacoffee.com/chris.lloyd)
+[![Licence](https://img.shields.io/badge/Licence-GPL--3.0-blue)](./LICENSE)
 
 [Install](#install) | [Features](#features) | [Build Locally](#developing-locally) | [Contribute](#contributing)
 
@@ -293,3 +294,29 @@ Issues and pull requests are welcome: <https://github.com/chriiiish/keito-deskto
 
 If the app has saved you the daily fight with a browser tab, the **About** tab has a
 tip jar. It is free and will stay that way either way.
+
+---
+
+## Licence
+
+[GNU General Public License v3.0](./LICENSE) — copyright © 2026 Chris Lloyd.
+
+**In short:** use it, at home or at work, for anything you like, including work you bill
+for. Read it, change it, share it. What you cannot do is take this code, make it closed
+source, and sell that.
+
+If you distribute a modified version — to colleagues, to customers, to anyone — you have to
+ship your source under the GPL too, so whoever receives it has the same freedoms you did.
+That is the whole point of the choice: nobody gets to build a proprietary product on top of
+this and pull the ladder up behind them.
+
+> **Not "non-commercial".** Tracking billable hours is commercial use, and it is expressly
+> allowed — a non-commercial licence would have banned the app's entire purpose. The GPL
+> restricts *closing the source*, not *earning a living*.
+
+### Trademark
+
+*Keito* is a trademark of its owner. This project is not affiliated with, endorsed by, or
+sponsored by Keito; the name is used only to say which service the app connects to. The
+GPL grants copyright permissions and **no trademark rights** — so a fork is free to use the
+code, but should pick its own name.
