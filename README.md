@@ -3,8 +3,7 @@
 [![GitHub Release](https://img.shields.io/github/v/release/chriiiish/keito-desktop?label=Latest%20Stable&color=bright%20green)](https://github.com/chriiiish/keito-desktop/releases/latest)
 [![Static Badge](https://img.shields.io/badge/Buy%20me%20a%20Coffee%20%E2%98%95-Donate-bright%20green)](https://buymeacoffee.com/chris.lloyd)
 
-
-
+[Install](#install) | [Features](#features) | [Build Locally](#developing-locally) | [Contribute](#contributing)
 
 A small cross-platform desktop app for switching time entries in [Keito](https://keito.ai)
 without leaving what you're doing. Press a global hotkey, type a note and hit Enter. Boom -
