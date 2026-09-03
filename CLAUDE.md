@@ -445,6 +445,15 @@ header and a row disagreeing about one task — both ticking, both on screen —
 bug. A row's buttons act on `latest`, the newest entry in the group, so resuming continues
 the most recent stretch rather than reopening the first of the day.
 
+**Nothing may assume the order `GET /time_entries` returns.** The endpoint promises none,
+and `FakeKeito` pushes as it creates — so entries arrive *oldest* first, which is the
+opposite of what `EntriesSnapshot` documented for years. `loadEntries` now sorts today and
+yesterday newest-first so that comment is true at the one place the lists are built, and
+`totalsByTaskAndNote` sorts again rather than trusting its caller, since it is a pure
+function anything may call. Reading the head of an unsorted list as "the most recent" is
+what made `resume` restart the first stretch of the day. An entry whose start cannot be
+read sorts last, where it cannot be mistaken for the newest.
+
 **The entries table in the settings window is deliberately *not* grouped.** It is a
 timesheet: its rows carry editable start and end times and a delete button, all of which
 belong to one entry. Grouping there would offer to edit a start time that several entries

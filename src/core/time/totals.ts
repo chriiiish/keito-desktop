@@ -1,5 +1,5 @@
 import type { TimeEntry } from "../keito/types.js";
-import { entrySeconds } from "./elapsed.js";
+import { entrySeconds, entryStartMs } from "./elapsed.js";
 
 /**
  * A day's entries folded into one row per thing actually worked on.
@@ -15,6 +15,22 @@ import { entrySeconds } from "./elapsed.js";
  * `RecentEntries` already claimed to do: "the day keeps one row per task" was true of
  * resuming, which restarts the entry in place, and quietly untrue of switching.
  */
+
+/**
+ * When a stretch began, as something sortable.
+ *
+ * A start that cannot be read sorts last rather than first: `-Infinity` puts an entry with
+ * neither `timer_started_at` nor `started_time` at the end of its group, where it cannot
+ * be mistaken for the most recent one and pull `resume` onto it.
+ */
+function startedAt(entry: TimeEntry, timeZone: string): number {
+  return entryStartMs(entry, timeZone) ?? -Infinity;
+}
+
+/** Newest first. Stable, so entries that began at the same moment keep the order given. */
+function newestFirst(timeZone: string) {
+  return (a: TimeEntry, b: TimeEntry): number => startedAt(b, timeZone) - startedAt(a, timeZone);
+}
 
 /** One task-and-note worked on during a day, however many entries it took. */
 export interface EntryTotal {
@@ -50,8 +66,14 @@ function noteKey(notes: string | null | undefined): string {
 /**
  * Entries grouped by the work they represent, each with its total.
  *
- * Order follows the input — which is newest first — by the newest entry in each group, so
- * a day still reads top-down in the order things last happened.
+ * **Ordered here rather than trusting the caller.** The list this is handed is whatever
+ * `GET /time_entries` paged back: the real API promises no order, and the fake pushes as
+ * it creates, so entries arrive *oldest* first. Taking the first entry of a group as its
+ * most recent was therefore wrong in the common case — `resume` would restart the first
+ * stretch of the day instead of the one you had just been working on.
+ *
+ * Groups come back newest first by their most recent stretch, so a day reads top-down in
+ * the order things last happened however the entries turned up.
  */
 export function totalsByTaskAndNote(
   entries: readonly TimeEntry[],
@@ -59,8 +81,10 @@ export function totalsByTaskAndNote(
   timeZone: string,
 ): EntryTotal[] {
   const groups = new Map<string, EntryTotal>();
+  // Sorted up front so each group is built newest first and `latest` is simply its head.
+  const ordered = [...entries].sort(newestFirst(timeZone));
 
-  for (const entry of entries) {
+  for (const entry of ordered) {
     const key = `${entry.project_id}:${entry.task_id}:${noteKey(entry.notes)}`;
     const seconds = entrySeconds(entry, nowMs, timeZone);
     const existing = groups.get(key);
@@ -83,7 +107,8 @@ export function totalsByTaskAndNote(
     if (seconds !== null) existing.seconds = (existing.seconds ?? 0) + seconds;
   }
 
-  return [...groups.values()];
+  // By the newest stretch in each, which is now the head of every group.
+  return [...groups.values()].sort((a, b) => newestFirst(timeZone)(a.latest, b.latest));
 }
 
 /**

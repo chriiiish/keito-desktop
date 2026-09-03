@@ -206,3 +206,61 @@ describe("loggedBeforeRunning", () => {
     expect(seconds).toBe(0);
   });
 });
+
+describe("totalsByTaskAndNote does not trust the order it is handed", () => {
+  // The list this is given is whatever GET /time_entries paged back. Nothing sorts it:
+  // the real API makes no promise, and the fake pushes as it creates, so entries arrive
+  // *oldest* first. Picking `latest` by position made resume restart the first stretch of
+  // the day rather than the most recent one.
+  const at = (id: string, startedTime: string, over: Partial<TimeEntry> = {}) =>
+    entry({ id, started_time: startedTime, timer_started_at: `2026-09-03T${startedTime}:00Z`, ...over });
+
+  it("finds the newest stretch even when handed the oldest first", () => {
+    const totals = totalsByTaskAndNote([at("te_09", "09:00"), at("te_11", "11:00")], NOW, TZ);
+
+    expect(totals[0]!.latest.id).toBe("te_11");
+  });
+
+  it("orders the entries within a group newest first, whatever it was given", () => {
+    const totals = totalsByTaskAndNote(
+      [at("te_09", "09:00"), at("te_13", "13:00"), at("te_11", "11:00")],
+      NOW,
+      TZ,
+    );
+
+    expect(totals[0]!.entries.map((e) => e.id)).toEqual(["te_13", "te_11", "te_09"]);
+  });
+
+  it("orders the groups newest first, by the newest stretch in each", () => {
+    const totals = totalsByTaskAndNote(
+      [at("te_early", "09:00", { task_id: "t_dev" }), at("te_late", "14:00", { task_id: "t_ops" })],
+      NOW,
+      TZ,
+    );
+
+    expect(totals.map((total) => total.latest.id)).toEqual(["te_late", "te_early"]);
+  });
+
+  it("puts a running stretch at the head of its group", () => {
+    // It started most recently by definition — it has not finished.
+    const totals = totalsByTaskAndNote(
+      [at("te_09", "09:00"), running({ id: "te_now", timer_started_at: "2026-09-03T09:50:00Z" })],
+      NOW,
+      TZ,
+    );
+
+    expect(totals[0]!.latest.id).toBe("te_now");
+  });
+
+  it("keeps entries whose start cannot be read, and puts them last", () => {
+    // No timer_started_at and no started_time: still real logged time, just unorderable.
+    const totals = totalsByTaskAndNote(
+      [entry({ id: "te_unknown", started_time: null }), at("te_09", "09:00")],
+      NOW,
+      TZ,
+    );
+
+    expect(totals[0]!.entries.map((e) => e.id)).toEqual(["te_09", "te_unknown"]);
+    expect(totals[0]!.latest.id).toBe("te_09");
+  });
+});
