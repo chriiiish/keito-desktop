@@ -21,6 +21,16 @@ const NUMERIC = /^(0|[1-9]\d*)$/;
 const ALPHANUMERIC = /^[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*$/;
 
 /**
+ * A tag as the version it names: no leading `v`, no build metadata.
+ *
+ * One definition, used both to parse and to produce the string the UI shows, so the two
+ * cannot drift into disagreeing about what "0.3.0" is.
+ */
+export function normaliseVersion(raw: string): string {
+  return raw.trim().replace(/^v/, "").split("+", 1)[0] ?? "";
+}
+
+/**
  * `1.2.3`, `v1.2.3` or `v1.2.3-beta.1` to a comparable Version; null for anything else.
  *
  * Null rather than a lenient best guess, because the only caller is deciding whether to
@@ -31,8 +41,7 @@ const ALPHANUMERIC = /^[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*$/;
  * so keeping it would only invite a comparison that shouldn't exist.
  */
 export function parseVersion(raw: string): Version | null {
-  const withoutBuild = raw.trim().replace(/^v/, "").split("+", 1)[0] ?? "";
-  const [core, ...rest] = withoutBuild.split("-");
+  const [core, ...rest] = normaliseVersion(raw).split("-");
   // split("-") also breaks up a pre-release containing hyphens ("1.0.0-x-y.1"), so the
   // tail is rejoined rather than taken as a single field.
   const prereleaseRaw = rest.join("-");
@@ -155,7 +164,7 @@ export function pickLatestRelease(releases: readonly GitHubRelease[]): ReleaseSu
     if (release.draft) continue;
     const parsed = parseVersion(release.tag_name);
     if (!parsed) continue;
-    const version = release.tag_name.trim().replace(/^v/, "").split("+", 1)[0] ?? "";
+    const version = normaliseVersion(release.tag_name);
     if (best && compareVersions(version, best.version) <= 0) continue;
     best = {
       version,

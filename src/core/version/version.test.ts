@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { compareVersions, isNewerVersion, parseVersion, pickLatestRelease } from "./version.js";
+import {
+  compareVersions,
+  isNewerVersion,
+  normaliseVersion,
+  parseVersion,
+  pickLatestRelease,
+} from "./version.js";
 
 describe("parseVersion", () => {
   it("takes a bare version", () => {
@@ -36,6 +42,17 @@ describe("parseVersion", () => {
 
   it("rejects leading zeros, which SemVer's numeric identifiers do not allow", () => {
     expect(parseVersion("1.02.3")).toBeNull();
+  });
+});
+
+describe("normaliseVersion", () => {
+  it("is the one definition of what a tag's version string is", () => {
+    // Shared by the parser and by the summary the UI renders, so the two cannot drift
+    // into disagreeing about what "0.3.0" is.
+    expect(normaliseVersion("v1.2.3")).toBe("1.2.3");
+    expect(normaliseVersion(" 1.2.3 ")).toBe("1.2.3");
+    expect(normaliseVersion("v1.2.3+build.5")).toBe("1.2.3");
+    expect(normaliseVersion("v1.2.3-rc.1")).toBe("1.2.3-rc.1");
   });
 });
 
