@@ -19,19 +19,42 @@ const LINKS: ReadonlyArray<readonly [string, string, string]> = [
   ],
 ];
 
-/** Where to find the project, and how to help with it. */
+/**
+ * Where to find the project, and the two ways to help with it.
+ *
+ * Money first, then code, then the build details.
+ *
+ * Money leads because it is the ask almost everyone reading this can actually act on:
+ * putting something in the tip jar takes one click, whereas opening a pull request takes
+ * an afternoon. Ordering the page by how many people can say yes puts the smallest ask at
+ * the top. The build details go last because they are not a contribution at all — they are
+ * what you copy into a bug report once you have decided to file one.
+ *
+ * The lead paragraph carries no heading of its own. "Not an official Keito product" is
+ * context for the whole tab rather than a section of it, and it has to be read before
+ * either ask makes sense.
+ */
 export function ContributeTab({ snapshot }: { snapshot: Snapshot }): JSX.Element {
   const open = (url: string) => keito.openExternal(url);
 
   return (
     <section className="settings contribute">
-      <h2>Open source</h2>
       <p className="hint">
         Keito Timer is free and open source. It is not an official Keito product — it is a
         small app built on Keito’s public API, and anyone is welcome to read it, change it,
         or take it apart to see how it works.
       </p>
 
+      <h2>Say thanks</h2>
+      <p className="hint">
+        Keito Timer is free. If it saves you the daily fight with a
+        browser tab, you can put something in the tip jar.
+      </p>
+      <AsyncButton className="coffee" onClick={() => open(COFFEE)}>
+        ☕ Buy me a hot chocolate
+      </AsyncButton>
+
+      <h2>Open source</h2>
       <ul className="contribute-links">
         {LINKS.map(([label, url, blurb]) => (
           <li key={url}>
@@ -42,29 +65,12 @@ export function ContributeTab({ snapshot }: { snapshot: Snapshot }): JSX.Element
           </li>
         ))}
       </ul>
-
-      <h2>Say thanks</h2>
-      <p className="hint">
-        Keito Timer is free, and will stay that way. If it saves you the daily fight with a
-        browser tab, you can put something in the tip jar.
-      </p>
-      <AsyncButton className="coffee" onClick={() => open(COFFEE)}>
-        ☕ Buy me a coffee
-      </AsyncButton>
-
-      <h2>Helping out</h2>
-      <p className="hint">
-        The domain logic lives in <code>src/core/</code> and runs under <code>npm test</code>{" "}
-        in seconds, with no window and no network — so a change is quick to make and quick to
-        prove. There is a separate contract suite that runs against the real Keito API when
-        you have a key.
-      </p>
       <p className="hint">
         Bug reports are much easier to act on with a log attached. API keys are masked in it.
       </p>
       <AsyncButton onClick={() => keito.openLog()}>Open log file</AsyncButton>
 
-      <h2>This build</h2>
+      <h2>About this build</h2>
       <dl className="build-info">
         <dt>Version</dt>
         <dd>{snapshot.appVersion}</dd>

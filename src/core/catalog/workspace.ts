@@ -3,6 +3,7 @@ import type { Pair, Project, TimeEntry } from "../keito/types.js";
 import { buildCatalog } from "./catalog.js";
 import { RECENTS_WINDOW_DAYS, rankRecents } from "./ranking.js";
 import { shiftDate, workspaceDate } from "../time/workspace-time.js";
+import { entryStartMs } from "../time/elapsed.js";
 
 export interface EntriesSnapshot {
   /** Pair ids, most relevant first. */
@@ -62,10 +63,27 @@ export async function loadEntries(
   // than sitting a fixed 24 hours behind a UTC clock.
   const previous = shiftDate(today, -1);
 
+  /**
+   * Newest first, which is what `EntriesSnapshot` has always claimed and never did.
+   *
+   * `GET /time_entries` promises no order and the fake pushes as it creates, so entries
+   * arrived *oldest* first — meaning anything reading the head of the list as "the most
+   * recent thing" was reading the first of the day. Sorted here, at the one place that
+   * builds the lists, rather than in each reader.
+   *
+   * An entry whose start cannot be read sorts last rather than first, where it cannot be
+   * mistaken for the most recent one.
+   */
+  const newestFirst = (a: TimeEntry, b: TimeEntry): number =>
+    (entryStartMs(b, timeZone) ?? -Infinity) - (entryStartMs(a, timeZone) ?? -Infinity);
+
+  const on = (date: string): TimeEntry[] =>
+    entries.filter((entry) => entry.spent_date === date).sort(newestFirst);
+
   return {
     recents: rankRecents(entries, today),
-    today: entries.filter((entry) => entry.spent_date === today),
-    yesterday: entries.filter((entry) => entry.spent_date === previous),
+    today: on(today),
+    yesterday: on(previous),
     running: entries.find((entry) => entry.is_running) ?? null,
   };
 }

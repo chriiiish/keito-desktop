@@ -171,3 +171,66 @@ describe("loadEntries", () => {
     expect(result.recents[0]).toBe("p_bank:t_dev");
   });
 });
+
+describe("loadEntries ordering", () => {
+  it("really does return today newest first, as it says", async () => {
+    // The fake pushes as it creates and the real API promises nothing, so this was
+    // documented but never true. Anything reading `today[0]` as "the most recent thing"
+    // was reading the oldest.
+    const keito = keitoWith();
+    keito.entries.push(
+      {
+        id: "te_morning",
+        project_id: "p_acme",
+        task_id: "t_dev",
+        spent_date: "2026-09-02",
+        started_time: "09:00",
+        ended_time: "09:30",
+        timer_started_at: "2026-09-02T09:00:00Z",
+        hours: 0.5,
+        is_running: false,
+        notes: null,
+        source: null,
+      },
+      {
+        id: "te_afternoon",
+        project_id: "p_acme",
+        task_id: "t_dev",
+        spent_date: "2026-09-02",
+        started_time: "14:00",
+        ended_time: "14:30",
+        timer_started_at: "2026-09-02T14:00:00Z",
+        hours: 0.5,
+        is_running: false,
+        notes: null,
+        source: null,
+      },
+    );
+
+    const result = await loadEntries(clientFor(keito), NOW, "UTC");
+
+    expect(result.today.map((entry) => entry.id)).toEqual(["te_afternoon", "te_morning"]);
+  });
+
+  it("orders yesterday the same way", async () => {
+    const keito = keitoWith();
+    const base = {
+      project_id: "p_acme",
+      task_id: "t_dev",
+      spent_date: "2026-09-01",
+      ended_time: "09:30",
+      hours: 0.5,
+      is_running: false,
+      notes: null,
+      source: null,
+    };
+    keito.entries.push(
+      { ...base, id: "te_early", started_time: "09:00", timer_started_at: "2026-09-01T09:00:00Z" },
+      { ...base, id: "te_late", started_time: "16:00", timer_started_at: "2026-09-01T16:00:00Z" },
+    );
+
+    const result = await loadEntries(clientFor(keito), NOW, "UTC");
+
+    expect(result.yesterday.map((entry) => entry.id)).toEqual(["te_late", "te_early"]);
+  });
+});
