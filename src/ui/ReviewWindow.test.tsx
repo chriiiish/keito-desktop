@@ -1243,6 +1243,17 @@ describe("the integrations tab", () => {
     expect(screen.getByText(/needs a personal access token/i)).toBeDefined();
   });
 
+  it("puts the switch before the name, since it works while the section is shut", async () => {
+    api.getSnapshot.mockResolvedValue(azure({ enabled: true, status: "needs-token" }));
+    await openIntegrationsCollapsed();
+
+    const toggle = screen.getByRole("checkbox", { name: "Azure DevOps" });
+    const name = screen.getByText("Azure DevOps");
+
+    // DOCUMENT_POSITION_FOLLOWING: the name comes after the switch in reading order.
+    expect(toggle.compareDocumentPosition(name) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("expands to the setup form when the name is clicked", async () => {
     api.getSnapshot.mockResolvedValue(azure({ enabled: true, status: "needs-token" }));
     const user = await openIntegrationsCollapsed();

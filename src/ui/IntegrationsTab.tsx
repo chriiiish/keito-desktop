@@ -36,8 +36,24 @@ export function IntegrationsTab({
 
   return (
     <section className="settings integrations">
-      <div className="integration-row">
-        <button
+      {/*
+        A card, so an integration reads as one object rather than as a line of controls
+        floating on the page — and so that expanding it visibly grows *that* thing rather
+        than pushing loose text down the tab. The next integration is another card.
+      */}
+      <div className="integration-card">
+        <div className="integration-row">
+          {/*
+            The switch leads, because whether this is on is the first thing about it and
+            the only control that works while the section is shut. The name and its state
+            follow, which is the order the row is read in.
+          */}
+          <Toggle
+            checked={azure.enabled}
+            onChange={(next) => keito.setAzureEnabled(next).then(onChange)}
+            label="Azure DevOps"
+          />
+          <button
           type="button"
           className="disclosure"
           aria-expanded={open}
@@ -65,32 +81,27 @@ export function IntegrationsTab({
           )}
         </button>
 
-        <span className={`integration-status ${azure.status}`}>
-          {azure.status === "connected"
-            ? `Connected${azure.organisationUrl ? ` — ${organisationName(azure.organisationUrl)}` : ""}`
-            : azure.status === "error"
-              ? "Not connected"
-              : azure.status === "needs-token"
-                ? "Needs a personal access token"
-                : "Off"}
-        </span>
+          <span className={`integration-status ${azure.status}`}>
+            {azure.status === "connected"
+              ? `Connected${azure.organisationUrl ? ` — ${organisationName(azure.organisationUrl)}` : ""}`
+              : azure.status === "error"
+                ? "Not connected"
+                : azure.status === "needs-token"
+                  ? "Needs a personal access token"
+                  : "Off"}
+          </span>
+        </div>
 
-        <Toggle
-          checked={azure.enabled}
-          onChange={(next) => keito.setAzureEnabled(next).then(onChange)}
-          label="Azure DevOps"
-        />
-      </div>
+        <div id="azure-panel" hidden={!open}>
+          <p className="hint">
+            Put a work item in the note without typing it. With this on, the note field
+            lists the open work items assigned to you — start typing to search them, or
+            press <kbd>↓</kbd> to see the list. A note is still just a note if you would
+            rather type one.
+          </p>
 
-      <div id="azure-panel" hidden={!open}>
-        <p className="hint">
-          Put a work item in the note without typing it. With this on, the note field lists
-          the open work items assigned to you — start typing to search them, or press{" "}
-          <kbd>↓</kbd> to see the list. A note is still just a note if you would rather type
-          one.
-        </p>
-
-        {azure.enabled && <AzureConnectionForm snapshot={snapshot} onChange={onChange} />}
+          {azure.enabled && <AzureConnectionForm snapshot={snapshot} onChange={onChange} />}
+        </div>
       </div>
     </section>
   );
