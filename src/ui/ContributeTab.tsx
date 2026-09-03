@@ -47,11 +47,11 @@ export function ContributeTab({ snapshot }: { snapshot: Snapshot }): JSX.Element
 
       <h2>Say thanks</h2>
       <p className="hint">
-        Keito Timer is free, and will stay that way. If it saves you the daily fight with a
+        Keito Timer is free. If it saves you the daily fight with a
         browser tab, you can put something in the tip jar.
       </p>
       <AsyncButton className="coffee" onClick={() => open(COFFEE)}>
-        ☕ Buy me a coffee
+        ☕ Buy me a hot chocolate
       </AsyncButton>
 
       <h2>Open source</h2>
@@ -66,17 +66,11 @@ export function ContributeTab({ snapshot }: { snapshot: Snapshot }): JSX.Element
         ))}
       </ul>
       <p className="hint">
-        The domain logic lives in <code>src/core/</code> and runs under <code>npm test</code>{" "}
-        in seconds, with no window and no network — so a change is quick to make and quick to
-        prove. There is a separate contract suite that runs against the real Keito API when
-        you have a key.
-      </p>
-      <p className="hint">
         Bug reports are much easier to act on with a log attached. API keys are masked in it.
       </p>
       <AsyncButton onClick={() => keito.openLog()}>Open log file</AsyncButton>
 
-      <h2>This build</h2>
+      <h2>About this build</h2>
       <dl className="build-info">
         <dt>Version</dt>
         <dd>{snapshot.appVersion}</dd>
