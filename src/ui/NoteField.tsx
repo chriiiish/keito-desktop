@@ -158,7 +158,11 @@ export const NoteField = forwardRef<NoteFieldHandle, {
         value={value}
         onChange={(event) => {
           onChange(event.target.value);
-          if (offered) setOpen(true);
+          if (!offered) return;
+          setOpen(true);
+          // Back to the top: filtering reorders the list, so the row that was highlighted
+          // is not the row that was highlighted.
+          setCursor(0);
         }}
         onKeyDown={onKeyDown}
         role={offered ? "combobox" : undefined}
@@ -182,7 +186,13 @@ export const NoteField = forwardRef<NoteFieldHandle, {
                 event.preventDefault();
                 pick(item);
               }}
-              onMouseEnter={() => setCursor(index)}
+              /*
+                Movement, not entry. A list that appears underneath a stationary pointer
+                fires mouseenter on whatever row lands under it — so opening the list put
+                the highlight on whichever row happened to be beneath the mouse rather
+                than on the first. mousemove only fires when the pointer actually moves.
+              */
+              onMouseMove={() => setCursor(index)}
             >
               <span className="work-item-id">{item.id}</span>
               <span className="work-item-title">{item.title}</span>

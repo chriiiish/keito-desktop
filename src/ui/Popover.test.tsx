@@ -5,7 +5,7 @@
  * preselected, what order the dropdown groups appear in), and it is the one screen that
  * cannot be checked by reading a snapshot.
  */
-import { act, cleanup, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import userEvent from "@testing-library/user-event";
 import type { Snapshot } from "../../electron/service.js";
@@ -1011,6 +1011,66 @@ describe("the note field with Azure DevOps", () => {
 
     expect(screen.getByRole("listbox")).toBeDefined();
     expect(screen.getByText("Fix the login redirect")).toBeDefined();
+  });
+
+  it("highlights the first option when the list opens", async () => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(connected());
+    render(<Popover />);
+
+    await user.click(await screen.findByPlaceholderText(/What are you working on/));
+    await user.keyboard("{ArrowDown}");
+
+    const options = screen.getAllByRole("option");
+    expect(options[0]!.getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("highlights the first option when the mark opens the list", async () => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(connected());
+    render(<Popover />);
+
+    await user.click(await screen.findByRole("button", { name: /show your azure devops work items/i }));
+
+    expect(screen.getAllByRole("option")[0]!.getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("does not move the highlight when the list opens under the pointer", async () => {
+    // A list rendered beneath a stationary mouse fires mouseenter on whatever row lands
+    // under it. That was picking the second option the moment the list opened.
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(connected());
+    render(<Popover />);
+    await user.click(await screen.findByPlaceholderText(/What are you working on/));
+    await user.keyboard("{ArrowDown}");
+
+    fireEvent.mouseEnter(screen.getAllByRole("option")[1]!);
+
+    expect(screen.getAllByRole("option")[0]!.getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("still follows the mouse when the mouse actually moves", async () => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(connected());
+    render(<Popover />);
+    await user.click(await screen.findByPlaceholderText(/What are you working on/));
+    await user.keyboard("{ArrowDown}");
+
+    fireEvent.mouseMove(screen.getAllByRole("option")[1]!);
+
+    expect(screen.getAllByRole("option")[1]!.getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("goes back to the first option as the filter changes", async () => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(connected());
+    render(<Popover />);
+    const input = await screen.findByPlaceholderText(/What are you working on/);
+
+    await user.keyboard("{ArrowDown}{ArrowDown}");
+    await user.type(input, "login");
+
+    expect(screen.getAllByRole("option")[0]!.getAttribute("aria-selected")).toBe("true");
   });
 
   it("filters the tickets as you type", async () => {
