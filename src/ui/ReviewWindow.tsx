@@ -40,6 +40,22 @@ const TABS: ReadonlyArray<readonly [Tab, string]> = [
  */
 const UPDATE_TAB: readonly [Tab, string] = ["update", "Update Available"];
 
+/** Every tab this window can render, update included. */
+const ALL_TABS: ReadonlyArray<readonly [Tab, string]> = [...TABS, UPDATE_TAB];
+
+/**
+ * Is this one of the tabs this window renders?
+ *
+ * `show-tab` arrives over IPC as an arbitrary string, so it is checked rather than cast.
+ * An id with no matching pane would leave the window blank with nothing in the tab bar
+ * highlighted — a dead end a user could not click their way out of, since the state is
+ * only reachable through the event and no tab button sets it. Derived from the tab list
+ * itself so a tab added later cannot be forgotten here.
+ */
+function isTab(value: string): value is Tab {
+  return ALL_TABS.some(([id]) => id === value);
+}
+
 export function ReviewWindow(): JSX.Element {
   const [snapshot, setSnapshot] = useSnapshot();
   const [tab, setTab] = useState<Tab>("entries");
@@ -77,7 +93,13 @@ export function ReviewWindow(): JSX.Element {
    * The popover's update notice opens this window on the update tab. An event rather than
    * Snapshot state, so clicking away from the tab afterwards actually sticks.
    */
-  useEffect(() => keito.onShowTab((requested) => setTab(requested as Tab)), []);
+  useEffect(
+    () =>
+      keito.onShowTab((requested) => {
+        if (isTab(requested)) setTab(requested);
+      }),
+    [],
+  );
 
   const company = ready ? snapshot?.identity?.accountName?.trim() : undefined;
   useEffect(() => {
@@ -87,7 +109,7 @@ export function ReviewWindow(): JSX.Element {
   if (!snapshot) return <div className="window loading">Loading…</div>;
 
   const update = snapshot.update;
-  const tabs = update ? [...TABS, UPDATE_TAB] : TABS;
+  const tabs = update ? ALL_TABS : TABS;
 
   // The update tab is gone the moment the update is installed, so a window left open on
   // it must fall back rather than render an empty pane.

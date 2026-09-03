@@ -1069,6 +1069,20 @@ describe("the update tab", () => {
     expect(screen.queryByRole("button", { name: /Update Available/ })).toBeNull();
   });
 
+  it("ignores a tab id it does not render, rather than blanking the window", async () => {
+    // show-tab arrives over IPC as an arbitrary string. An unknown id would otherwise
+    // leave no pane rendered and nothing highlighted, and no tab button can set that
+    // state, so there would be no way to click out of it.
+    api.getSnapshot.mockResolvedValue(withUpdate());
+    render(<ReviewWindow />);
+    await screen.findByRole("button", { name: /Update Available/ });
+
+    const show = api.onShowTab.mock.calls[0]![0];
+    await act(async () => show("nonsense"));
+
+    expect(screen.getByRole("button", { name: "Time Entries" }).className).toContain("on");
+  });
+
   it("selects the tab when the main process asks for it", async () => {
     // How the popover notice gets here: an event, not Snapshot state.
     api.getSnapshot.mockResolvedValue(withUpdate());
