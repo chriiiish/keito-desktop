@@ -1081,3 +1081,30 @@ describe("the update tab", () => {
     expect(screen.getByText(/Keito Timer 0\.4\.0 is available/)).toBeDefined();
   });
 });
+
+describe("the update tab without a working key", () => {
+  const noKey = (over: Partial<Snapshot> = {}) => ({
+    ...withUpdate(),
+    keyStatus: "missing" as const,
+    ...over,
+  });
+
+  it("is still reachable, since it needs nothing from Keito", async () => {
+    // Every other tab falls back to the connection form. This one does not: a user whose
+    // key has just stopped working is exactly who might want the newer version.
+    api.getSnapshot.mockResolvedValue(noKey());
+    render(<ReviewWindow />);
+    await userEvent.setup().click(await screen.findByRole("button", { name: /Update Available/ }));
+
+    expect(screen.getByText(/Keito Timer 0\.4\.0 is available/)).toBeDefined();
+  });
+
+  it("leaves every other tab falling back to the connection form", async () => {
+    api.getSnapshot.mockResolvedValue(noKey());
+    render(<ReviewWindow />);
+    await userEvent.setup().click(await screen.findByRole("button", { name: "Projects" }));
+
+    expect(screen.queryByText(/Keito Timer 0\.4\.0 is available/)).toBeNull();
+    expect(screen.getByRole("button", { name: "Connect" })).toBeDefined();
+  });
+});

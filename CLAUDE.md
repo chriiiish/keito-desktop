@@ -280,6 +280,13 @@ Snapshot — a Snapshot field would re-select the tab on every broadcast, so cli
 from it would not stick. That is the exception to "new UI state belongs on `Snapshot`":
 this is a navigation command, not state.
 
+**The update tab is the one exception to "no key, connection form".** Every other tab
+falls back to Keito Connection until a key works, because none of them can do anything
+useful without one. This tab can: it is about the app, not the workspace, and needs no key,
+no catalog and no network beyond the check that already happened. Without the exception the
+tab would sit in the bar and visibly do nothing when clicked, and the release would be
+hidden from the user most likely to want it — someone whose key has just stopped working.
+
 **The release body is not shown as-is.** The workflow prepends a download table and
 first-launch instructions to every release, and `generate_release_notes: true` appends
 GitHub's list underneath — so only the `## What's Changed` section is a changelog.

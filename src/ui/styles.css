@@ -220,6 +220,7 @@ button.primary:hover { filter: brightness(1.08); }
 .tabs button.has-update::before { content: "● "; color: var(--accent); font-size: 9px; vertical-align: 2px; }
 
 .update-tab .primary { margin-bottom: 4px; }
+.update-lead { font-size: 17px; font-weight: 600; margin: 0 0 4px; color: var(--fg); }
 /*
  * The changed-things list. A max height so a busy release cannot push the rest of the tab
  * off the screen, and `anywhere` so a long commit subject wraps rather than scrolling the

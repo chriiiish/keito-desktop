@@ -27,7 +27,12 @@ export function UpdateTab({
 
   return (
     <section className="settings update-tab">
-      <h2>Keito Timer {update.name} is available</h2>
+      {/*
+        A real heading rather than a `.settings h2`, which is a small uppercase section
+        label — as one, the most important sentence on the tab rendered smaller and fainter
+        than the body text under it. The h2s below keep that label role for the sections.
+      */}
+      <h1 className="update-lead">Keito Timer {update.name} is available</h1>
       <p className="hint">
         You are running {snapshot.appVersion}
         {published ? `. ${update.name} was published on ${published}.` : "."}

@@ -89,11 +89,21 @@ export function ReviewWindow(): JSX.Element {
   const update = snapshot.update;
   const tabs = update ? [...TABS, UPDATE_TAB] : TABS;
 
-  // Nothing else can do anything useful until the connection works. The update tab is
-  // also gone the moment the update is installed, so a window left open on it must fall
-  // back rather than render an empty pane.
+  // The update tab is gone the moment the update is installed, so a window left open on
+  // it must fall back rather than render an empty pane.
   const selected: Tab = tab === "update" && !update ? "entries" : tab;
-  const active: Tab = snapshot.keyStatus === "ready" ? selected : "connection";
+
+  /**
+   * Nothing else can do anything useful until the connection works — with one exception.
+   *
+   * The update tab is about the app, not the workspace: it needs no key, no catalog and no
+   * network beyond the check that already happened. Falling it back to the connection form
+   * would leave a tab in the bar that visibly does nothing when clicked, and would hide a
+   * release from the very user most likely to want it — someone whose key has just stopped
+   * working, for whom the newer version might be the fix.
+   */
+  const active: Tab =
+    snapshot.keyStatus === "ready" || selected === "update" ? selected : "connection";
 
   return (
     <div className="window">
