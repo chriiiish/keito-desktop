@@ -33,14 +33,26 @@ stop the first launch. **This is expected, and only happens once.**
   <summary>macOS</summary>
   
   Open the `.dmg` and drag Keito Timer to Applications. The first launch is
-  refused with *"Apple could not verify…"*. Open **System Settings → Privacy & Security**,
-  scroll down, and press **Open Anyway**.
+  refused with *"Apple could not verify…"*. 
   
+  <img width="260" height="250" alt="image" src="https://github.com/user-attachments/assets/a9359a24-4269-40b1-a930-e15ae4f0c5b6" />
+
+  Open **System Settings → Privacy & Security**,
+  scroll down, and press **Open Anyway**.
+
+  <img width="723" height="626" alt="image" src="https://github.com/user-attachments/assets/c23343df-1909-445b-9773-0de5b0e90737" />
+  <img width="260" height="350" alt="image" src="https://github.com/user-attachments/assets/0b50cecc-b504-4ed7-a654-96f23af84bf9" />
+
   > Double-clicking again will not help, and neither will right-click → Open. The
   > Privacy & Security panel is the only route.
+
 </details>
 <details>
   <summary>Windows</summary>  
+
+  When downloading you may get told the exe is unsafe:
+  
+  <!-- WINDOWS IMAGE -->
   
   Run the `.exe`. SmartScreen shows *"Windows protected your PC"*. Choose
   **More info → Run anyway**. The installer is per-user and lets you pick the directory.
@@ -50,6 +62,8 @@ stop the first launch. **This is expected, and only happens once.**
 
 The app opens its settings window on first launch and asks for two things. **You will
 need to get these from your Keito administrator.**
+
+<img width="558" height="398" alt="image" src="https://github.com/user-attachments/assets/101267f9-4b83-419f-a48d-3419e2cbcc97" />
 
 * **An API key.** In Keito: Settings → Integrations → create a **full-access integration
 key**. It starts `kto_`.
@@ -72,6 +86,8 @@ taskbar. There is no main window; closing the settings window does not quit it.
 
 Press **`⌘⇧K`** (macOS) or **`Ctrl+Shift+K`** (Windows) from anywhere, enter in a note or
 just hit ENTER to start recording time.
+
+<img width="444" height="567" alt="image" src="https://github.com/user-attachments/assets/70dfe7dd-47d5-455d-8b9d-c47e8c3cae0c" />
 
 ### Something wrong?
 
@@ -104,27 +120,35 @@ If this made your life easier, consider buying me a coffee ❤️
 
 - **Tray popover on a global hotkey** (default `⌘⇧K` / `Ctrl+Shift+K`, changed by pressing
   the new combination in Settings): pick a category from the filterable dropdown, type a
-  note, press `⏎`.
+  note, press `⏎`.  
+  <img width="444" height="567" alt="image" src="https://github.com/user-attachments/assets/c6b690d9-bdc4-440c-8441-b960efb1a2f1" />
+  
 - **Favourites first**, then your three most recent, then every project with its tasks
-  beneath it. Filter by typing; star anything from inside the dropdown.
+  beneath it. Filter by typing; star anything from inside the dropdown.  
+  <img width="413" height="372" alt="image" src="https://github.com/user-attachments/assets/385b1e51-3914-4bf7-832c-3c466adf081c" />
+
 - **Today and yesterday listed.** Today's work resumes in one click;
   yesterday's copies the category and note onto a new entry dated today, so last night's
-  timesheet is not reopened.
-- **One row per task, totalled.** Coming back to something after lunch adds to it rather
-  than starting a second row — the popover shows everything spent on that task and note
-  today, including the stretch currently running.
-- **One-call switching.** `POST /time_entries` with `replace_running: true` stops the old
-  timer and starts the new one atomically — there is no window where nothing is tracked.
-  A failed switch leaves the previous timer running and offers a retry.
+  timesheet is not reopened.  
+  <img width="413" height="237" alt="image" src="https://github.com/user-attachments/assets/0774f095-f49b-43a6-9c2d-b69fa1309737" />
+  
 - **The running task in your menu bar.** Configurable: the note by default, falling back to
-  the task when blank, or the project instead — optionally prefixed with either.
+  the task when blank, or the project instead — optionally prefixed with either.  
+  <img width="413" height="237" alt="image" src="https://github.com/user-attachments/assets/e7ec924d-adef-4197-b1d4-c54acfba54bf" />
+
 - **Idle detection.** Away for 10+ minutes? On return it offers to trim the idle span. A
-  timer left running past 10 hours is stopped automatically.
+  timer left running past 10 hours is stopped automatically.  
+  
 - **Switch off categories you never use**, per task or a whole project at once. Favourites
-  and anything used in the last 30 days stay visible regardless.
-- **Entries window** for correcting today's or this week's times and notes.
+  and anything used in the last 30 days stay visible regardless.  
+  <img width="587" height="389" alt="image" src="https://github.com/user-attachments/assets/b5e4dacd-0fff-4e96-ba0e-fbddd9c98fc3" />
+
+- **Entries window** for correcting today's or this week's times and notes.  
+  <img width="895" height="275" alt="image" src="https://github.com/user-attachments/assets/7d5b25f2-5146-4d52-a40b-92c974b341e1" />
+
 - **Tells you when a new version is out**, with a link to the download. It does not update
   itself — see [Known limits](#known-limits).
+  
 
 A "category" here is a **(project, task) pair**. Keito has no category resource, and a time
 entry requires both ids.
