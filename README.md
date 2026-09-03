@@ -6,6 +6,8 @@ you're recording your time.
 
 It is not an official Keito product. It is built on Keito's public API.
 
+<img width="428" height="526" alt="image" src="https://github.com/user-attachments/assets/183b6463-d252-4097-adf9-95d7e7ba3945" />
+
 ---
 
 ## Install
