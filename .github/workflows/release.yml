@@ -174,7 +174,12 @@ jobs:
       - uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.meta.outputs.tag }}
-          name: ${{ needs.meta.outputs.tag }}
+          # The tag carries the v; the release title does not. The v belongs to the ref —
+          # it is what makes `v*` match and what `git tag` shows — but the title is read as
+          # a version number by people and by the app's update notice, which shows it
+          # verbatim. "0.3.0 is available" reads as a version; "v0.3.0 is available" reads
+          # as a tag someone forgot to tidy.
+          name: ${{ needs.meta.outputs.version }}
           draft: true
           generate_release_notes: true
           # Leads with the three installers, named and linked, because GitHub

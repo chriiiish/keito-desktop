@@ -365,6 +365,14 @@ list the job fails loudly rather than routing around it — the release is alrea
 published by then, and a version silently left unrecorded is the thing this job exists to
 prevent.
 
+**The tag carries the `v`; the release title does not.** `tag_name` is `vX.Y.Z` — the `v`
+is what makes the workflow's `v*` trigger match and what `git tag` lists — but `name` is
+the bare `X.Y.Z`. The title is read as a version number, by people and by the update
+notice, which renders it verbatim: *"0.3.0 is available"* reads as a version, *"v0.3.0 is
+available"* reads as a tag nobody tidied. Releases cut before this was fixed are titled
+`vX.Y.Z`, so `pickLatestRelease` still falls back to the tag when a release has no name at
+all, and the tab shows whatever the title says.
+
 **The download names are literals, not `${productName}`.** `artifactName` spells out
 `Keito-Timer-…` because the product name contains a space and GitHub rewrites a space in a
 release asset to a full stop. `${arch}` is only ever `arm64` or `x64`, so
