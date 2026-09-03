@@ -6,7 +6,7 @@ you're recording your time.
 
 It is not an official Keito product. It is built on Keito's public API.
 
-<img width="428" height="526" alt="image" src="https://github.com/user-attachments/assets/183b6463-d252-4097-adf9-95d7e7ba3945" />
+<img width="428" height="526" alt="Keito Timer popover" src="https://github.com/user-attachments/assets/183b6463-d252-4097-adf9-95d7e7ba3945" />
 
 ## Install
 
@@ -33,13 +33,13 @@ stop the first launch. **This is expected, and only happens once.**
   Open the `.dmg` and drag Keito Timer to Applications. The first launch is
   refused with *"Apple could not verify…"*. 
   
-  <img width="260" height="250" alt="image" src="https://github.com/user-attachments/assets/a9359a24-4269-40b1-a930-e15ae4f0c5b6" />
+  <img width="260" height="250" alt="macOS could not verify Keito timer error popup" src="https://github.com/user-attachments/assets/a9359a24-4269-40b1-a930-e15ae4f0c5b6" />
 
   Open **System Settings → Privacy & Security**,
   scroll down, and press **Open Anyway**.
 
-  <img width="723" height="626" alt="image" src="https://github.com/user-attachments/assets/c23343df-1909-445b-9773-0de5b0e90737" /><br />
-  <img width="260" height="350" alt="image" src="https://github.com/user-attachments/assets/0b50cecc-b504-4ed7-a654-96f23af84bf9" />  
+  <img width="723" height="626" alt="macOS privacy settings" src="https://github.com/user-attachments/assets/c23343df-1909-445b-9773-0de5b0e90737" /><br />
+  <img width="260" height="350" alt="macOS confirmation popup" src="https://github.com/user-attachments/assets/0b50cecc-b504-4ed7-a654-96f23af84bf9" />  
   <br />
   > Double-clicking again will not help, and neither will right-click → Open. The
   > Privacy & Security panel is the only route.
@@ -49,8 +49,8 @@ stop the first launch. **This is expected, and only happens once.**
   <summary><b>Windows</b></summary>  
 
   When downloading you may get told the exe is unsafe:  
-  <img width="514" height="357" alt="image" src="https://github.com/user-attachments/assets/e5283ca4-0261-4c21-9fa4-080064b7c104" />  
-  <img width="363" height="447" alt="image" src="https://github.com/user-attachments/assets/faf0409e-066f-4473-90ee-b1ee6f0c6cb7" />
+  <img width="514" height="357" alt="Download Unsafe on Windows" src="https://github.com/user-attachments/assets/e5283ca4-0261-4c21-9fa4-080064b7c104" />  
+  <img width="363" height="447" alt="Keep Download on Windows" src="https://github.com/user-attachments/assets/faf0409e-066f-4473-90ee-b1ee6f0c6cb7" />
 
   Run the `.exe`. SmartScreen shows *"Windows protected your PC"*. Choose
   **More info → Run anyway**. The installer is per-user and lets you pick the directory.
@@ -61,7 +61,7 @@ stop the first launch. **This is expected, and only happens once.**
 The app opens its settings window on first launch and asks for two things. **You will
 need to get these from your Keito administrator.**
 
-<img width="558" height="398" alt="image" src="https://github.com/user-attachments/assets/101267f9-4b83-419f-a48d-3419e2cbcc97" />
+<img width="558" height="398" alt="Keito credentials page" src="https://github.com/user-attachments/assets/101267f9-4b83-419f-a48d-3419e2cbcc97" />
 
 * **An API key.** In Keito: Settings → Integrations → create a **full-access integration
 key**. It starts `kto_`.
@@ -85,7 +85,7 @@ taskbar. There is no main window; closing the settings window does not quit it.
 Press **`⌘⇧K`** (macOS) or **`Ctrl+Shift+K`** (Windows) from anywhere, enter in a note or
 just hit ENTER to start recording time.
 
-<img width="444" height="567" alt="image" src="https://github.com/user-attachments/assets/70dfe7dd-47d5-455d-8b9d-c47e8c3cae0c" />
+<img width="444" height="567" alt="Keito Timer popup" src="https://github.com/user-attachments/assets/70dfe7dd-47d5-455d-8b9d-c47e8c3cae0c" />
 
 ### Something wrong?
 
@@ -121,39 +121,37 @@ If this made your life easier, consider buying me a coffee ❤️
 - **Tray popover on a global hotkey** (default `⌘⇧K` / `Ctrl+Shift+K`, changed by pressing
   the new combination in Settings): pick a category from the filterable dropdown, type a
   note, press `⏎`.  
-  <img width="444" height="567" alt="image" src="https://github.com/user-attachments/assets/c6b690d9-bdc4-440c-8441-b960efb1a2f1" />
+  <img width="444" height="567" alt="Keito Timer popup" src="https://github.com/user-attachments/assets/c6b690d9-bdc4-440c-8441-b960efb1a2f1" />
   
 - **Favourites first**, then your three most recent, then every project with its tasks
   beneath it. Filter by typing; star anything from inside the dropdown.  
-  <img width="413" height="372" alt="image" src="https://github.com/user-attachments/assets/385b1e51-3914-4bf7-832c-3c466adf081c" />
+  <img width="413" height="372" alt="Keito Timer Favourites and recent list" src="https://github.com/user-attachments/assets/385b1e51-3914-4bf7-832c-3c466adf081c" />
 
 - **Today and yesterday listed.** Today's work resumes in one click;
   yesterday's copies the category and note onto a new entry dated today, so last night's
   timesheet is not reopened.  
-  <img width="413" height="237" alt="image" src="https://github.com/user-attachments/assets/0774f095-f49b-43a6-9c2d-b69fa1309737" />
+  <img width="413" height="237" alt="Keito Timer time entries list" src="https://github.com/user-attachments/assets/0774f095-f49b-43a6-9c2d-b69fa1309737" />
   
 - **The running task in your menu bar.** Configurable: the note by default, falling back to
   the task when blank, or the project instead — optionally prefixed with either.  
-  <img width="203" height="27" alt="image" src="https://github.com/user-attachments/assets/36a84d63-926c-412f-8bdb-337b3bd54935" />
-  <img width="367" height="102" alt="image" src="https://github.com/user-attachments/assets/e18b3832-c26a-40e8-9e69-52ecdb6dafaa" />
-
+  <img width="203" height="27" alt="macOS menu bar icon" src="https://github.com/user-attachments/assets/36a84d63-926c-412f-8bdb-337b3bd54935" />
+  <img width="367" height="102" alt="Windows task bar icon" src="https://github.com/user-attachments/assets/e18b3832-c26a-40e8-9e69-52ecdb6dafaa" />
 
 - **Idle detection.** Away for 10+ minutes? On return it offers to trim the idle span. A
   timer left running past 10 hours is stopped automatically.
-  <img width="420" height="128" alt="image" src="https://github.com/user-attachments/assets/16624efc-bcf5-4489-a265-3ba252d5cdc9" />
+  <img width="420" height="128" alt="Idle detection screenshot" src="https://github.com/user-attachments/assets/16624efc-bcf5-4489-a265-3ba252d5cdc9" />
 
-  
 - **Switch off categories you never use**, per task or a whole project at once. Favourites
   and anything used in the last 30 days stay visible regardless.  
-  <img width="587" height="389" alt="image" src="https://github.com/user-attachments/assets/b5e4dacd-0fff-4e96-ba0e-fbddd9c98fc3" />
+  <img width="587" height="389" alt="Change which categories are visible" src="https://github.com/user-attachments/assets/b5e4dacd-0fff-4e96-ba0e-fbddd9c98fc3" />
 
 - **Entries window** for correcting today's or this week's times and notes.  
-  <img width="895" height="275" alt="image" src="https://github.com/user-attachments/assets/7d5b25f2-5146-4d52-a40b-92c974b341e1" />
+  <img width="895" height="275" alt="List of all entries for today" src="https://github.com/user-attachments/assets/7d5b25f2-5146-4d52-a40b-92c974b341e1" />
 
 - **Tells you when a new version is out**, with a link to the download. It does not update
   itself — see [Known limits](#known-limits).
-  <img width="604" height="166" alt="image" src="https://github.com/user-attachments/assets/f7f8eef8-864c-40d3-9ac5-b13bb1c402a9" />
-  <img width="423" height="59" alt="image" src="https://github.com/user-attachments/assets/eb4c44da-b038-4ae9-be80-a34e36348885" />
+  <img width="604" height="166" alt="New version tab" src="https://github.com/user-attachments/assets/f7f8eef8-864c-40d3-9ac5-b13bb1c402a9" />
+  <img width="423" height="59" alt="New version message" src="https://github.com/user-attachments/assets/eb4c44da-b038-4ae9-be80-a34e36348885" />
 
 
   
