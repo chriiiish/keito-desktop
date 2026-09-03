@@ -40,9 +40,9 @@ stop the first launch. **This is expected, and only happens once.**
   Open **System Settings → Privacy & Security**,
   scroll down, and press **Open Anyway**.
 
-  <img width="723" height="626" alt="image" src="https://github.com/user-attachments/assets/c23343df-1909-445b-9773-0de5b0e90737" />
-  <img width="260" height="350" alt="image" src="https://github.com/user-attachments/assets/0b50cecc-b504-4ed7-a654-96f23af84bf9" />
-
+  <img width="723" height="626" alt="image" src="https://github.com/user-attachments/assets/c23343df-1909-445b-9773-0de5b0e90737" /><br />
+  <img width="260" height="350" alt="image" src="https://github.com/user-attachments/assets/0b50cecc-b504-4ed7-a654-96f23af84bf9" />  
+  <br />
   > Double-clicking again will not help, and neither will right-click → Open. The
   > Privacy & Security panel is the only route.
 
@@ -134,7 +134,9 @@ If this made your life easier, consider buying me a coffee ❤️
   
 - **The running task in your menu bar.** Configurable: the note by default, falling back to
   the task when blank, or the project instead — optionally prefixed with either.  
-  <img width="413" height="237" alt="image" src="https://github.com/user-attachments/assets/e7ec924d-adef-4197-b1d4-c54acfba54bf" />
+  <!--todo mac image -->
+  <img width="367" height="102" alt="image" src="https://github.com/user-attachments/assets/e18b3832-c26a-40e8-9e69-52ecdb6dafaa" />
+
 
 - **Idle detection.** Away for 10+ minutes? On return it offers to trim the idle span. A
   timer left running past 10 hours is stopped automatically.  
