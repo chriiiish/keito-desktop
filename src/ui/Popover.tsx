@@ -3,6 +3,7 @@ import { AsyncButton, Spinner, useAsyncAction } from "./AsyncButton.js";
 import { CategoryPicker } from "./CategoryPicker.js";
 import { Elapsed } from "./Elapsed.js";
 import { RecentEntries } from "./RecentEntries.js";
+import { loggedBeforeRunning } from "../core/time/totals.js";
 import { keito } from "./keito-api.js";
 import { useSnapshot } from "./useSnapshot.js";
 
@@ -118,7 +119,10 @@ export function Popover(): JSX.Element {
               )}
             </div>
             <div className="running-right">
-              <Elapsed startedAtMs={running.startedAtMs} />
+              <Elapsed
+                startedAtMs={running.startedAtMs}
+                priorSeconds={loggedBeforeRunning(snapshot.today, snapshot.workspaceTimezone)}
+              />
               <AsyncButton
                 className="stop"
                 title="Stop timer"

@@ -842,3 +842,80 @@ describe("the update notice", () => {
     expect(screen.queryByText(/Update available/)).toBeNull();
   });
 });
+
+describe("a task worked on more than once in a day", () => {
+  // Switching away and back is POST /time_entries, which creates a *new* entry rather
+  // than continuing the old one. So the same task worked on twice is two entries, and
+  // while the second is running it reports hours: null — which is how the day's earlier
+  // work came to vanish from the popover.
+  const twice = (over: Partial<TimeEntry> = {}) => [
+    entry("te_2", "p_acme", "t_dev", {
+      notes: "Sprint planning",
+      hours: null,
+      ended_time: null,
+      is_running: true,
+      timer_started_at: new Date(Date.now() - 10 * 60_000).toISOString(),
+      ...over,
+    }),
+    entry("te_1", "p_acme", "t_dev", { notes: "Sprint planning", hours: 0.5 }),
+  ];
+
+  it("shows it once, with everything spent on it today added up", async () => {
+    api.getSnapshot.mockResolvedValue({ ...snapshot, today: twice() } satisfies Snapshot);
+
+    render(<Popover />);
+
+    // 30 minutes logged plus 10 running, on one row rather than two rows of a fraction.
+    expect(await screen.findByText("0:40")).toBeDefined();
+    expect(screen.queryByText("0:30")).toBeNull();
+    expect(screen.getAllByText("Sprint planning")).toHaveLength(1);
+  });
+
+  it("resumes the newest stretch, not the first one of the day", async () => {
+    api.getSnapshot.mockResolvedValue({
+      ...snapshot,
+      today: twice({ is_running: false, hours: 0.25, ended_time: "10:15" }),
+    } satisfies Snapshot);
+    api.resumeEntry.mockResolvedValue(snapshot);
+    render(<Popover />);
+
+    await userEvent.setup().click(await screen.findByLabelText(/^Resume Development$/));
+
+    expect(api.resumeEntry).toHaveBeenCalledWith("te_2");
+  });
+
+  it("keeps the same task apart when the notes differ", async () => {
+    api.getSnapshot.mockResolvedValue({
+      ...snapshot,
+      today: [
+        entry("te_2", "p_acme", "t_dev", { notes: "Code review" }),
+        entry("te_1", "p_acme", "t_dev", { notes: "Sprint planning" }),
+      ],
+    } satisfies Snapshot);
+
+    render(<Popover />);
+
+    expect(await screen.findByText("Code review")).toBeDefined();
+    expect(screen.getByText("Sprint planning")).toBeDefined();
+  });
+
+  it("counts earlier stretches on the header clock too", async () => {
+    // Otherwise the header and the row for the very same task disagree, both ticking.
+    api.getSnapshot.mockResolvedValue({
+      ...snapshot,
+      today: twice(),
+      timer: {
+        status: "running",
+        pair: snapshot.catalog[0]!,
+        entryId: "te_2",
+        startedAtMs: Date.now() - 10 * 60_000,
+        note: "Sprint planning",
+      },
+    } satisfies Snapshot);
+
+    render(<Popover />);
+
+    // 00:40:00 rather than 00:10:00 — the half hour before the current stretch counts.
+    expect(await screen.findByText(/^00:40:0\d$/)).toBeDefined();
+  });
+});

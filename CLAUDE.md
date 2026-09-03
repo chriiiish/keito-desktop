@@ -434,6 +434,22 @@ takes effect once that stops being true.
 calendar date, so the Yesterday boundary moves with the workspace rather than sitting
 24 hours behind a UTC clock.
 
+**The popover's lists are grouped by (project, task, note), not by entry.** Keito has no
+notion of "the same work continued": switching away and back is `POST /time_entries` with
+`replace_running`, which creates a **new** entry every time, so an hour spent on one task
+in three sittings is three entries. A running entry also reports `hours: null`, so while
+the third sitting was going the popover showed only that sitting and the first two had
+apparently never happened. `totalsByTaskAndNote` in `src/core/time/totals.ts` folds them
+back together and `loggedBeforeRunning` feeds the header clock the same total, because a
+header and a row disagreeing about one task — both ticking, both on screen — is its own
+bug. A row's buttons act on `latest`, the newest entry in the group, so resuming continues
+the most recent stretch rather than reopening the first of the day.
+
+**The entries table in the settings window is deliberately *not* grouped.** It is a
+timesheet: its rows carry editable start and end times and a delete button, all of which
+belong to one entry. Grouping there would offer to edit a start time that several entries
+share.
+
 `Snapshot.revision` increments on every server-side change. Windows holding their own
 derived data (the entries table) reload when it moves — without that they go stale until
 remounted.

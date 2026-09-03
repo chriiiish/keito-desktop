@@ -1,5 +1,7 @@
 import type { Pair, TimeEntry } from "../core/keito/types.js";
-import { entrySeconds, formatDuration } from "../core/time/elapsed.js";
+import type { EntryTotal } from "../core/time/totals.js";
+import { formatDuration } from "../core/time/elapsed.js";
+import { totalsByTaskAndNote } from "../core/time/totals.js";
 import { AsyncButton } from "./AsyncButton.js";
 import { useNow } from "./useNow.js";
 
@@ -39,11 +41,13 @@ export function RecentEntries({
   const running =
     today.some((entry) => entry.is_running) || yesterday.some((entry) => entry.is_running);
   const now = useNow(1000, running);
-  const describe = (entry: TimeEntry) => {
+  const describe = (total: EntryTotal) => {
+    const entry = total.latest;
     const pair = catalog.find(
       (candidate) => candidate.projectId === entry.project_id && candidate.taskId === entry.task_id,
     );
     return {
+      total,
       entry,
       pair,
       taskName: pair?.taskName ?? "Unknown task",
@@ -63,18 +67,25 @@ export function RecentEntries({
         <p className="empty">{empty}</p>
       ) : (
         <ul>
-          {entries.map(describe).map(({ entry, pair, taskName, projectName }) => (
-            <li key={entry.id} className={entry.is_running ? "running-row" : ""}>
+          {/*
+            One row per task-and-note, not per entry. Switching away and back creates a new
+            entry each time, so without this a day reads as the same task over and over,
+            each row holding a fraction of the time actually spent on it.
+          */}
+          {totalsByTaskAndNote(entries, now, timeZone)
+            .map(describe)
+            .map(({ total, entry, pair, taskName, projectName }) => (
+            <li key={total.key} className={total.isRunning ? "running-row" : ""}>
               <div className="entry-text">
                 <strong>{entry.notes?.trim() || taskName}</strong>
                 <span>
                   {projectName} — {taskName}
                 </span>
               </div>
-              <span className={`entry-hours${entry.is_running ? " ticking" : ""}`}>
-                {formatDuration(entrySeconds(entry, now, timeZone))}
+              <span className={`entry-hours${total.isRunning ? " ticking" : ""}`}>
+                {formatDuration(total.seconds)}
               </span>
-              {entry.is_running ? (
+              {total.isRunning ? (
                 <AsyncButton
                   className="stop small"
                   title="Stop this timer"
@@ -110,7 +121,9 @@ export function RecentEntries({
                   className="play small"
                   title="Resume this entry"
                   aria-label={`Resume ${taskName}`}
-                  onClick={() => onResume(entry.id)}
+                  // The newest stretch of this work, so restarting continues where it
+                  // actually left off rather than reopening the first entry of the day.
+                  onClick={() => onResume(total.latest.id)}
                 >
                   ▶
                 </AsyncButton>
