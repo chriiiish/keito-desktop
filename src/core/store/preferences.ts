@@ -35,6 +35,13 @@ export interface Preferences {
    * update is still somewhere to be found rather than gone.
    */
   dismissedUpdate?: string | undefined;
+  /**
+   * Whether update checks look at pre-releases as well as stable ones.
+   *
+   * Off by default: a release the project has flagged as not ready is not something to
+   * push at someone who never asked for it.
+   */
+  includePrereleases: boolean;
 }
 
 const defaults = (): Preferences => ({
@@ -44,6 +51,7 @@ const defaults = (): Preferences => ({
   hotkey: DEFAULT_HOTKEY,
   trayFallback: "task",
   trayPrefix: "none",
+  includePrereleases: false,
 });
 
 /** Favourites and settings on disk. The API key is not here — that lives in the OS keychain. */

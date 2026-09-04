@@ -154,8 +154,9 @@ If this made your life easier, consider buying me a coffee ❤️
 - **Entries window** for correcting today's or this week's times and notes.  
   <img width="895" height="275" alt="List of all entries for today" src="https://github.com/user-attachments/assets/7d5b25f2-5146-4d52-a40b-92c974b341e1" />
 
-- **Tells you when a new version is out**, with a link to the download. It does not update
-  itself — see [Known limits](#known-limits).  
+- **Tells you when a new version is out**, with a link to the download — stable releases by
+  default, or pre-releases too if you switch that on in **Settings → Updates**. It does not
+  update itself — see [Known limits](#known-limits).  
   <img width="604" height="166" alt="New version tab" src="https://github.com/user-attachments/assets/f7f8eef8-864c-40d3-9ac5-b13bb1c402a9" />
   <img width="423" height="59" alt="New version message" src="https://github.com/user-attachments/assets/eb4c44da-b038-4ae9-be80-a34e36348885" />
 

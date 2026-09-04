@@ -68,6 +68,8 @@ export interface Snapshot {
    * other way round, so a dev build is routinely behind by design.
    */
   update: UpdateStatus | null;
+  /** Whether update checks include pre-releases. The Settings toggle reads this. */
+  includePrereleases: boolean;
   /** The company id sent as Keito-Account-Id, once known. */
   accountId: string | null;
   /** A masked stand-in for the stored key, so settings can show one without exposing it. */
@@ -194,6 +196,7 @@ export class AppService {
       update: this.#update
         ? { ...this.#update, dismissed: prefs.dismissedUpdate === this.#update.version }
         : null,
+      includePrereleases: prefs.includePrereleases,
       accountId: prefs.accountId ?? null,
       apiKeyHint: this.#apiKeyHint,
       trayFallback: prefs.trayFallback,
@@ -385,6 +388,20 @@ export class AppService {
     if (this.#update && this.#update.version !== previous) {
       this.#log.info(`Update available: ${this.#update.version} (running ${this.#appVersion})`);
     }
+  }
+
+  /**
+   * Switches the update check between the stable channel and everything published.
+   *
+   * Drops whatever the last check found, rather than leaving it on screen: turning
+   * pre-releases off while a pre-release notice is showing has to take the notice with it,
+   * and the caller re-checks immediately so the gap is not visible.
+   */
+  async setIncludePrereleases(includePrereleases: boolean): Promise<Snapshot> {
+    await this.#prefs.update({ includePrereleases });
+    this.#update = null;
+    this.#revision++;
+    return this.snapshot();
   }
 
   /**

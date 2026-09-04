@@ -144,24 +144,46 @@ export interface ReleaseSummary {
   notes: string | null;
 }
 
+/** Which channel to look in. */
+export interface ReleaseChannel {
+  /**
+   * Whether a release GitHub has flagged as a pre-release counts.
+   *
+   * Off by default: someone who never opted in should not be offered a version the
+   * project itself has labelled as not ready.
+   */
+  includePrereleases?: boolean;
+}
+
 /**
  * The newest release a user could actually install, or null if there isn't one.
  *
- * **Drafts are excluded; pre-releases are not.** `GET /releases/latest` would be the
- * obvious call and it answers 404 here, because it excludes both — and this project
- * publishes every release as a pre-release while its drafts are the unpublished ones. A
- * draft is invisible to anyone without write access, so offering it would point users at
- * a 404; a pre-release is the thing on the download page today.
+ * **Drafts are always excluded.** A draft is invisible to anyone without write access, so
+ * offering one would point users at a 404. `GET /releases/latest` would be the obvious
+ * call and is not used: it also hides every pre-release, which would make the opt-in below
+ * impossible to implement.
+ *
+ * **Pre-releases are excluded unless asked for.** Opting in *adds them to the running*
+ * rather than preferring them — a stable release published after a release candidate is
+ * still the newer of the two, and still the one to offer.
+ *
+ * GitHub's `prerelease` flag decides, not the tag. A tag can carry a SemVer pre-release
+ * suffix without being flagged and the reverse is equally possible; the flag is what the
+ * download page shows, so it is what this follows.
  *
  * Sorted by version rather than trusting the order GitHub returns: `/releases` is ordered
  * by creation date, which stops matching version order the moment a patch is cut for an
  * older line. Tags that are not versions are skipped rather than failing the check, so one
  * `nightly` tag cannot switch the feature off.
  */
-export function pickLatestRelease(releases: readonly GitHubRelease[]): ReleaseSummary | null {
+export function pickLatestRelease(
+  releases: readonly GitHubRelease[],
+  channel: ReleaseChannel = {},
+): ReleaseSummary | null {
   let best: ReleaseSummary | null = null;
   for (const release of releases) {
     if (release.draft) continue;
+    if (release.prerelease && !channel.includePrereleases) continue;
     const parsed = parseVersion(release.tag_name);
     if (!parsed) continue;
     const version = normaliseVersion(release.tag_name);

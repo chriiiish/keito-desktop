@@ -30,6 +30,8 @@ let tray: Tray | null = null;
 let popover: BrowserWindow | null = null;
 let mainWindow: BrowserWindow | null = null;
 let service: AppService;
+/** Held so the update check can read the channel the user chose. */
+let prefsStore: PreferencesStore;
 let registeredHotkey: string | null = null;
 let log: Logger;
 /** False until `service` exists, so a second launch cannot race startup. */
@@ -285,6 +287,13 @@ function registerIpc(): void {
   );
 
   handle("dismiss-update", async () => service.dismissUpdate());
+  handle("set-include-prereleases", async (include: boolean) => {
+    const snapshot = await service.setIncludePrereleases(include);
+    // Re-check on the new channel rather than waiting for the daily timer, so the switch
+    // is seen to do something.
+    void checkForUpdates();
+    return snapshot;
+  });
 
   handle("set-tray-label", async (options: Parameters<AppService["setTrayLabel"]>[0]) =>
     service.setTrayLabel(options),
@@ -396,19 +405,28 @@ function startMonitors(): void {
  * so opening it costs nothing, and CLAUDE.md's request budget is about a frugal app rather
  * than only about Keito's own endpoints.
  */
+/**
+ * Asks GitHub what the newest release is on the channel the user has chosen, and tells
+ * every window.
+ *
+ * Module level rather than tucked inside the timer, because switching the pre-release
+ * toggle has to re-check straight away — a daily timer would otherwise leave the setting
+ * looking broken for up to a day.
+ */
+async function checkForUpdates(): Promise<void> {
+  const { includePrereleases } = prefsStore.get();
+  service.setLatestRelease(await fetchLatestRelease(log, { includePrereleases }));
+  broadcast(service.snapshot());
+}
+
 function startUpdateChecks(): void {
   if (!app.isPackaged) {
     log.info("Update check skipped: not a packaged build");
     return;
   }
 
-  const check = async (): Promise<void> => {
-    service.setLatestRelease(await fetchLatestRelease(log));
-    broadcast(service.snapshot());
-  };
-
-  void check();
-  setInterval(() => void check(), UPDATE_CHECK_INTERVAL_MS);
+  void checkForUpdates();
+  setInterval(() => void checkForUpdates(), UPDATE_CHECK_INTERVAL_MS);
 }
 
 // One tray icon, one set of global shortcuts, one writer of preferences.json. Without
@@ -445,6 +463,7 @@ async function start(): Promise<void> {
   process.on("unhandledRejection", (reason) => log.error(`Unhandled rejection: ${String(reason)}`));
 
   const prefs = await PreferencesStore.open(join(app.getPath("userData"), "preferences.json"));
+  prefsStore = prefs;
   const secrets = new SecretStore(join(app.getPath("userData"), "credentials.bin"));
   service = await AppService.create(prefs, secrets, log, app.getVersion());
 

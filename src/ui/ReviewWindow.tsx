@@ -503,6 +503,25 @@ function Settings({
         </p>
       )}
 
+      <h2>Updates</h2>
+      <p className="hint">
+        Keito Timer tells you when a newer version is out. By default that means stable
+        releases only. Switch this on to be told about pre-releases too — early builds,
+        published to be tried rather than relied on.
+      </p>
+      <div className="setting-row">
+        <span className="setting-label">Include pre-releases</span>
+        <Toggle
+          checked={snapshot.includePrereleases}
+          label="Include pre-releases"
+          onChange={(next) => keito.setIncludePrereleases(next).then(onChange)}
+        />
+      </div>
+      <p className="hint">
+        Either way it only ever tells you; it does not update itself. Switching this off
+        again while a pre-release is on offer takes the notice with it.
+      </p>
+
       <h2>Workspace timezone</h2>
       <p className="hint">
         Only used when you edit a time by hand. Timers themselves are stamped by Keito.

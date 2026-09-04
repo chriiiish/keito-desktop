@@ -21,6 +21,8 @@ const api = {
     ipcRenderer.invoke("set-hidden", pairIds, hidden),
   setHotkey: (hotkey: string): Promise<Snapshot> => ipcRenderer.invoke("set-hotkey", hotkey),
   dismissUpdate: (): Promise<Snapshot> => ipcRenderer.invoke("dismiss-update"),
+  setIncludePrereleases: (include: boolean): Promise<Snapshot> =>
+    ipcRenderer.invoke("set-include-prereleases", include),
   setOpenAtLogin: (openAtLogin: boolean): Promise<Snapshot> =>
     ipcRenderer.invoke("set-open-at-login", openAtLogin),
   setTrayLabel: (options: {

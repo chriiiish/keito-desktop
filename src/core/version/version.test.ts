@@ -150,9 +150,49 @@ describe("pickLatestRelease", () => {
     expect(picked?.version).toBe("0.3.0");
   });
 
-  it("keeps pre-releases, which are what this project actually publishes", () => {
-    const picked = pickLatestRelease([release("v0.3.0", { prerelease: true })]);
-    expect(picked?.version).toBe("0.3.0");
+  it("leaves pre-releases out unless they were asked for", () => {
+    // The default is the stable channel: someone who never opted in should not be
+    // offered a release the project itself has labelled as not ready.
+    const picked = pickLatestRelease([release("v1.1.0", { prerelease: true }), release("v1.0.2")]);
+
+    expect(picked?.version).toBe("1.0.2");
+  });
+
+  it("includes pre-releases when they are", () => {
+    const picked = pickLatestRelease(
+      [release("v1.1.0", { prerelease: true }), release("v1.0.2")],
+      { includePrereleases: true },
+    );
+
+    expect(picked?.version).toBe("1.1.0");
+  });
+
+  it("still finds the stable release when it is the newer of the two", () => {
+    // Opting in adds pre-releases to the running, it does not prefer them: a stable
+    // release published after an rc is still the one to offer.
+    const picked = pickLatestRelease(
+      [release("v1.1.0"), release("v1.1.0-rc.2", { prerelease: true })],
+      { includePrereleases: true },
+    );
+
+    expect(picked?.version).toBe("1.1.0");
+  });
+
+  it("has nothing to offer when every release is a pre-release and they are off", () => {
+    // Rather than falling back to one — the whole point of the switch is not seeing them.
+    expect(pickLatestRelease([release("v0.3.0", { prerelease: true })])).toBeNull();
+  });
+
+  it("takes GitHub's prerelease flag, not the tag, as the answer", () => {
+    // A tag can carry a SemVer pre-release suffix without being flagged, and vice versa.
+    // The flag is what the download page shows, so it is what this follows.
+    const flagged = pickLatestRelease([release("v2.0.0", { prerelease: true })], {
+      includePrereleases: true,
+    });
+    expect(flagged?.version).toBe("2.0.0");
+
+    const unflagged = pickLatestRelease([release("v2.0.0-beta.1", { prerelease: false })]);
+    expect(unflagged?.version).toBe("2.0.0-beta.1");
   });
 
   it("ignores tags that are not versions rather than failing the whole check", () => {
