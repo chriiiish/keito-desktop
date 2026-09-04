@@ -63,6 +63,7 @@ const snapshot: Snapshot = {
   platform: "darwin",
   appVersion: "0.1.0",
   update: null,
+  noteIsInternal: false,
   includePrereleases: false,
 
   azure: {

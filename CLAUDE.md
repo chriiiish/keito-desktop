@@ -133,6 +133,31 @@ until a contract test covers it.
   The suite cannot catch a regression here on its own: the fake echoes whatever
   `spent_date` it is sent, so tests written in UTC pass either way. `rankRecents` takes
   today as a `YYYY-MM-DD` string rather than a `Date` so the comparison cannot drift.
+- **A time entry has two notes.** Keito calls them **Notes** (client-visible) and
+  **Internal Notes** (team-only); so does this app, and so should anything written about it.
+  `notes` is documented; **`internal_notes` is not** — the name was inferred from Keito's
+  own terminology and its snake_case convention, and a contract test exists to prove it
+  round-trips. It is the safe direction to be wrong in: a wrong field name drops a note,
+  where the other way round would publish a private one to a client.
+
+  **One display rule everywhere** — `visibleNote` in `src/core/keito/notes.ts`: the client
+  note, or the internal one when there is no client note. The menu bar label, today,
+  yesterday and the entries table all use it, so an entry never reads differently depending
+  on where you look at it. Whitespace is not a note; falling back on `"  "` would show an
+  entry as blank with an internal note sitting behind it.
+
+  **An edit writes back to the field it was read from** (`visibleNoteField`). The entries
+  table edits what it displays, so saving a corrected fallback as `notes` would hand a note
+  somebody marked private straight to the client, with nothing on screen to say so.
+
+  **The toggle is remembered between timers** (`Preferences.noteIsInternal`), which is what
+  makes the gold state load-bearing rather than decorative: the setting is sticky, so the
+  gold pill and the gold field border are the only things telling you the next note is
+  private. The popover passes the visibility explicitly to `switchTo` rather than letting
+  the service read the preference, so what was on screen when Enter was pressed is what
+  gets sent. Gold is `--star`, the amber already used for favourites — one warm accent, not
+  two that look related and are not.
+
 - **There is no `GET /time_entries/:id`** — it answers `405`. Nothing may depend on reading
   a single entry; `PATCH` and `DELETE` go straight at the id.
 - **No ETags, no `If-Match`.** The docs describe both; the live API sends neither and

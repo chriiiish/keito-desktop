@@ -3,6 +3,7 @@ import { KeitoAuthError } from "../keito/errors.js";
 import { pairId } from "../catalog/catalog.js";
 import type { Pair, TimeEntry } from "../keito/types.js";
 import { workspaceDate } from "../time/workspace-time.js";
+import { noteFor, type NoteVisibility } from "../keito/notes.js";
 
 export type TimerState =
   | { status: "idle" }
@@ -41,6 +42,12 @@ export interface TimerOptions {
  * Owns "what am I timing right now". Keito is the source of truth; this holds the last
  * answer the server gave so the tray can render it without a round trip.
  */
+/** A note as typed, plus which of the two fields it is meant for. */
+export interface TypedNote {
+  text: string | undefined;
+  visibility: NoteVisibility;
+}
+
 export class Timer {
   #client: KeitoClient;
   #now: () => Date;
@@ -57,7 +64,7 @@ export class Timer {
     return this.#state;
   }
 
-  async switchTo(pair: Pair, notes?: string): Promise<void> {
+  async switchTo(pair: Pair, note?: TypedNote): Promise<void> {
     // On failure the previous state stands: a switch that never reached Keito must not
     // stop the clock on work that is still happening.
     const entry = await this.#guard(() =>
@@ -71,7 +78,8 @@ export class Timer {
         // Unconditional: "switch" always means "make this the running timer". This is
         // also race-free if another device started a timer since our last refresh.
         replaceRunning: true,
-        ...(notes ? { notes } : {}),
+        // Either notes or internal_notes, never both, and neither when blank.
+        ...noteFor(note?.visibility ?? "client", note?.text),
       }),
     );
     this.#state = { status: "running", pair, entry };

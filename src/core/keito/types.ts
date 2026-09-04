@@ -51,5 +51,13 @@ export interface TimeEntry {
   duration_seconds?: number | null;
   hours: number | null;
   is_running: boolean;
+  /** The client-visible note. Keito calls this "Notes"; so does this app. */
   notes: string | null;
+  /**
+   * The team-only note. Keito calls this "Internal Notes".
+   *
+   * Optional because a response that omits it is indistinguishable from one where it is
+   * empty, and neither is worth failing over — see `visibleNote`.
+   */
+  internal_notes?: string | null;
 }

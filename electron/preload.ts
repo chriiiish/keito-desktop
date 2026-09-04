@@ -12,8 +12,8 @@ const api = {
   signOut: (): Promise<Snapshot> => ipcRenderer.invoke("sign-out"),
   resetAll: (): Promise<Snapshot> => ipcRenderer.invoke("reset-all"),
   refresh: (): Promise<Snapshot> => ipcRenderer.invoke("refresh"),
-  switchTo: (pairId: string, notes?: string): Promise<Snapshot> =>
-    ipcRenderer.invoke("switch-to", pairId, notes),
+  switchTo: (pairId: string, notes?: string, visibility?: "client" | "internal"): Promise<Snapshot> =>
+    ipcRenderer.invoke("switch-to", pairId, notes, visibility),
   stopTimer: (): Promise<Snapshot> => ipcRenderer.invoke("stop-timer"),
   resumeEntry: (entryId: string): Promise<Snapshot> => ipcRenderer.invoke("resume-entry", entryId),
   toggleFavourite: (pairId: string): Promise<Snapshot> => ipcRenderer.invoke("toggle-favourite", pairId),
@@ -23,6 +23,8 @@ const api = {
   dismissUpdate: (): Promise<Snapshot> => ipcRenderer.invoke("dismiss-update"),
   setIncludePrereleases: (include: boolean): Promise<Snapshot> =>
     ipcRenderer.invoke("set-include-prereleases", include),
+  setNoteIsInternal: (internal: boolean): Promise<Snapshot> =>
+    ipcRenderer.invoke("set-note-is-internal", internal),
   setAzureEnabled: (enabled: boolean): Promise<Snapshot> =>
     ipcRenderer.invoke("set-azure-enabled", enabled),
   connectAzure: (token: string, organisationUrl?: string): Promise<Snapshot> =>

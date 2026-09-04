@@ -277,7 +277,9 @@ function registerIpc(): void {
   handle("set-company-id", async (accountId: string) => service.setCompanyId(accountId));
   handle("sign-out", async () => service.signOut());
   handle("refresh", async () => service.refresh());
-  handle("switch-to", async (pairId: string, notes?: string) => service.switchTo(pairId, notes));
+  handle("switch-to", async (pairId: string, notes?: string, visibility?: "client" | "internal") =>
+    service.switchTo(pairId, notes, visibility),
+  );
   handle("stop-timer", async () => service.stopTimer());
   handle("resume-entry", async (entryId: string) => service.resumeEntry(entryId));
   handle("toggle-favourite", async (pairId: string) => service.toggleFavourite(pairId));
@@ -292,6 +294,7 @@ function registerIpc(): void {
   );
 
   handle("dismiss-update", async () => service.dismissUpdate());
+  handle("set-note-is-internal", async (internal: boolean) => service.setNoteIsInternal(internal));
   handle("set-include-prereleases", async (include: boolean) => {
     await service.setIncludePrereleases(include);
     /*

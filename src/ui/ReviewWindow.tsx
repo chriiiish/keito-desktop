@@ -13,6 +13,7 @@ import { Toggle } from "./Toggle.js";
 import { useSnapshot } from "./useSnapshot.js";
 import { shiftDate, workspaceDate } from "../core/time/workspace-time.js";
 import { entrySeconds, formatDecimalHours } from "../core/time/elapsed.js";
+import { visibleNote } from "../core/keito/notes.js";
 import { useNow } from "./useNow.js";
 
 /** The Monday of the week a YYYY-MM-DD date falls in. */
@@ -258,10 +259,10 @@ function Entries({ revision, timeZone }: { revision: number; timeZone: string })
               </td>
               <td>
                 <input
-                  defaultValue={entry.notes ?? ""}
+                  defaultValue={visibleNote(entry)}
                   placeholder="—"
                   onBlur={(event) => {
-                    if (event.target.value !== (entry.notes ?? "")) {
+                    if (event.target.value !== visibleNote(entry)) {
                       void edit(entry.id, { notes: event.target.value });
                     }
                   }}

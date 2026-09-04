@@ -210,6 +210,44 @@ button.primary:hover { filter: brightness(1.08); }
 }
 .update-notice-dismiss:hover { color: var(--fg); }
 
+/* ── Internal-note toggle ────────────────────────────────── */
+/* Caption on the left, toggle right-aligned above the play button. */
+.field-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+
+/*
+ * Gold, and only gold, means the note is for the team. --star is the amber already used
+ * for favourites rather than a new colour: this app has one warm accent and adding a
+ * second would make two things look related that are not.
+ */
+.note-visibility {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--line);
+  background: none;
+  border-radius: 999px;
+  padding: 1px 8px 1px 6px;
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.note-visibility-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+  opacity: 0.5;
+}
+.note-visibility:hover { border-color: var(--star); }
+.note-visibility.on { border-color: var(--star); color: var(--star); }
+.note-visibility.on .note-visibility-dot { background: var(--star); opacity: 1; }
+.note-visibility:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* The field itself carries the state too, so it is visible while you are typing in it. */
+.with-play.internal input { border-color: var(--star); }
+.with-play.internal input:focus { outline-color: var(--star); }
+
 /* ── Note field with Azure DevOps work items ─────────────── */
 /* Position relative so the listbox can hang off it; the popover itself does not scroll. */
 .note-field { position: relative; flex: 1; display: flex; align-items: center; }

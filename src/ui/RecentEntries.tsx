@@ -2,6 +2,7 @@ import type { Pair, TimeEntry } from "../core/keito/types.js";
 import type { EntryTotal } from "../core/time/totals.js";
 import { formatDuration } from "../core/time/elapsed.js";
 import { totalsByTaskAndNote } from "../core/time/totals.js";
+import { visibleNote, visibleNoteField, type NoteVisibility } from "../core/keito/notes.js";
 import { AsyncButton } from "./AsyncButton.js";
 import { useNow } from "./useNow.js";
 
@@ -14,7 +15,11 @@ interface RecentEntriesProps {
   /** Continues an entry from today, on Keito's restart endpoint. */
   onResume: (entryId: string) => Promise<unknown>;
   /** Starts a fresh entry today from an older one's category and note. */
-  onStartAgain: (pairId: string, notes: string | undefined) => Promise<unknown>;
+  onStartAgain: (
+    pairId: string,
+    notes: string | undefined,
+    visibility: NoteVisibility,
+  ) => Promise<unknown>;
   onStop: () => Promise<unknown>;
 }
 
@@ -77,7 +82,7 @@ export function RecentEntries({
             .map(({ total, entry, pair, taskName, projectName }) => (
             <li key={total.key} className={total.isRunning ? "running-row" : ""}>
               <div className="entry-text">
-                <strong>{entry.notes?.trim() || taskName}</strong>
+                <strong>{visibleNote(entry) || taskName}</strong>
                 <span>
                   {projectName} — {taskName}
                 </span>
@@ -106,7 +111,13 @@ export function RecentEntries({
                   disabled={!pair}
                   onClick={async () => {
                     if (!pair) return;
-                    await onStartAgain(pair.id, entry.notes?.trim() || undefined);
+                    // Carries the note *and* which field it was in, so starting
+                    // yesterday's private note again does not publish it today.
+                    await onStartAgain(
+                      pair.id,
+                      visibleNote(entry) || undefined,
+                      visibleNoteField(entry),
+                    );
                   }}
                 >
                   {/* Fast-forward rather than play, because the button does something

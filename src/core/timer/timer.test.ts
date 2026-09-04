@@ -79,7 +79,7 @@ describe("starting a timer", () => {
   });
 
   it("attaches notes when given, and omits them when not", async () => {
-    await timer.switchTo(QA, "Regression sweep");
+    await timer.switchTo(QA, { text: "Regression sweep", visibility: "client" });
 
     expect(keito.entries[0]!.notes).toBe("Regression sweep");
   });

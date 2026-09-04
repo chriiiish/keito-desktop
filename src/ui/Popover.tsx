@@ -4,6 +4,7 @@ import { CategoryPicker } from "./CategoryPicker.js";
 import { Elapsed } from "./Elapsed.js";
 import { RecentEntries } from "./RecentEntries.js";
 import { NoteField, type NoteFieldHandle } from "./NoteField.js";
+import type { NoteVisibility } from "../core/keito/notes.js";
 import { loggedBeforeRunning } from "../core/time/totals.js";
 import { keito } from "./keito-api.js";
 import { useSnapshot } from "./useSnapshot.js";
@@ -14,6 +15,8 @@ export function Popover(): JSX.Element {
   const [note, setNote] = useState("");
 
   const [idle, setIdle] = useState<{ awaySinceMs: number; awaySeconds: number } | null>(null);
+  /** Which field a typed note is for. Remembered between timers, so it is read from the snapshot. */
+  const visibility: NoteVisibility = snapshot?.noteIsInternal ? "internal" : "client";
   const noteRef = useRef<NoteFieldHandle>(null);
 
   useEffect(() => keito.onIdleReturn(setIdle), []);
@@ -45,7 +48,7 @@ export function Popover(): JSX.Element {
 
   const [starting, start] = useAsyncAction(async () => {
     if (!selectedId) return;
-    const next = await keito.switchTo(selectedId, note.trim() || undefined);
+    const next = await keito.switchTo(selectedId, note.trim() || undefined, visibility);
     setSnapshot(next);
     if (!next.error) {
       setNote("");
@@ -63,8 +66,14 @@ export function Popover(): JSX.Element {
    * Yesterday's rows start a new entry dated today rather than restarting the old one,
    * which would file today's work under yesterday's date.
    */
-  const startAgain = async (pairId: string, notes: string | undefined) => {
-    const next = await keito.switchTo(pairId, notes);
+  const startAgain = async (
+    pairId: string,
+    notes: string | undefined,
+    visibility: NoteVisibility,
+  ) => {
+    // Keeps the note in the field it was already in: starting yesterday's internal note
+    // again must not publish it today.
+    const next = await keito.switchTo(pairId, notes, visibility);
     setSnapshot(next);
     if (!next.error) void keito.closePopover();
   };
@@ -190,8 +199,33 @@ export function Popover(): JSX.Element {
             pointerdown and the forwarded click reopened it, so it could be opened that way
             and never closed. */}
         <div className="field">
-          <span className="field-label">Note</span>
-          <div className="with-play">
+          <div className="field-head">
+            <span className="field-label">Note</span>
+            {/*
+              Gold means this note is for the team only. In line with the caption and
+              right-aligned above the play button, so the thing that decides where a note
+              goes sits with the field it governs rather than beside the timer controls.
+            */}
+            <button
+              type="button"
+              role="switch"
+              aria-checked={visibility === "internal"}
+              aria-label="Internal note"
+              className={`note-visibility${visibility === "internal" ? " on" : ""}`}
+              title={
+                visibility === "internal"
+                  ? "Internal note — your team can see this, the client cannot"
+                  : "Client-visible note — switch on to keep it to your team"
+              }
+              onClick={() =>
+                void keito.setNoteIsInternal(visibility !== "internal").then(setSnapshot)
+              }
+            >
+              <span className="note-visibility-dot" aria-hidden="true" />
+              Internal
+            </button>
+          </div>
+          <div className={`with-play${visibility === "internal" ? " internal" : ""}`}>
             <NoteField
               ref={noteRef}
               value={note}
