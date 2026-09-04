@@ -1348,6 +1348,21 @@ describe("the internal-note toggle", () => {
     expect(screen.getByText("Note")).toBeDefined();
   });
 
+  it("turns the caption gold with the switch", async () => {
+    // The caption is the plain-language half of the same signal; the colour is the half
+    // you catch out of the corner of your eye.
+    api.getSnapshot.mockResolvedValue(internal());
+    render(<Popover />);
+
+    expect((await screen.findByText("Internal Note")).className).toContain("internal");
+  });
+
+  it("leaves the caption plain while the note is client-visible", async () => {
+    render(<Popover />);
+
+    expect((await screen.findByText("Note")).className).not.toContain("internal");
+  });
+
   it("names the field rather than labelling the toggle", async () => {
     // The caption says which note this is, so the switch carries no word of its own.
     api.getSnapshot.mockResolvedValue(internal());

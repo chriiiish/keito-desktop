@@ -202,7 +202,7 @@ export function Popover(): JSX.Element {
         <div className="field">
           <div className="field-head">
             {/* The caption says which note this is, so the toggle needs no word of its own. */}
-            <span className="field-label">
+            <span className={`field-label${visibility === "internal" ? " internal" : ""}`}>
               {visibility === "internal" ? "Internal Note" : "Note"}
             </span>
             {/*

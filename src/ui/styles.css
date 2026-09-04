@@ -228,6 +228,29 @@ button.primary:hover { filter: brightness(1.08); }
 .note-visibility.on .switch input:checked + .track { background: var(--star); }
 .note-visibility.on .switch input:focus-visible + .track { outline-color: var(--star); }
 
+/* The caption is the plain-language half of the same signal. */
+.field-label.internal { color: var(--star); }
+
+/*
+ * A closed padlock rides in the knob while the switch is off.
+ *
+ * Drawn as an SVG rather than set as a character: the lock codepoint renders as a colour
+ * emoji on macOS, which is the same reason the Yesterday button is two play triangles
+ * rather than a fast-forward glyph.
+ */
+.note-visibility .switch input + .track::after {
+  /*
+   * More specific than `.switch .track::after`, which sets the `background` shorthand and
+   * would otherwise reset this back to none — it is declared later in this file.
+   */
+  background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.5' stroke-linecap='round'><rect x='4' y='10' width='16' height='11' rx='2' fill='%2364748b' stroke='none'/><path d='M8 10V7a4 4 0 0 1 8 0v3'/></svg>");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 9px 9px;
+}
+/* Gone once the switch is on, where the gold is doing the talking. */
+.note-visibility .switch input:checked + .track::after { background-image: none; }
+
 /* The field itself carries the state too, so it is visible while you are typing in it. */
 .with-play.internal input { border-color: var(--star); }
 .with-play.internal input:focus { outline-color: var(--star); }
