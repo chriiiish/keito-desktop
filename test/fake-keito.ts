@@ -21,6 +21,8 @@ export interface FakeEntry {
   is_running: boolean;
   notes: string | null;
   source: string | null;
+  /** Whose entry it is. Unset means the key's own user, which is the common case. */
+  user_id?: string | null;
 }
 
 export interface FakeKeitoOptions {
@@ -35,11 +37,26 @@ export interface FakeKeitoOptions {
   /** The workspace this key belongs to. Two fakes with different companies stand in for
    *  two Keito accounts, which is the only way to exercise switching between them. */
   company?: { id: string; name: string };
+  /** Who the key belongs to. Entries seeded for anybody else stand in for a colleague's. */
+  userId?: string;
+  /**
+   * Whether the fake honours `user_id`. Set false to stand in for a Keito that ignores a
+   * filter it does not recognise — which is how a documented parameter fails in practice,
+   * and the reason the client filters a second time.
+   */
+  honoursUserFilter?: boolean;
 }
 
 export class FakeKeito {
   entries: FakeEntry[] = [];
-  requests: Array<{ method: string; path: string; body: unknown; headers: Headers }> = [];
+  requests: Array<{
+    method: string;
+    path: string;
+    /** Query parameters, so a test can assert what was *asked for*, not just where. */
+    query: Record<string, string>;
+    body: unknown;
+    headers: Headers;
+  }> = [];
   /** Set to make the next request fail as if the network were down. */
   offline = false;
   /** projectId -> how many more times GET /tasks should answer 503 for it. */
@@ -52,6 +69,8 @@ export class FakeKeito {
     rejectAuth: boolean;
     pageSize: number;
     company: { id: string; name: string };
+    userId: string;
+    honoursUserFilter: boolean;
   };
   #seq = 0;
 
@@ -63,6 +82,8 @@ export class FakeKeito {
       rejectAuth: options.rejectAuth ?? false,
       pageSize: options.pageSize ?? 200,
       company: options.company ?? { id: "co_9", name: "Acme" },
+      userId: options.userId ?? "u_1",
+      honoursUserFilter: options.honoursUserFilter ?? true,
     };
   }
 
@@ -96,7 +117,13 @@ export class FakeKeito {
     const url = new URL(request.url);
     const path = url.pathname.replace(new URL(KEITO_BASE_URL).pathname, "");
     const body = request.method === "GET" ? undefined : await request.clone().json().catch(() => undefined);
-    this.requests.push({ method: request.method, path, body, headers: request.headers });
+    this.requests.push({
+      method: request.method,
+      path,
+      query: Object.fromEntries(url.searchParams),
+      body,
+      headers: request.headers,
+    });
 
     if (this.#options.rejectAuth) return this.#json({ message: "Invalid token" }, 401);
 
@@ -105,7 +132,11 @@ export class FakeKeito {
 
   #route(method: string, path: string, url: URL, body: any, headers: Headers): Response {
     if (method === "GET" && path === "/users/me") {
-      return this.#json({ id: "u_1", first_name: "Chris", company: this.#options.company });
+      return this.#json({
+        id: this.#options.userId,
+        first_name: "Chris",
+        company: this.#options.company,
+      });
     }
     if (method === "GET" && path === "/projects") {
       // Tasks arrive embedded, exactly as the live API returns them.
@@ -135,6 +166,12 @@ export class FakeKeito {
       const to = url.searchParams.get("to");
       if (from) entries = entries.filter((e) => e.spent_date >= from);
       if (to) entries = entries.filter((e) => e.spent_date <= to);
+      const userId = url.searchParams.get("user_id");
+      // An unrecognised parameter is ignored rather than rejected, which is the failure
+      // mode worth being able to reproduce.
+      if (userId && this.#options.honoursUserFilter) {
+        entries = entries.filter((e) => (e.user_id ?? this.#options.userId) === userId);
+      }
       return this.#page(entries, "time_entries", url);
     }
     if (method === "POST" && path === "/time_entries") {
