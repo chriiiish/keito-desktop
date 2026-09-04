@@ -288,11 +288,16 @@ function registerIpc(): void {
 
   handle("dismiss-update", async () => service.dismissUpdate());
   handle("set-include-prereleases", async (include: boolean) => {
-    const snapshot = await service.setIncludePrereleases(include);
-    // Re-check on the new channel rather than waiting for the daily timer, so the switch
-    // is seen to do something.
-    void checkForUpdates();
-    return snapshot;
+    await service.setIncludePrereleases(include);
+    /*
+     * Awaited, not fired off. `setIncludePrereleases` drops the release it already found —
+     * it has to, or switching *off* would leave a pre-release notice nothing could
+     * reproduce — so returning before the re-check lands would take an existing notice and
+     * the Update Available tab away and put them back a moment later. The Toggle stays
+     * busy for the duration, which is the honest thing for it to do.
+     */
+    await checkForUpdates();
+    return service.snapshot();
   });
 
   handle("set-tray-label", async (options: Parameters<AppService["setTrayLabel"]>[0]) =>
@@ -414,12 +419,23 @@ function startMonitors(): void {
  * looking broken for up to a day.
  */
 async function checkForUpdates(): Promise<void> {
+  /*
+   * The guard lives here, on the thing that must never run in a dev build, rather than only
+   * on the timer that starts it. A dev run reports package.json's version, which the
+   * release workflow stamps *after* a release is cut, so it is legitimately behind whatever
+   * shipped and would always claim an update exists. Guarding only the timer meant the
+   * pre-release toggle — which re-checks directly — walked straight past it.
+   */
+  if (!app.isPackaged) return;
+
   const { includePrereleases } = prefsStore.get();
   service.setLatestRelease(await fetchLatestRelease(log, { includePrereleases }));
   broadcast(service.snapshot());
 }
 
 function startUpdateChecks(): void {
+  // checkForUpdates guards itself; this is only to avoid arming a timer that would do
+  // nothing, and to say once why nothing happens.
   if (!app.isPackaged) {
     log.info("Update check skipped: not a packaged build");
     return;
