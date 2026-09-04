@@ -25,8 +25,10 @@ export interface CatalogFreshness {
  * A null `accountId` also reloads. Not knowing which workspace you are in is not a reason
  * to keep showing the last one.
  *
- * Pure so it can be tested: `AppService` is deliberately not unit tested, and this is the
- * decision worth being sure about rather than the plumbing around it.
+ * Pure, so the rule can be exercised on its own: every combination of age, emptiness and
+ * workspace, including the boundary at exactly the TTL. `electron/service.test.ts` covers
+ * the same bug end to end, through the caching this feeds; the two are complementary
+ * rather than duplicates — one pins the rule, the other proves it is wired to anything.
  */
 export function shouldReloadCatalog(freshness: CatalogFreshness): boolean {
   if (freshness.force) return true;
