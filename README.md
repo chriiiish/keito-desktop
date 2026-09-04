@@ -144,7 +144,7 @@ If this made your life easier, consider buying me a coffee ❤️
   |<img width="203" height="27" alt="macOS menu bar icon" src="https://github.com/user-attachments/assets/36a84d63-926c-412f-8bdb-337b3bd54935" />|<img width="367" height="102" alt="Windows task bar icon" src="https://github.com/user-attachments/assets/e18b3832-c26a-40e8-9e69-52ecdb6dafaa" />|
 
 - **Idle detection.** Away for 10+ minutes? On return it offers to trim the idle span. A
-  timer left running past 10 hours is stopped automatically.
+  timer left running past 10 hours is stopped automatically.  
   <img width="420" height="128" alt="Idle detection screenshot" src="https://github.com/user-attachments/assets/16624efc-bcf5-4489-a265-3ba252d5cdc9" />
 
 - **Switch off categories you never use**, per task or a whole project at once. Favourites
@@ -194,6 +194,8 @@ expand it to set it up.
 ### Azure DevOps
 
 Puts a work item in your note without you typing it.
+
+<img width="410" height="190" alt="image" src="https://github.com/user-attachments/assets/107e1773-d42c-4f49-b977-e0467219b5bd" />
 
 Once connected, the note field carries the Azure DevOps mark. Type to search the open work
 items assigned to you, or press `↓` to see the lot; picking one fills the note in as
