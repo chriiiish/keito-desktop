@@ -412,9 +412,16 @@ button.link.muted:hover { color: var(--danger); }
  * a section elsewhere, not the heavier `--rule` bars that separate whole sections. A group
  * reads as a group without needing a box drawn around it.
  */
+/*
+ * Every group is this wide — the tables and the menu bar label alike. One value, because
+ * three independent numbers is how the menu bar label came to sit 100px wider than
+ * everything above it.
+ */
+.settings { --settings-width: 460px; }
+
 .settings-table {
   width: 100%;
-  max-width: 460px;
+  max-width: var(--settings-width);
   border-collapse: collapse;
   margin: 0 0 22px;
 }
@@ -466,7 +473,9 @@ button.link.muted:hover { color: var(--danger); }
 .setting-name { display: inline-flex; align-items: center; gap: 5px; }
 
 /* The tray label group keeps a heading rather than a caption: it is a radio set, not rows. */
-.settings-group { margin: 0 0 22px; }
+.settings-group { margin: 0 0 22px; max-width: var(--settings-width); }
+/* The preview and the radio rows fill the group rather than setting a width of their own. */
+.settings-group .tray-label { max-width: 100%; }
 /* Matching the tables' captions exactly, so the two kinds of group read as one sequence. */
 .settings-group h2 { margin: 0 0 6px; font-weight: normal; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
 
