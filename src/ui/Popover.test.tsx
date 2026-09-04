@@ -1348,6 +1348,25 @@ describe("the internal-note toggle", () => {
     expect(screen.getByText("Note")).toBeDefined();
   });
 
+  it("shows a padlock in the switch while the note is client-visible", async () => {
+    // An element, not a background image: the app's CSP is `default-src 'self'` with no
+    // `img-src`, so a data: URI is refused — which is how two attempts at this rendered
+    // perfectly in a plain page and not at all in the app. As an element it is assertable,
+    // which a background image never was.
+    render(<Popover />);
+    await screen.findByPlaceholderText(/What are you working on/);
+
+    expect(document.querySelector(".note-lock")).not.toBeNull();
+  });
+
+  it("takes the padlock away once the note is internal", async () => {
+    api.getSnapshot.mockResolvedValue(internal());
+    render(<Popover />);
+    await screen.findByPlaceholderText(/What are you working on/);
+
+    expect(document.querySelector(".note-lock")).toBeNull();
+  });
+
   it("turns the caption gold with the switch", async () => {
     // The caption is the plain-language half of the same signal; the colour is the half
     // you catch out of the corner of your eye.

@@ -150,7 +150,16 @@ until a contract test covers it.
   table edits what it displays, so saving a corrected fallback as `notes` would hand a note
   somebody marked private straight to the client, with nothing on screen to say so.
 
-  **The toggle is remembered between timers** (`Preferences.noteIsInternal`), which is what
+  **`index.html` sets `default-src 'self'` and declares no `img-src`, so a `data:` URI is an
+image the renderer refuses to load.** A CSS `background-image: url("data:image/svg+xml,…")`
+therefore draws nothing — silently, with no layout change to notice. It cost two rounds on
+the note padlock, because it renders perfectly in any page without that meta tag and no test
+can see it: jsdom has no opinion about background images. **Draw small marks as inline
+`<svg>` elements**, which the policy does not govern and a test can assert. If a harness
+page is used to check appearance, give it the same CSP as `index.html` — and remember that
+`script-src 'self'` then rules out an inline `<script>` stub too.
+
+**The toggle is remembered between timers** (`Preferences.noteIsInternal`), which is what
   makes the state load-bearing rather than decorative: the setting is sticky, so the caption,
   the gold switch and the gold field border are the only things telling you the next note is
   private. The caption changes from "Note" to "Internal Note", which is why the switch

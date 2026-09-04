@@ -10,6 +10,33 @@ import { loggedBeforeRunning } from "../core/time/totals.js";
 import { keito } from "./keito-api.js";
 import { useSnapshot } from "./useSnapshot.js";
 
+/**
+ * The padlock that rides in the switch while a note is client-visible.
+ *
+ * An element rather than a CSS `background-image`, because `index.html` sets
+ * `default-src 'self'` and declares no `img-src` — so a `data:` URI is an image the policy
+ * refuses to load. It rendered perfectly in a plain page and not at all in the app, which
+ * is a difference no test would have shown either: jsdom has no opinion about background
+ * images. As an element it is both allowed and assertable.
+ *
+ * Positioned over the knob's resting place rather than inside it: the knob is a
+ * pseudo-element and cannot hold a child.
+ */
+function ClosedPadlock(): JSX.Element {
+  return (
+    <svg className="note-lock" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <rect x="4" y="11" width="16" height="10" rx="2" fill="currentColor" />
+      <path
+        d="M8.5 11V7.5a3.5 3.5 0 0 1 7 0V11"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="3"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 export function Popover(): JSX.Element {
   const [snapshot, setSnapshot] = useSnapshot();
   const [selectedId, setSelectedId] = useState("");
@@ -216,6 +243,7 @@ export function Popover(): JSX.Element {
                 label="Internal note"
                 onChange={(next) => keito.setNoteIsInternal(next).then(setSnapshot)}
               />
+              {visibility !== "internal" && <ClosedPadlock />}
             </span>
           </div>
           <div className={`with-play${visibility === "internal" ? " internal" : ""}`}>

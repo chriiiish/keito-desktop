@@ -224,7 +224,7 @@ button.primary:hover { filter: brightness(1.08); }
  * --star is the amber already used for favourites rather than a new colour. This app has
  * one warm accent, and a second would make two unrelated things look related.
  */
-.note-visibility { display: inline-flex; }
+.note-visibility { display: inline-flex; position: relative; }
 .note-visibility.on .switch input:checked + .track { background: var(--star); }
 .note-visibility.on .switch input:focus-visible + .track { outline-color: var(--star); }
 
@@ -238,23 +238,23 @@ button.primary:hover { filter: brightness(1.08); }
  * emoji on macOS, which is the same reason the Yesterday button is two play triangles
  * rather than a fast-forward glyph.
  */
-.note-visibility .switch input + .track::after {
-  /*
-   * More specific than `.switch .track::after`, which sets the `background` shorthand and
-   * would otherwise reset this back to none — it is declared later in this file.
-   *
-   * Drawn heavy and near-black, and filling most of the 16px knob. The first version was
-   * 9px of slate-500 and was invisible on a real screen: it read well enough magnified,
-   * which is exactly how you ship an icon nobody can see. A padlock at this size is three
-   * strokes and a box, so it needs the weight.
-   */
-  background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230f172a' stroke-width='3' stroke-linecap='round'><rect x='4' y='11' width='16' height='10' rx='2' fill='%230f172a' stroke='none'/><path d='M8.5 11V7.5a3.5 3.5 0 0 1 7 0V11'/></svg>");
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: 12px 12px;
+/*
+ * The padlock sits over the knob's resting place — top 2px, left 2px, 16px across — rather
+ * than inside it, since the knob is a pseudo-element and cannot hold a child.
+ *
+ * It is an element and not a background image on purpose: index.html sets
+ * `default-src 'self'` with no `img-src`, so a `data:` URI is refused. That is why the
+ * first two attempts at this were invisible in the app and perfect everywhere else.
+ */
+.note-lock {
+  position: absolute;
+  left: 4px;
+  top: 4px;
+  width: 12px;
+  height: 12px;
+  color: var(--fg);
+  pointer-events: none;
 }
-/* Gone once the switch is on, where the gold is doing the talking. */
-.note-visibility .switch input:checked + .track::after { background-image: none; }
 
 /* The field itself carries the state too, so it is visible while you are typing in it. */
 .with-play.internal input { border-color: var(--star); }
