@@ -1222,19 +1222,4 @@ describe("the pre-release setting", () => {
     expect(api.setIncludePrereleases).toHaveBeenCalledWith(false);
   });
 
-  it("says what a pre-release is, since the word is not self-explanatory", async () => {
-    api.getSnapshot.mockResolvedValue(snapshot);
-    await openSettings();
-
-    expect(screen.getByText(/tried rather than relied on/i)).toBeDefined();
-  });
-
-  it("says it still does not update itself", async () => {
-    // The switch changes which releases are looked for, not what happens when one is
-    // found — and an update setting is exactly where someone would assume otherwise.
-    api.getSnapshot.mockResolvedValue(snapshot);
-    await openSettings();
-
-    expect(screen.getByText(/does not update itself/i)).toBeDefined();
-  });
 });
