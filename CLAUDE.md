@@ -157,6 +157,13 @@ Tests live only at these seams: `KeitoClient`, `Timer`, `buildPicker`,
 round-tripping to a temp dir. The Electron main process, the tray and the hotkey are
 deliberately **not** unit-tested — they're verified by running the app.
 
+`electron/service.test.ts` is the one exception, and is deliberately narrow: the
+company-change cache bug lives *inside* `AppService` and only appears across a switch of
+company, so there is nowhere else it could be caught. `AppService` imports nothing from
+Electron at runtime — `SecretStore` and `Logger` are type-only — so it constructs under
+Vitest with stand-ins and the global `fetch` pointed at `FakeKeito`. Do not grow this into
+a general test of the service; the rule above still stands.
+
 `src/ui/Popover.test.tsx` and `src/ui/ReviewWindow.test.tsx` are the component tests (jsdom + Testing Library). The popover
 holds real logic — which category is preselected, dropdown grouping and filtering,
 favouriting from inside the list, resuming today's entries — and it is the screen that
@@ -211,7 +218,17 @@ Startup is **3 requests**; a popover open is normally **1**. Keep it that way.
   own call for callers that have no entries to hand.
 - **The catalog is cached for `CATALOG_TTL_MS`.** Projects and tasks change far more slowly
   than the popover is opened. A failed reload keeps the previous catalog rather than
-  emptying it.
+  emptying it — **unless the catalog belongs to a different company**, in which case it is
+  dropped and the failure raised, because showing someone another workspace's projects is
+  worse than showing none.
+- **The catalog cache is keyed on the company, not just on time.** Projects and tasks belong
+  to one Keito account, and connecting to a different one inside the TTL used to leave the
+  previous account's catalog in place: it was neither stale nor empty, so nothing reloaded
+  it. `#catalogAccountId` records which workspace the cache is for and
+  `shouldReloadCatalog` in `src/core/catalog/staleness.ts` makes the decision. Note that a
+  key alone does not change the company — `validateKey()` lets a configured account id win
+  over the server-reported one — so the paths that matter are `setCompanyId` and
+  `setApiKey` with an explicit id.
 - **Every list endpoint is paged** via `#paged` at `PAGE_SIZE`. Without it a busy month is
   ranked from the first page alone — silently wrong rather than visibly broken.
 - Entries embed `project` and `task` objects, so a timer running against an archived
