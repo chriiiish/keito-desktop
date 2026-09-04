@@ -136,10 +136,15 @@ suite("internal notes", () => {
     });
     created.push(entry.id);
 
-    const [read] = await client.listTimeEntries({
+    // By id, not the first row: a real workspace may already have entries on this date and
+    // the list is in no guaranteed order, so taking [0] could assert against someone else's
+    // note — or pass while the one just written is wrong.
+    const listed = await client.listTimeEntries({
       from: entry.spent_date,
       to: entry.spent_date,
     });
+    const read = listed.find((candidate) => candidate.id === entry.id);
+    expect(read, "the entry just created was not in the day's listing").toBeTruthy();
 
     console.log("internal_notes came back as:", read?.internal_notes ?? "(absent)");
     console.log("notes came back as:", read?.notes ?? "(absent)");
@@ -148,7 +153,8 @@ suite("internal notes", () => {
     expect(entry.internal_notes ?? read?.internal_notes).toBe(
       "keito-timer contract check — internal",
     );
-    // And it must not have leaked into the client-visible field.
+    // And it must not have leaked into the client-visible field, on the way out or back.
     expect(entry.notes ?? "").not.toContain("internal");
+    expect(read?.notes ?? "").not.toContain("internal");
   });
 });

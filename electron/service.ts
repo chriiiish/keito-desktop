@@ -785,21 +785,29 @@ export class AppService {
    * note or, failing that, the internal one — so saving an edited fallback as `notes`
    * would hand a note somebody marked private straight to the client, without anything on
    * screen suggesting it had happened.
+   *
+   * The caller says which field that was, in `noteField`. This process cannot work it out
+   * for every row the table can edit: it holds only today's and yesterday's entries, while
+   * the table's "This week" view lists rows older than both. Deciding from `#today` and
+   * `#yesterday` alone meant every one of those older rows fell through to the client
+   * note, which is exactly the disclosure the rule above exists to prevent.
+   *
+   * The local lookup stays as a fallback for a caller that sends no field, and only then
+   * does an unrecognised entry default to client — what typing into an untouched row is
+   * meant to produce.
    */
   async updateEntry(
     id: string,
-    patch: { notes?: string; startedTime?: string; endedTime?: string },
+    patch: { notes?: string; noteField?: NoteVisibility; startedTime?: string; endedTime?: string },
   ): Promise<Snapshot> {
     if (!this.#client) return this.snapshot();
     return this.#run(async () => {
-      let { notes, ...rest } = patch;
+      let { notes, noteField, ...rest } = patch;
       const body: Parameters<KeitoClient["updateTimeEntry"]>[1] = { ...rest };
 
       if (notes !== undefined) {
         const entry = [...this.#today, ...this.#yesterday].find((candidate) => candidate.id === id);
-        // Unknown entry — one from an older week in the table — is treated as client,
-        // which is what an untouched row produces anyway.
-        const field = entry ? visibleNoteField(entry) : "client";
+        const field = noteField ?? (entry ? visibleNoteField(entry) : "client");
         if (field === "internal") body.internalNotes = notes;
         else body.notes = notes;
       }

@@ -242,6 +242,12 @@ export function Popover(): JSX.Element {
               declared in Settings — see Preferences.internalNotesAvailable. Offering the
               switch without the feature would write a note to a field that does not exist.
             */}
+            {/*
+              No in-flight guard, for the same reason the update notice's dismiss has none:
+              `setNoteIsInternal` writes a preference and calls nothing on Keito, and the
+              rule about double-firing is about API calls. Two rapid clicks write the
+              preference twice and land on the state the switch is showing.
+            */}
             {snapshot.internalNotesAvailable && (
               <span className={`note-visibility${visibility === "internal" ? " on" : ""}`}>
                 <Toggle

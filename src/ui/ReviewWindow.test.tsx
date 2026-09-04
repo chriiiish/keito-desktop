@@ -1580,3 +1580,70 @@ describe("the Internal Notes plan setting", () => {
     expect(api.setInternalNotesAvailable).toHaveBeenCalledWith(false);
   });
 });
+
+/**
+ * The table edits whichever note it displayed, so the save has to name the field it read
+ * from. The main process cannot work that out for itself: it caches only today's and
+ * yesterday's entries, and "This week" lists rows older than both. Left to guess, it
+ * defaults to the client note — which would publish an internal note the table was only
+ * showing as a fallback.
+ */
+describe("which note field an edit is written back to", () => {
+  const row = (over: Record<string, unknown> = {}) => ({
+    id: "te_1",
+    project_id: "p_acme",
+    task_id: "t_dev",
+    spent_date: "2026-09-02",
+    started_time: "09:00",
+    ended_time: "09:30",
+    timer_started_at: null,
+    duration_seconds: null,
+    hours: 0.5,
+    is_running: false,
+    notes: null,
+    ...over,
+  });
+
+  const editNote = async (over: Record<string, unknown>, typed: string) => {
+    api.listEntries.mockResolvedValue([row(over)]);
+    api.updateEntry.mockResolvedValue(snapshot);
+    const user = userEvent.setup();
+    render(<ReviewWindow />);
+    await user.click(await screen.findByRole("button", { name: "Time Entries" }));
+
+    const notes = await screen.findByPlaceholderText("—");
+    await user.clear(notes);
+    await user.type(notes, typed);
+    fireEvent.blur(notes);
+  };
+
+  it("names the internal field when the shown note was the internal fallback", async () => {
+    await editNote({ notes: "", internal_notes: "Chasing the invoice" }, "Chasing it again");
+
+    expect(api.updateEntry).toHaveBeenCalledWith("te_1", {
+      notes: "Chasing it again",
+      noteField: "internal",
+    });
+  });
+
+  it("names the client field when the shown note was the client one", async () => {
+    await editNote(
+      { notes: "Sprint planning", internal_notes: "Chasing the invoice" },
+      "Sprint review",
+    );
+
+    expect(api.updateEntry).toHaveBeenCalledWith("te_1", {
+      notes: "Sprint review",
+      noteField: "client",
+    });
+  });
+
+  it("names the client field for a row that had no note at all", async () => {
+    await editNote({ notes: null, internal_notes: null }, "First note");
+
+    expect(api.updateEntry).toHaveBeenCalledWith("te_1", {
+      notes: "First note",
+      noteField: "client",
+    });
+  });
+});
