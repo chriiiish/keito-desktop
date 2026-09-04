@@ -202,36 +202,7 @@ items assigned to you, or press `↓` to see the lot; picking one fills the note
 **You can still just type a note.** Nothing about the existing behaviour changes, and `⏎`
 starts the timer exactly as before unless the ticket list is actually open.
 
-#### Setting it up
-
-1. In Azure DevOps: your profile menu → **User settings** → **Personal access tokens** →
-   **New Token**. It needs one scope — **Work Items (Read)**.
-2. In Keito Timer: **Integrations → Azure DevOps**, switch it on and expand it.
-3. Paste your organisation URL (`https://dev.azure.com/your-org`) and the token, then press
-   **Connect**.
-
-Both are asked for together on purpose. Working the organisation out from the token alone
-only ever succeeds for a token created for *All accessible organizations*, so for most
-people it failed and asked for the URL anyway.
-
-#### What it reads, and what it keeps
-
-The list holds the **200 most recently changed open work items assigned to you**, newest
-first. It refreshes every 10 minutes, and again when you open the popover if it has gone
-stale — opening the popover is something you do constantly, so it does not re-fetch every
-single time. Items in a `Closed`, `Done` or `Removed` state are left out.
-
-The token is encrypted by the operating system in its own file — exactly like the Keito key
-— and is never written to `preferences.json`. **The work item list is held in memory only**
-and never written to disk: those titles are your workplace's, not this app's to leave lying
-around.
-
-An on-premises **Azure DevOps Server** collection works too; paste its collection URL
-instead of a `dev.azure.com` one.
-
-> The note is the only link. Keito has no custom fields, so nothing structured ties a time
-> entry back to a work item — edit the note afterwards and the connection to the ticket is
-> gone.
+---
 
 ## Developing locally
 
