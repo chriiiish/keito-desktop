@@ -215,34 +215,18 @@ button.primary:hover { filter: brightness(1.08); }
 .field-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 
 /*
- * Gold, and only gold, means the note is for the team. --star is the amber already used
- * for favourites rather than a new colour: this app has one warm accent and adding a
- * second would make two things look related that are not.
+ * Gold, and only gold, means the note is for the team.
+ *
+ * The app's own switch, recoloured, rather than a control of its own: it behaves like
+ * every other toggle here and carries no word, because the caption beside it already
+ * changes from "Note" to "Internal Note".
+ *
+ * --star is the amber already used for favourites rather than a new colour. This app has
+ * one warm accent, and a second would make two unrelated things look related.
  */
-.note-visibility {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  border: 1px solid var(--line);
-  background: none;
-  border-radius: 999px;
-  padding: 1px 8px 1px 6px;
-  font: inherit;
-  font-size: 10px;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-}
-.note-visibility-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--muted);
-  opacity: 0.5;
-}
-.note-visibility:hover { border-color: var(--star); }
-.note-visibility.on { border-color: var(--star); color: var(--star); }
-.note-visibility.on .note-visibility-dot { background: var(--star); opacity: 1; }
-.note-visibility:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.note-visibility { display: inline-flex; }
+.note-visibility.on .switch input:checked + .track { background: var(--star); }
+.note-visibility.on .switch input:focus-visible + .track { outline-color: var(--star); }
 
 /* The field itself carries the state too, so it is visible while you are typing in it. */
 .with-play.internal input { border-color: var(--star); }

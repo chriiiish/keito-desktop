@@ -1343,8 +1343,18 @@ describe("the internal-note toggle", () => {
   it("is off by default, because a note is client-visible unless you say otherwise", async () => {
     render(<Popover />);
 
-    const toggle = await screen.findByRole("switch", { name: "Internal note" });
-    expect(toggle.getAttribute("aria-checked")).toBe("false");
+    const toggle = (await screen.findByRole("checkbox", { name: "Internal note" })) as HTMLInputElement;
+    expect(toggle.checked).toBe(false);
+    expect(screen.getByText("Note")).toBeDefined();
+  });
+
+  it("names the field rather than labelling the toggle", async () => {
+    // The caption says which note this is, so the switch carries no word of its own.
+    api.getSnapshot.mockResolvedValue(internal());
+    render(<Popover />);
+
+    expect(await screen.findByText("Internal Note")).toBeDefined();
+    expect(screen.queryByText("Note")).toBeNull();
   });
 
   it("sits with the note caption rather than beside the timer controls", async () => {
@@ -1352,7 +1362,7 @@ describe("the internal-note toggle", () => {
     await screen.findByText("Note");
 
     const head = screen.getByText("Note").parentElement!;
-    expect(within(head).getByRole("switch", { name: "Internal note" })).toBeDefined();
+    expect(within(head).getByRole("checkbox", { name: "Internal note" })).toBeDefined();
   });
 
   it("switches a typed note to internal", async () => {
@@ -1360,7 +1370,7 @@ describe("the internal-note toggle", () => {
     api.setNoteIsInternal.mockResolvedValue(internal());
     render(<Popover />);
 
-    await user.click(await screen.findByRole("switch", { name: "Internal note" }));
+    await user.click(await screen.findByRole("checkbox", { name: "Internal note" }));
 
     expect(api.setNoteIsInternal).toHaveBeenCalledWith(true);
   });
@@ -1371,7 +1381,7 @@ describe("the internal-note toggle", () => {
     api.setNoteIsInternal.mockResolvedValue(snapshot);
     render(<Popover />);
 
-    await user.click(await screen.findByRole("switch", { name: "Internal note" }));
+    await user.click(await screen.findByRole("checkbox", { name: "Internal note" }));
 
     expect(api.setNoteIsInternal).toHaveBeenCalledWith(false);
   });
@@ -1395,9 +1405,8 @@ describe("the internal-note toggle", () => {
     render(<Popover />);
     await screen.findByPlaceholderText(/What are you working on/);
 
-    const toggle = screen.getByRole("switch", { name: "Internal note" });
-    expect(toggle.getAttribute("aria-checked")).toBe("true");
-    expect(toggle.className).toContain("on");
+    expect((screen.getByRole("checkbox", { name: "Internal note" }) as HTMLInputElement).checked).toBe(true);
+    expect(document.querySelector(".note-visibility.on")).not.toBeNull();
     expect(document.querySelector(".with-play.internal")).not.toBeNull();
   });
 

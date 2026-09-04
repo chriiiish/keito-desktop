@@ -151,12 +151,15 @@ until a contract test covers it.
   somebody marked private straight to the client, with nothing on screen to say so.
 
   **The toggle is remembered between timers** (`Preferences.noteIsInternal`), which is what
-  makes the gold state load-bearing rather than decorative: the setting is sticky, so the
-  gold pill and the gold field border are the only things telling you the next note is
-  private. The popover passes the visibility explicitly to `switchTo` rather than letting
+  makes the state load-bearing rather than decorative: the setting is sticky, so the caption,
+  the gold switch and the gold field border are the only things telling you the next note is
+  private. The caption changes from "Note" to "Internal Note", which is why the switch
+  carries no word of its own — the field says which note it is, and a label beside it would
+  be the same sentence twice. The popover passes the visibility explicitly to `switchTo` rather than letting
   the service read the preference, so what was on screen when Enter was pressed is what
-  gets sent. Gold is `--star`, the amber already used for favourites — one warm accent, not
-  two that look related and are not.
+  gets sent. It is the app's own `Toggle`, recoloured, rather than a control of its own, so it
+  behaves like every other switch here. Gold is `--star`, the amber already used for
+  favourites — one warm accent, not two that look related and are not.
 
 - **There is no `GET /time_entries/:id`** — it answers `405`. Nothing may depend on reading
   a single entry; `PATCH` and `DELETE` go straight at the id.

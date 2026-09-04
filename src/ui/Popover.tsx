@@ -4,6 +4,7 @@ import { CategoryPicker } from "./CategoryPicker.js";
 import { Elapsed } from "./Elapsed.js";
 import { RecentEntries } from "./RecentEntries.js";
 import { NoteField, type NoteFieldHandle } from "./NoteField.js";
+import { Toggle } from "./Toggle.js";
 import type { NoteVisibility } from "../core/keito/notes.js";
 import { loggedBeforeRunning } from "../core/time/totals.js";
 import { keito } from "./keito-api.js";
@@ -200,30 +201,22 @@ export function Popover(): JSX.Element {
             and never closed. */}
         <div className="field">
           <div className="field-head">
-            <span className="field-label">Note</span>
+            {/* The caption says which note this is, so the toggle needs no word of its own. */}
+            <span className="field-label">
+              {visibility === "internal" ? "Internal Note" : "Note"}
+            </span>
             {/*
-              Gold means this note is for the team only. In line with the caption and
+              Gold means the note is for the team only. In line with the caption and
               right-aligned above the play button, so the thing that decides where a note
               goes sits with the field it governs rather than beside the timer controls.
             */}
-            <button
-              type="button"
-              role="switch"
-              aria-checked={visibility === "internal"}
-              aria-label="Internal note"
-              className={`note-visibility${visibility === "internal" ? " on" : ""}`}
-              title={
-                visibility === "internal"
-                  ? "Internal note — your team can see this, the client cannot"
-                  : "Client-visible note — switch on to keep it to your team"
-              }
-              onClick={() =>
-                void keito.setNoteIsInternal(visibility !== "internal").then(setSnapshot)
-              }
-            >
-              <span className="note-visibility-dot" aria-hidden="true" />
-              Internal
-            </button>
+            <span className={`note-visibility${visibility === "internal" ? " on" : ""}`}>
+              <Toggle
+                checked={visibility === "internal"}
+                label="Internal note"
+                onChange={(next) => keito.setNoteIsInternal(next).then(setSnapshot)}
+              />
+            </span>
           </div>
           <div className={`with-play${visibility === "internal" ? " internal" : ""}`}>
             <NoteField
