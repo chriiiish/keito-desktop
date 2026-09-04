@@ -408,8 +408,9 @@ button.link.muted:hover { color: var(--danger); }
  * changes it on the right. The row header is a `th scope="row"`, so the pairing survives
  * for a screen reader rather than living only in the alignment.
  *
- * `--rule` under the caption, matching the bars used between sections elsewhere, so a
- * group reads as a group without needing a box drawn around it.
+ * A `--line` hairline under the caption and between the rows — the same weight used within
+ * a section elsewhere, not the heavier `--rule` bars that separate whole sections. A group
+ * reads as a group without needing a box drawn around it.
  */
 .settings-table {
   width: 100%;
