@@ -58,6 +58,7 @@ const snapshot: Snapshot = {
   platform: "darwin",
   appVersion: "0.1.0",
   update: null,
+  includePrereleases: false,
   accountId: "co_9",
   apiKeyHint: "kto_••••••••abcd",
   trayFallback: "task",

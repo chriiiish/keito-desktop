@@ -30,6 +30,8 @@ let tray: Tray | null = null;
 let popover: BrowserWindow | null = null;
 let mainWindow: BrowserWindow | null = null;
 let service: AppService;
+/** Held so the update check can read the channel the user chose. */
+let prefsStore: PreferencesStore;
 let registeredHotkey: string | null = null;
 let log: Logger;
 /** False until `service` exists, so a second launch cannot race startup. */
@@ -285,6 +287,18 @@ function registerIpc(): void {
   );
 
   handle("dismiss-update", async () => service.dismissUpdate());
+  handle("set-include-prereleases", async (include: boolean) => {
+    await service.setIncludePrereleases(include);
+    /*
+     * Awaited, not fired off. `setIncludePrereleases` drops the release it already found —
+     * it has to, or switching *off* would leave a pre-release notice nothing could
+     * reproduce — so returning before the re-check lands would take an existing notice and
+     * the Update Available tab away and put them back a moment later. The Toggle stays
+     * busy for the duration, which is the honest thing for it to do.
+     */
+    await checkForUpdates();
+    return service.snapshot();
+  });
 
   handle("set-tray-label", async (options: Parameters<AppService["setTrayLabel"]>[0]) =>
     service.setTrayLabel(options),
@@ -396,19 +410,39 @@ function startMonitors(): void {
  * so opening it costs nothing, and CLAUDE.md's request budget is about a frugal app rather
  * than only about Keito's own endpoints.
  */
+/**
+ * Asks GitHub what the newest release is on the channel the user has chosen, and tells
+ * every window.
+ *
+ * Module level rather than tucked inside the timer, because switching the pre-release
+ * toggle has to re-check straight away — a daily timer would otherwise leave the setting
+ * looking broken for up to a day.
+ */
+async function checkForUpdates(): Promise<void> {
+  /*
+   * The guard lives here, on the thing that must never run in a dev build, rather than only
+   * on the timer that starts it. A dev run reports package.json's version, which the
+   * release workflow stamps *after* a release is cut, so it is legitimately behind whatever
+   * shipped and would always claim an update exists. Guarding only the timer meant the
+   * pre-release toggle — which re-checks directly — walked straight past it.
+   */
+  if (!app.isPackaged) return;
+
+  const { includePrereleases } = prefsStore.get();
+  service.setLatestRelease(await fetchLatestRelease(log, { includePrereleases }));
+  broadcast(service.snapshot());
+}
+
 function startUpdateChecks(): void {
+  // checkForUpdates guards itself; this is only to avoid arming a timer that would do
+  // nothing, and to say once why nothing happens.
   if (!app.isPackaged) {
     log.info("Update check skipped: not a packaged build");
     return;
   }
 
-  const check = async (): Promise<void> => {
-    service.setLatestRelease(await fetchLatestRelease(log));
-    broadcast(service.snapshot());
-  };
-
-  void check();
-  setInterval(() => void check(), UPDATE_CHECK_INTERVAL_MS);
+  void checkForUpdates();
+  setInterval(() => void checkForUpdates(), UPDATE_CHECK_INTERVAL_MS);
 }
 
 // One tray icon, one set of global shortcuts, one writer of preferences.json. Without
@@ -445,6 +479,7 @@ async function start(): Promise<void> {
   process.on("unhandledRejection", (reason) => log.error(`Unhandled rejection: ${String(reason)}`));
 
   const prefs = await PreferencesStore.open(join(app.getPath("userData"), "preferences.json"));
+  prefsStore = prefs;
   const secrets = new SecretStore(join(app.getPath("userData"), "credentials.bin"));
   service = await AppService.create(prefs, secrets, log, app.getVersion());
 

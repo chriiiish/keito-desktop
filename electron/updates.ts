@@ -1,4 +1,9 @@
-import { pickLatestRelease, type GitHubRelease, type ReleaseSummary } from "../src/core/version/version.js";
+import {
+  pickLatestRelease,
+  type GitHubRelease,
+  type ReleaseChannel,
+  type ReleaseSummary,
+} from "../src/core/version/version.js";
 import type { Logger } from "./logger.js";
 
 /**
@@ -30,13 +35,17 @@ export const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60_000;
 const TIMEOUT_MS = 10_000;
 
 /**
- * The newest installable release, or null if the check could not answer.
+ * The newest installable release on the requested channel, or null if the check could not
+ * answer.
  *
  * Never throws. A missing update is indistinguishable from a failed lookup as far as the
  * UI is concerned — both mean "show nothing" — and an unreachable GitHub must not surface
  * as an error banner over a timer that is working perfectly well.
  */
-export async function fetchLatestRelease(log: Logger): Promise<ReleaseSummary | null> {
+export async function fetchLatestRelease(
+  log: Logger,
+  channel: ReleaseChannel = {},
+): Promise<ReleaseSummary | null> {
   try {
     const response = await fetch(RELEASES_URL, {
       headers: {
@@ -62,7 +71,7 @@ export async function fetchLatestRelease(log: Logger): Promise<ReleaseSummary | 
       return null;
     }
 
-    return pickLatestRelease(body as GitHubRelease[]);
+    return pickLatestRelease(body as GitHubRelease[], channel);
   } catch (error) {
     log.warn(`Update check failed: ${String(error)}`);
     return null;

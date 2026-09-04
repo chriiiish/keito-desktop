@@ -20,6 +20,36 @@ describe("PreferencesStore", () => {
     expect(store.get()).toMatchObject({ favourites: [], hotkey: DEFAULT_HOTKEY });
   });
 
+  it("looks only at stable releases until told otherwise", async () => {
+    const store = await PreferencesStore.open(file);
+
+    expect(store.get().includePrereleases).toBe(false);
+  });
+
+  it("remembers that pre-releases were asked for across a restart", async () => {
+    // A setting that forgets itself between launches looks like a switch that does not
+    // work, and update checks are rare enough that nobody would catch it in the act.
+    const first = await PreferencesStore.open(file);
+    await first.update({ includePrereleases: true });
+
+    const reopened = await PreferencesStore.open(file);
+
+    expect(reopened.get().includePrereleases).toBe(true);
+  });
+
+  it("remembers being switched back off, rather than falling back to the default", async () => {
+    // false is also the default, so a store that dropped the field entirely would still
+    // read as false — this passes for the right reason only if the value round-trips.
+    const first = await PreferencesStore.open(file);
+    await first.update({ includePrereleases: true });
+    await (await PreferencesStore.open(file)).update({ includePrereleases: false });
+
+    const reopened = await PreferencesStore.open(file);
+
+    expect(reopened.get().includePrereleases).toBe(false);
+    expect(JSON.parse(await readFile(file, "utf8"))).toHaveProperty("includePrereleases", false);
+  });
+
   it("remembers favourites across a restart", async () => {
     const first = await PreferencesStore.open(file);
     await first.addFavourite("p_acme:t_dev");
