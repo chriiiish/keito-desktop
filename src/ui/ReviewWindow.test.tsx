@@ -1491,3 +1491,52 @@ describe("the integrations tab", () => {
     expect(api.setAzureEnabled).toHaveBeenCalledWith(true);
   });
 });
+
+describe("which note the entries table shows", () => {
+  const row = (over: Record<string, unknown> = {}) => ({
+    id: "te_1",
+    project_id: "p_acme",
+    task_id: "t_dev",
+    spent_date: "2026-09-02",
+    started_time: "09:00",
+    ended_time: "09:30",
+    timer_started_at: null,
+    duration_seconds: null,
+    hours: 0.5,
+    is_running: false,
+    notes: null,
+    ...over,
+  });
+
+  const openEntries = async () => {
+    const user = userEvent.setup();
+    render(<ReviewWindow />);
+    await user.click(await screen.findByRole("button", { name: "Time Entries" }));
+    return user;
+  };
+
+  it("shows the client note when there is one", async () => {
+    api.listEntries.mockResolvedValue([
+      row({ notes: "Sprint planning", internal_notes: "Chasing the invoice" }),
+    ]);
+    await openEntries();
+
+    expect(await screen.findByDisplayValue("Sprint planning")).toBeDefined();
+  });
+
+  it("falls back to the internal note when the client one is empty", async () => {
+    api.listEntries.mockResolvedValue([row({ notes: "", internal_notes: "Chasing the invoice" })]);
+    await openEntries();
+
+    expect(await screen.findByDisplayValue("Chasing the invoice")).toBeDefined();
+  });
+
+  it("shows an empty field when neither has anything", async () => {
+    // The table's own no-note behaviour: a blank box you can type into.
+    api.listEntries.mockResolvedValue([row({ notes: null, internal_notes: null })]);
+    await openEntries();
+
+    const notes = await screen.findByDisplayValue("");
+    expect((notes as HTMLInputElement).value).toBe("");
+  });
+});

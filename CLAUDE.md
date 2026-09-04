@@ -141,7 +141,15 @@ until a contract test covers it.
   where the other way round would publish a private one to a client.
 
   **One display rule everywhere** — `visibleNote` in `src/core/keito/notes.ts`: the client
-  note, or the internal one when there is no client note. The menu bar label, today,
+  note, then the internal one, then whatever that surface already did with no note at all
+  (the task name in the popover lists, the task or project in the menu bar label, an empty
+  box in the entries table). The chain ends where it always did rather than at a blank.
+
+  **`totalsByTaskAndNote` groups on the *visible* note too**, not on `notes`. Keying on the
+  client field alone put every internal-only entry in one bucket — they all have no client
+  note — so two unrelated pieces of work merged into one row showing one of their notes. The
+  field is part of the key as well as the text: the same words as a client note and as an
+  internal note are two different things. The menu bar label, today,
   yesterday and the entries table all use it, so an entry never reads differently depending
   on where you look at it. Whitespace is not a note; falling back on `"  "` would show an
   entry as blank with an internal note sitting behind it.

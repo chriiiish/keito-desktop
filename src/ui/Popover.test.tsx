@@ -1479,3 +1479,61 @@ describe("the internal-note toggle", () => {
     expect(api.switchTo).toHaveBeenCalledWith("p_acme:t_dev", "Chasing the invoice", "internal");
   });
 });
+
+describe("which note is shown", () => {
+  const shown = (over: Partial<TimeEntry>) => ({
+    ...snapshot,
+    today: [entry("te_1", "p_acme", "t_dev", over)],
+  }) satisfies Snapshot;
+
+  it("shows the client note when there is one", async () => {
+    api.getSnapshot.mockResolvedValue(
+      shown({ notes: "Sprint planning", internal_notes: "Chasing the invoice" }),
+    );
+    render(<Popover />);
+
+    expect(await screen.findByText("Sprint planning")).toBeDefined();
+    expect(screen.queryByText("Chasing the invoice")).toBeNull();
+  });
+
+  it("falls back to the internal note when the client one is empty", async () => {
+    for (const notes of [null, "", "   "]) {
+      api.getSnapshot.mockResolvedValue(shown({ notes, internal_notes: "Chasing the invoice" }));
+      const view = render(<Popover />);
+
+      expect(await screen.findByText("Chasing the invoice"), String(notes)).toBeDefined();
+      view.unmount();
+    }
+  });
+
+  it("falls back to the task name when neither note has anything", async () => {
+    // The no-note behaviour that was there before either field existed.
+    for (const [notes, internal] of [
+      [null, null],
+      ["", ""],
+      ["  ", "  "],
+    ] as const) {
+      api.getSnapshot.mockResolvedValue(shown({ notes, internal_notes: internal }));
+      const view = render(<Popover />);
+
+      expect(await screen.findByText("Development"), `${notes}/${internal}`).toBeDefined();
+      view.unmount();
+    }
+  });
+
+  it("says No note in the header when a running timer has neither", async () => {
+    api.getSnapshot.mockResolvedValue({
+      ...snapshot,
+      timer: {
+        status: "running",
+        pair: snapshot.catalog[0]!,
+        entryId: "te_1",
+        startedAtMs: Date.now(),
+        note: null,
+      },
+    } satisfies Snapshot);
+    render(<Popover />);
+
+    expect(await screen.findByText("No note")).toBeDefined();
+  });
+});
