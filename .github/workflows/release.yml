@@ -207,11 +207,20 @@ jobs:
 
             The *Source code* archives below are added by GitHub to every release and are not needed to install the app.
 
-            ## First launch
+            ## First installation
 
             **macOS** — drag the app to Applications. The first launch is refused with "Apple could not verify…" because these builds are not notarised; open **System Settings → Privacy & Security** and press **Open Anyway**. Only needed once.
 
             **Windows** — run the `.exe`. SmartScreen shows "Windows protected your PC"; choose **More info → Run anyway**.
+
+            When downloading you may get told the exe is unsafe:  
+            <img width="514" height="357" alt="Download Unsafe on Windows" src="https://github.com/user-attachments/assets/e5283ca4-0261-4c21-9fa4-080064b7c104" />  
+            <img width="363" height="447" alt="Keep Download on Windows" src="https://github.com/user-attachments/assets/faf0409e-066f-4473-90ee-b1ee6f0c6cb7" />
+
+            If you get the following error on Windows it's probably because this exe isn't signed:
+            <img width="545" height="136" alt="image" src="https://github.com/user-attachments/assets/69049e8d-6e62-451e-842f-85831f629543" />
+
+            Check here for how to be able to run the EXE: [How to Fix "Windows Cannot Access the Specified Device" Error in Windows - GeeksforGeeks](https://www.geeksforgeeks.org/techtips/fix-windows-cannot-access-specified-device-error/)
 
           files: |
             dist/*.dmg
