@@ -179,8 +179,6 @@ entry requires both ids.
 
 ---
 
----
-
 ## Integrations
 
 Keito Timer can read from another system so you do not have to retype what is already in
