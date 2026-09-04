@@ -3,6 +3,7 @@ import { AsyncButton, Spinner, useAsyncAction } from "./AsyncButton.js";
 import { CategoryPicker } from "./CategoryPicker.js";
 import { Elapsed } from "./Elapsed.js";
 import { RecentEntries } from "./RecentEntries.js";
+import { NoteField, type NoteFieldHandle } from "./NoteField.js";
 import { loggedBeforeRunning } from "../core/time/totals.js";
 import { keito } from "./keito-api.js";
 import { useSnapshot } from "./useSnapshot.js";
@@ -13,7 +14,7 @@ export function Popover(): JSX.Element {
   const [note, setNote] = useState("");
 
   const [idle, setIdle] = useState<{ awaySinceMs: number; awaySeconds: number } | null>(null);
-  const noteRef = useRef<HTMLInputElement>(null);
+  const noteRef = useRef<NoteFieldHandle>(null);
 
   useEffect(() => keito.onIdleReturn(setIdle), []);
 
@@ -37,7 +38,6 @@ export function Popover(): JSX.Element {
   // appears — on first mount, and on each show thereafter, since the window is reused.
   const focusNote = useCallback(() => {
     noteRef.current?.focus();
-    noteRef.current?.select();
   }, []);
 
   useEffect(focusNote, [focusNote, snapshot?.keyStatus]);
@@ -187,11 +187,12 @@ export function Popover(): JSX.Element {
         <label>
           Note
           <div className="with-play">
-            <input
+            <NoteField
               ref={noteRef}
-              placeholder="What are you working on?"
               value={note}
-              onChange={(event) => setNote(event.target.value)}
+              onChange={setNote}
+              workItems={snapshot.azure.workItems}
+              connected={snapshot.azure.status === "connected"}
             />
             <button
               type="submit"

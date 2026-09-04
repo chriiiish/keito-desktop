@@ -4,7 +4,7 @@
 [![Static Badge](https://img.shields.io/badge/Buy%20me%20a%20Coffee%20%E2%98%95-Donate-bright%20green)](https://buymeacoffee.com/chris.lloyd)
 [![Licence](https://img.shields.io/badge/Licence-GPL--3.0-blue)](./LICENSE)
 
-[Install](#install) | [Features](#features) | [Build Locally](#developing-locally) | [Contribute](#contributing)
+[Install](#install) | [Features](#features) | [Integrations](#integrations) | [Build Locally](#developing-locally) | [Contribute](#contributing)
 
 A small cross-platform desktop app for switching time entries in [Keito](https://keito.ai)
 without leaving what you're doing. Press a global hotkey, type a note and hit Enter. Boom -
@@ -150,7 +150,7 @@ If this made your life easier, consider buying me a coffee ❤️
   |<img width="203" height="27" alt="macOS menu bar icon" src="https://github.com/user-attachments/assets/36a84d63-926c-412f-8bdb-337b3bd54935" />|<img width="367" height="102" alt="Windows task bar icon" src="https://github.com/user-attachments/assets/e18b3832-c26a-40e8-9e69-52ecdb6dafaa" />|
 
 - **Idle detection.** Away for 10+ minutes? On return it offers to trim the idle span. A
-  timer left running past 10 hours is stopped automatically.
+  timer left running past 10 hours is stopped automatically.  
   <img width="420" height="128" alt="Idle detection screenshot" src="https://github.com/user-attachments/assets/16624efc-bcf5-4489-a265-3ba252d5cdc9" />
 
 - **Switch off categories you never use**, per task or a whole project at once. Favourites
@@ -158,6 +158,10 @@ If this made your life easier, consider buying me a coffee ❤️
   <img width="587" height="389" alt="Change which categories are visible" src="https://github.com/user-attachments/assets/b5e4dacd-0fff-4e96-ba0e-fbddd9c98fc3" />
 
 - **Entries window** for correcting today's or this week's times and notes.  
+- **Azure DevOps work items as notes.** Type to search the open work items assigned to you,
+  or press `↓` to browse, and the note fills in as `1842: Login redirect drops the return
+  URL`. Read-only, optional, and off unless you turn it on — see
+  [Integrations](#integrations).  
   <img width="895" height="275" alt="List of all entries for today" src="https://github.com/user-attachments/assets/7d5b25f2-5146-4d52-a40b-92c974b341e1" />
 
 - **Tells you when a new version is out**, with a link to the download — stable releases by
@@ -179,6 +183,31 @@ entry requires both ids.
   decision. Your settings, favourites and key survive an install over the top.
 - The 30-day entries window is paged at 200; a very heavy month costs an extra request or
   two to rank recents correctly.
+
+---
+
+## Integrations
+
+Keito Timer can read from another system so you do not have to retype what is already in
+it. Integrations are **optional, off until you switch them on, and read-only** — nothing is
+ever written back.
+
+They live under **Integrations**, each as its own card. A card shows whether it is working
+at a glance, with a red mark beside the name if it is switched on but not connected;
+expand it to set it up.
+
+### Azure DevOps
+
+Puts a work item in your note without you typing it.
+
+<img width="410" height="190" alt="image" src="https://github.com/user-attachments/assets/107e1773-d42c-4f49-b977-e0467219b5bd" />
+
+Once connected, the note field carries the Azure DevOps mark. Type to search the open work
+items assigned to you, or press `↓` to see the lot; picking one fills the note in as
+`1842: Login redirect drops the return URL`.
+
+**You can still just type a note.** Nothing about the existing behaviour changes, and `⏎`
+starts the timer exactly as before unless the ticket list is actually open.
 
 ---
 

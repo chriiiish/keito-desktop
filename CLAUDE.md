@@ -332,6 +332,87 @@ GitHub's list underneath — so only the `## What's Changed` section is a change
 app did not write, and rendering arbitrary remote markup is a bigger commitment than a
 notice warrants.
 
+## Azure DevOps integration
+
+Optional, off by default, and switched on in **Integrations**. It reads the open work items
+assigned to whoever owns the token and offers them in the popover's note field, so a note
+can be `1842: Login redirect drops the return URL` without typing it.
+
+**These are properties of the Azure DevOps API, not choices.**
+
+- **A bad token answers `203`, not `401`.** Azure DevOps replies to an expired,
+  under-scoped or simply wrong PAT with **203 Non-Authoritative Information** and an HTML
+  sign-in page. `response.ok` is *true* for a 203, so a naive client sails past it and then
+  fails parsing HTML as JSON, a long way from the actual cause. `AzureClient` raises
+  `AzureAuthError` on 203 alongside 401/403, and `test/fake-azure.ts` answers a bad token
+  the same way so the suite actually covers it.
+- **Listing work items is two requests, not one.** A WIQL query returns *ids only*; the
+  titles need a second call to `/_apis/wit/workitems?ids=…`. That is why the list is cached
+  rather than fetched whenever the popover opens.
+- **The detail call does not preserve the order it was asked in.** WIQL decides "most
+  recently changed first"; `workitems?ids=` makes no such promise, so the client re-imposes
+  the id order rather than trusting what comes back.
+- **`ids=` takes at most 200**, which is also the cap on the whole list. A dropdown longer
+  than that is not one anybody scrolls.
+- **`project` is optional.** `POST https://dev.azure.com/{org}/_apis/wit/wiql` searches the
+  whole organisation, so the user nominates an organisation and never a project.
+- **Ordering is most-recently-updated first, everywhere, and matching never changes it.**
+  `searchWorkItems` filters; it does not rank. Ranking id matches above title-prefix matches
+  above substring matches meant the list reshuffled with every keystroke — the same tickets
+  in a different sequence depending on how far through the word you were. It sorts by
+  `changedDate` itself rather than relying on `AzureClient` having sorted first, because a
+  property that holds only because today's single caller happens to sort is not one worth
+  having.
+- **`System.ChangedDate` is fetched and sorted on**, rather than trusting WIQL's
+  `ORDER BY` to survive the second call. An item with no readable date sorts *last* —
+  `Date.parse(null)` is `NaN`, and a comparator that returns `NaN` leaves the order
+  untouched instead of putting the undated item anywhere in particular.
+- **Looking the organisation up from the token was built, then removed. Do not rebuild
+  it.** It is `profiles/me` then `/_apis/accounts?memberId=…` on
+  **app.vssps.visualstudio.com** — a different host — needing **User Profile (Read)** on top
+  of Work Items (Read). That is not the part that kills it: a token is created either for
+  one organisation or for *All accessible organizations*, and **only the second kind
+  authenticates against that host at all**. A token scoped to one organisation is refused
+  there with the scope granted, while working perfectly against `dev.azure.com` for the
+  work items it was made to read — so the lookup failed for most real tokens, said
+  something misleading about the token being refused, and then asked for the URL anyway.
+  Two round trips to reach the one field that always works. The URL and the token are now
+  asked for together, and **Work Items (Read) is the only scope this needs.**
+
+**A URL, not an organisation name.** `azureOrganisationUrl` holds
+`https://dev.azure.com/acme` rather than `acme`, which costs nothing and is what lets an
+on-premises Azure DevOps Server collection work at all.
+
+**The token lives in its own `SecretStore`** (`azure.bin`), beside the Keito key and by the
+same reasoning: `preferences.json` is plain text. The renderer never receives it —
+`Snapshot.azure.hasToken` is a boolean, the way `apiKeyHint` is a mask.
+
+**The work item list never touches disk.** It is somebody's internal project data, and a
+list worth one refresh on launch is not worth leaving in a file. It lives on the Snapshot
+and dies with the process.
+
+**Refreshed every 10 minutes, and on popover open only if older than `AZURE_STALE_MS`.**
+Opening the popover is the whole app; putting two Azure requests on that path
+unconditionally would spend the frugality the request budget is about. A failed refresh
+drops the list rather than keeping it — offering tickets from a connection that has stopped
+working is worse than offering none — and is shown in Integrations, never over a running
+timer.
+
+**Enter is only taken over while the list is open.** `NoteField` renders exactly the input
+it replaced when no work items are offered: no listbox, no key handling, Enter submits.
+With items, ↓ opens, typing filters, Enter picks *instead of* submitting, and Escape closes
+the list keeping what was typed. Anyone who never opens the list types and submits as
+before, which is the point — the integration must not put a step in front of the app's only
+loop.
+
+**The note is the only carrier.** Keito has no custom fields, so nothing structured ties an
+entry to a work item; `workItemNote` writes `1842: Title` and `noteWorkItemId` reads it back
+out. Edit the note afterwards and the link is gone.
+
+**The mark beside the note field is a plain infinity loop in Azure's blue, not Microsoft's
+logo** — the same position taken over the Keito name. It is always shown next to the words
+"Azure DevOps", never alone.
+
 ## Platform rules
 
 Both macOS and Windows are supported targets, and the two differ in ways that fail

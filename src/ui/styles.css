@@ -210,6 +210,130 @@ button.primary:hover { filter: brightness(1.08); }
 }
 .update-notice-dismiss:hover { color: var(--fg); }
 
+/* ── Note field with Azure DevOps work items ─────────────── */
+/* Position relative so the listbox can hang off it; the popover itself does not scroll. */
+.note-field { position: relative; flex: 1; display: flex; align-items: center; }
+.note-field input { width: 100%; }
+/* Room for the mark, so the caret never sits under it. */
+.note-field.has-work-items input,
+.note-field .note-azure ~ input { padding-left: 26px; }
+
+.note-azure {
+  position: absolute;
+  left: 5px;
+  display: flex;
+  align-items: center;
+  /* Above the input's own background, but never in the way of the caret. */
+  z-index: 1;
+  border: none;
+  background: none;
+  padding: 2px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.note-azure:hover { background: var(--accent-soft); }
+.note-azure:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
+.azure-logo { display: block; }
+.azure-logo.muted { opacity: 0.35; }
+
+/*
+ * Downward, over today's entries. The note field sits directly under the category picker,
+ * and covering the category — which says what you are about to start — is worse than
+ * covering a list of what you already did. Opening upward did exactly that.
+ *
+ * `text-transform` and `letter-spacing` are reset because the note field lives inside
+ * `.starter label`, which uppercases its contents for the CATEGORY / NOTE captions. Without
+ * this the work item titles render in capitals, which is how they first shipped.
+ */
+.work-item-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 13px;
+  color: var(--fg);
+  z-index: 10;
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  max-height: 240px;
+  overflow-y: auto;
+  background: var(--bg);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 18%);
+}
+.work-item-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+.work-item-list li.cursor { background: var(--accent); color: var(--on-accent); }
+.work-item-id { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12px; }
+.work-item-list li.cursor .work-item-id,
+.work-item-list li.cursor .work-item-project { color: var(--on-accent); opacity: 0.8; }
+.work-item-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.work-item-project { font-size: 11px; color: var(--muted); white-space: nowrap; }
+
+/* ── Integrations ────────────────────────────────────────── */
+/*
+ * One integration, one card. Bordered so it reads as an object rather than as controls
+ * loose on the page, and so expanding it grows that object instead of shoving text down.
+ */
+.integration-card {
+  max-width: 620px;
+  padding: 10px 12px;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.integration-row { display: flex; align-items: center; gap: 10px; }
+.integration-row .disclosure { display: flex; align-items: center; gap: 7px; flex: 1; }
+.integration-name { font-weight: 500; }
+/*
+ * A mark, not an emoji. ⚠ renders as a colour glyph on macOS and would be the only one in
+ * the app; this is drawn, so it matches the tray and play icons rather than the keyboard.
+ */
+.integration-alert {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--danger);
+  color: var(--bg);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+/* Ruled off from the row rather than merely spaced, so the head stays a head. */
+#azure-panel {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.integration-status { font-size: 12px; color: var(--muted); }
+.integration-status.connected { color: var(--success); }
+.integration-status.error { color: var(--danger); }
+.integrations h3 { font-size: 12px; margin: 14px 0 4px; }
+.scope-list { margin: 0 0 8px; padding-left: 18px; font-size: 12px; color: var(--muted); }
+.scope-list li { padding: 1px 0; }
+.scope-list strong { color: var(--fg); }
+.azure-connect { max-width: 460px; }
+.integrations kbd {
+  font: inherit;
+  font-size: 11px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0 4px;
+  background: var(--raised);
+}
+
 /* ── Review window ───────────────────────────────────────── */
 .window { padding: 0 0 24px; }
 .tabs { display: flex; gap: 4px; padding: 12px 20px 0; border-bottom: var(--rule-width) solid var(--rule); }

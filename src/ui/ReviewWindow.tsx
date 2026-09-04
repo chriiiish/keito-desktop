@@ -6,6 +6,7 @@ import { AsyncButton, Spinner, useAsyncAction } from "./AsyncButton.js";
 import { HotkeyRecorder } from "./HotkeyRecorder.js";
 import { TrayLabelSettings } from "./TrayLabelSettings.js";
 import { AboutTab } from "./AboutTab.js";
+import { IntegrationsTab } from "./IntegrationsTab.js";
 import { UpdateTab } from "./UpdateTab.js";
 import { ProjectsTab } from "./ProjectsTab.js";
 import { Toggle } from "./Toggle.js";
@@ -20,13 +21,14 @@ function weekStart(today: string): string {
   return shiftDate(today, -weekday);
 }
 
-type Tab = "entries" | "projects" | "connection" | "settings" | "about" | "update";
+type Tab = "entries" | "projects" | "connection" | "settings" | "integrations" | "about" | "update";
 
 const TABS: ReadonlyArray<readonly [Tab, string]> = [
   ["entries", "Time Entries"],
   ["projects", "Projects"],
   ["connection", "Keito Connection"],
   ["settings", "Settings"],
+  ["integrations", "Integrations"],
   ["about", "About"],
 ];
 
@@ -147,6 +149,7 @@ export function ReviewWindow(): JSX.Element {
       {active === "projects" && <ProjectsTab snapshot={snapshot} onChange={setSnapshot} />}
       {active === "connection" && <Connection snapshot={snapshot} onChange={setSnapshot} />}
       {active === "settings" && <Settings snapshot={snapshot} onChange={setSnapshot} />}
+      {active === "integrations" && <IntegrationsTab snapshot={snapshot} onChange={setSnapshot} />}
       {active === "about" && <AboutTab snapshot={snapshot} />}
       {active === "update" && update && <UpdateTab snapshot={snapshot} update={update} />}
     </div>

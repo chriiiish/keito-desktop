@@ -5,7 +5,7 @@
  * preselected, what order the dropdown groups appear in), and it is the one screen that
  * cannot be checked by reading a snapshot.
  */
-import { act, cleanup, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import userEvent from "@testing-library/user-event";
 import type { Snapshot } from "../../electron/service.js";
@@ -13,7 +13,7 @@ import type { TimeEntry } from "../core/keito/types.js";
 
 const api = {
   getSnapshot: vi.fn(),
-  onSnapshot: vi.fn(() => () => {}),
+  onSnapshot: vi.fn((_handler: (snapshot: Snapshot) => void) => () => {}),
   onIdleReturn: vi.fn(() => () => {}),
   onPopoverShown: vi.fn((_handler: () => void) => () => {}),
   switchTo: vi.fn(),
@@ -59,6 +59,14 @@ const snapshot: Snapshot = {
   appVersion: "0.1.0",
   update: null,
   includePrereleases: false,
+  azure: {
+    enabled: false,
+    status: "off" as const,
+    organisationUrl: null,
+    hasToken: false,
+    workItems: [],
+    error: null,
+  },
   accountId: "co_9",
   apiKeyHint: "kto_••••••••abcd",
   trayFallback: "task",
@@ -918,5 +926,377 @@ describe("a task worked on more than once in a day", () => {
 
     // 00:40:00 rather than 00:10:00 — the half hour before the current stretch counts.
     expect(await screen.findByText(/^00:40:0\d$/)).toBeDefined();
+  });
+});
+
+describe("the note field with Azure DevOps", () => {
+  const workItems = [
+    {
+      id: 1234,
+      title: "Fix the login redirect",
+      project: "Acme Web",
+      state: "Active",
+      changedDate: "2026-09-03T11:00:00Z",
+    },
+    {
+      id: 1240,
+      title: "Login page copy",
+      project: "Acme Web",
+      state: "New",
+      changedDate: "2026-09-03T10:00:00Z",
+    },
+    {
+      id: 88,
+      title: "Rework the timesheet export",
+      project: "Acme Billing",
+      state: "Active",
+      changedDate: "2026-09-02T09:00:00Z",
+    },
+  ];
+
+  const connected = (over: Partial<Snapshot["azure"]> = {}): Snapshot => ({
+    ...snapshot,
+    azure: {
+      enabled: true,
+      status: "connected",
+      organisationUrl: "https://dev.azure.com/acme",
+      hasToken: true,
+      workItems,
+      error: null,
+      ...over,
+    },
+  });
+
+  it("shows no mark and no listbox when the integration is off", async () => {
+    render(<Popover />);
+    await screen.findByText("QA");
+
+    expect(screen.queryByLabelText("Azure DevOps")).toBeNull();
+    expect(screen.getByPlaceholderText("What are you working on?")).toBeDefined();
+  });
+
+  it("leaves Enter starting the timer when no tickets are offered", async () => {
+    // The whole loop of this app is type a note, press Enter. An integration nobody
+    // switched on must not put a step in front of it.
+    const user = userEvent.setup();
+    api.switchTo.mockResolvedValue(snapshot);
+    render(<Popover />);
+
+    await user.type(await screen.findByPlaceholderText("What are you working on?"), "Just a note{Enter}");
+
+    expect(api.switchTo).toHaveBeenCalledWith("p_acme:t_qa", "Just a note");
+  });
+
+  it("says what the mark means on hover", async () => {
+    api.getSnapshot.mockResolvedValue(connected());
+    render(<Popover />);
+
+    const mark = await screen.findByRole("button", { name: /azure devops work items/i });
+    expect(mark.getAttribute("title")).toBe("Connected to Azure DevOps");
+  });
+
+  it("shows the Azure mark once connected", async () => {
+    api.getSnapshot.mockResolvedValue(connected());
+    render(<Popover />);
+
+    expect(await screen.findByLabelText("Azure DevOps")).toBeDefined();
+  });
+
+  it("opens the assigned tickets on the down arrow", async () => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(connected());
+    render(<Popover />);
+
+    await user.click(await screen.findByPlaceholderText(/What are you working on/));
+    await user.keyboard("{ArrowDown}");
+
+    expect(screen.getByRole("listbox")).toBeDefined();
+    expect(screen.getByText("Fix the login redirect")).toBeDefined();
+  });
+
+  it("highlights the first option when the list opens", async () => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(connected());
+    render(<Popover />);
+
+    await user.click(await screen.findByPlaceholderText(/What are you working on/));
+    await user.keyboard("{ArrowDown}");
+
+    const options = screen.getAllByRole("option");
+    expect(options[0]!.getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("highlights the first option when the mark opens the list", async () => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(connected());
+    render(<Popover />);
+
+    await user.click(await screen.findByRole("button", { name: /show your azure devops work items/i }));
+
+    expect(screen.getAllByRole("option")[0]!.getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("does not move the highlight when the list opens under the pointer", async () => {
+    // A list rendered beneath a stationary mouse fires mouseenter on whatever row lands
+    // under it. That was picking the second option the moment the list opened.
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(connected());
+    render(<Popover />);
+    await user.click(await screen.findByPlaceholderText(/What are you working on/));
+    await user.keyboard("{ArrowDown}");
+
+    fireEvent.mouseEnter(screen.getAllByRole("option")[1]!);
+
+    expect(screen.getAllByRole("option")[0]!.getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("still follows the mouse when the mouse actually moves", async () => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(connected());
+    render(<Popover />);
+    await user.click(await screen.findByPlaceholderText(/What are you working on/));
+    await user.keyboard("{ArrowDown}");
+
+    fireEvent.mouseMove(screen.getAllByRole("option")[1]!);
+
+    expect(screen.getAllByRole("option")[1]!.getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("goes back to the first option as the filter changes", async () => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(connected());
+    render(<Popover />);
+    const input = await screen.findByPlaceholderText(/What are you working on/);
+
+    await user.keyboard("{ArrowDown}{ArrowDown}");
+    await user.type(input, "login");
+
+    expect(screen.getAllByRole("option")[0]!.getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("filters the tickets as you type", async () => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(connected());
+    render(<Popover />);
+
+    await user.type(await screen.findByPlaceholderText(/What are you working on/), "timesheet");
+
+    expect(screen.getByText("Rework the timesheet export")).toBeDefined();
+    expect(screen.queryByText("Fix the login redirect")).toBeNull();
+  });
+
+  it("keeps the most recently updated first while filtering", async () => {
+    // Matching decides what is offered, never the order. Ranking by how well something
+    // matched meant the list reshuffled with every keystroke.
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(connected());
+    render(<Popover />);
+
+    await user.type(await screen.findByPlaceholderText(/What are you working on/), "login");
+
+    const shown = screen.getAllByRole("option").map((row) => row.textContent);
+    expect(shown[0]).toContain("Fix the login redirect");
+    expect(shown[1]).toContain("Login page copy");
+  });
+
+  it("finds a ticket by its number", async () => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(connected());
+    render(<Popover />);
+
+    await user.type(await screen.findByPlaceholderText(/What are you working on/), "1234");
+
+    expect(screen.getByText("Fix the login redirect")).toBeDefined();
+    expect(screen.queryByText("Login page copy")).toBeNull();
+  });
+
+  it("puts the ticket in the note as number and title", async () => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(connected());
+    render(<Popover />);
+    const input = await screen.findByPlaceholderText(/What are you working on/);
+
+    await user.type(input, "timesheet");
+    await user.keyboard("{Enter}");
+
+    expect((input as HTMLInputElement).value).toBe("88: Rework the timesheet export");
+  });
+
+  it("picks with Enter rather than starting the timer, so the next Enter starts it", async () => {
+    // Enter means "pick" only while the list is open. This is the one keystroke the
+    // integration takes over, and it hands it straight back.
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(connected());
+    api.switchTo.mockResolvedValue(snapshot);
+    render(<Popover />);
+    const input = await screen.findByPlaceholderText(/What are you working on/);
+
+    await user.type(input, "timesheet");
+    await user.keyboard("{Enter}");
+    expect(api.switchTo).not.toHaveBeenCalled();
+
+    await user.keyboard("{Enter}");
+    expect(api.switchTo).toHaveBeenCalledWith("p_acme:t_qa", "88: Rework the timesheet export");
+  });
+
+  it("closes the list on Escape and keeps what was typed", async () => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(connected());
+    render(<Popover />);
+    const input = await screen.findByPlaceholderText(/What are you working on/);
+
+    await user.type(input, "login");
+    await user.keyboard("{Escape}");
+
+    expect(screen.queryByRole("listbox")).toBeNull();
+    expect((input as HTMLInputElement).value).toBe("login");
+    // Escape closed the list, not the popover.
+    expect(api.closePopover).not.toHaveBeenCalled();
+  });
+
+  it("survives arrowing down while nothing matches", async () => {
+    // Arrowing down with an empty list moved the highlight to matches.length - 1, which is
+    // -1, and a clamp that only looks *past* the end of the list cannot see that. Typing
+    // resets the cursor, so the way it persists is a list that refills without a keystroke
+    // — which is exactly what the ten-minute refresh does.
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(connected());
+    render(<Popover />);
+    const input = await screen.findByPlaceholderText(/What are you working on/);
+
+    await user.type(input, "zzzznothing");
+    await user.keyboard("{ArrowDown}");
+
+    // A refresh brings in a work item that does match what is already typed.
+    const push = api.onSnapshot.mock.calls[0]![0];
+    await act(async () => {
+      push(
+        connected({
+          workItems: [
+            {
+              id: 99,
+              title: "zzzznothing to see here",
+              project: "Acme Web",
+              state: "Active",
+              changedDate: "2026-09-03T12:00:00Z",
+            },
+          ],
+        }),
+      );
+    });
+
+    expect(screen.getAllByRole("option")[0]!.getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("still lets you type a note that is not a ticket at all", async () => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(connected());
+    api.switchTo.mockResolvedValue(snapshot);
+    render(<Popover />);
+
+    await user.type(
+      await screen.findByPlaceholderText(/What are you working on/),
+      "Reviewing a pull request",
+    );
+    await user.keyboard("{Enter}");
+
+    expect(api.switchTo).toHaveBeenCalledWith("p_acme:t_qa", "Reviewing a pull request");
+  });
+
+  it("offers nothing while the connection is broken", async () => {
+    // A stale list behind a connection that has stopped working would suggest tickets it
+    // cannot refresh.
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(
+      connected({ status: "error", workItems: [], error: "Token expired" }),
+    );
+    render(<Popover />);
+
+    await user.type(await screen.findByPlaceholderText("What are you working on?"), "login");
+
+    expect(screen.queryByRole("listbox")).toBeNull();
+  });
+});
+
+describe("browsing the work item list", () => {
+  const many = Array.from({ length: 40 }, (_, i) => ({
+    id: 100 + i,
+    title: `Work item ${100 + i}`,
+    project: i % 2 === 0 ? "Acme Web" : "Acme Billing",
+    state: "Active",
+    changedDate: `2026-09-03T${String(23 - (i % 24)).padStart(2, "0")}:00:00Z`,
+  }));
+
+  const withItems = (items: typeof many) =>
+    ({
+      ...snapshot,
+      azure: {
+        enabled: true,
+        status: "connected" as const,
+        organisationUrl: "https://dev.azure.com/acme",
+        hasToken: true,
+        workItems: items,
+        error: null,
+      },
+    }) satisfies Snapshot;
+
+  it("shows the project rather than the work item type", async () => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(withItems(many.slice(0, 2)));
+    render(<Popover />);
+
+    await user.click(await screen.findByPlaceholderText(/What are you working on/));
+    await user.keyboard("{ArrowDown}");
+
+    expect(screen.getByText("Acme Web")).toBeDefined();
+    expect(screen.getByText("Acme Billing")).toBeDefined();
+  });
+
+  it("offers every assigned item rather than a shortlist, and scrolls", async () => {
+    // The down arrow is the only way to browse what is assigned to you, so cutting the
+    // list to a handful would hide most of it.
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(withItems(many));
+    render(<Popover />);
+
+    await user.click(await screen.findByPlaceholderText(/What are you working on/));
+    await user.keyboard("{ArrowDown}");
+
+    expect(screen.getAllByRole("option")).toHaveLength(40);
+  });
+
+  it("opens the list when the Azure mark is clicked", async () => {
+    // The mark is the most obvious thing to click when you want to see your tickets.
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(withItems(many.slice(0, 3)));
+    render(<Popover />);
+
+    await user.click(await screen.findByRole("button", { name: /show your azure devops work items/i }));
+
+    expect(screen.getByRole("listbox")).toBeDefined();
+  });
+
+  it("closes it again on a second click", async () => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(withItems(many.slice(0, 3)));
+    render(<Popover />);
+    const mark = await screen.findByRole("button", { name: /show your azure devops work items/i });
+
+    await user.click(mark);
+    await user.click(screen.getByRole("button", { name: /hide your azure devops work items/i }));
+
+    expect(screen.queryByRole("listbox")).toBeNull();
+  });
+
+  it("keeps the caret in the note after the mark is clicked", async () => {
+    // Clicking the mark is a way into the list, not a way out of the field you were typing
+    // in — the next keystroke has to go where it would have gone anyway.
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(withItems(many.slice(0, 3)));
+    render(<Popover />);
+
+    await user.click(await screen.findByRole("button", { name: /show your azure devops work items/i }));
+
+    expect(document.activeElement).toBe(screen.getByPlaceholderText(/What are you working on/));
   });
 });

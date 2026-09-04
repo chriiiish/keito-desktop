@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { act, cleanup, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Snapshot } from "../../electron/service.js";
@@ -20,6 +20,10 @@ const api = {
   openLog: vi.fn(),
   openExternal: vi.fn(),
   setIncludePrereleases: vi.fn(),
+
+  disconnectAzure: vi.fn(),
+  connectAzure: vi.fn(),
+  setAzureEnabled: vi.fn(),
   openWindow: vi.fn(),
   dismissUpdate: vi.fn(),
   onShowTab: vi.fn((_handler: (tab: string) => void) => () => {}),
@@ -60,6 +64,15 @@ const snapshot: Snapshot = {
   appVersion: "0.1.0",
   update: null,
   includePrereleases: false,
+
+  azure: {
+    enabled: false,
+    status: "off" as const,
+    organisationUrl: null,
+    hasToken: false,
+    workItems: [],
+    error: null,
+  },
   accountId: "co",
   apiKeyHint: "kto_••••••••abcd",
   trayFallback: "task",
@@ -86,6 +99,7 @@ describe("the review window", () => {
       "Projects",
       "Keito Connection",
       "Settings",
+      "Integrations",
       "About",
     ]);
   });
@@ -1222,5 +1236,257 @@ describe("the pre-release setting", () => {
 
     expect(api.setIncludePrereleases).toHaveBeenCalledWith(false);
   });
+});
 
+describe("the integrations tab", () => {
+  /** Opens the tab and expands the Azure section, which starts collapsed. */
+  const openIntegrations = async () => {
+    const user = userEvent.setup();
+    render(<ReviewWindow />);
+    await user.click(await screen.findByRole("button", { name: "Integrations" }));
+    await user.click(screen.getByRole("button", { expanded: false }));
+    return user;
+  };
+
+  /** Opens the tab and leaves the Azure section as it is found. */
+  const openIntegrationsCollapsed = async () => {
+    const user = userEvent.setup();
+    render(<ReviewWindow />);
+    await user.click(await screen.findByRole("button", { name: "Integrations" }));
+    return user;
+  };
+
+  const azure = (over: Partial<Snapshot["azure"]> = {}): Snapshot => ({
+    ...snapshot,
+    azure: {
+      enabled: false,
+      status: "off",
+      organisationUrl: null,
+      hasToken: false,
+      workItems: [],
+      error: null,
+      ...over,
+    },
+  });
+
+  it("keeps the form out of the way until the integration is switched on", async () => {
+    api.getSnapshot.mockResolvedValue(azure());
+    await openIntegrations();
+
+    expect(screen.getByText("Azure DevOps")).toBeDefined();
+    expect(screen.queryByLabelText("Personal access token")).toBeNull();
+  });
+
+  it("starts collapsed, showing only whether it is working", async () => {
+    // Almost every visit is not a setup: the scopes and two credential fields are a wall
+    // in front of the one thing worth seeing at a glance.
+    api.getSnapshot.mockResolvedValue(azure({ enabled: true, status: "needs-token" }));
+    await openIntegrationsCollapsed();
+
+    expect(screen.getByRole("button", { expanded: false })).toBeDefined();
+    expect(screen.getByText("Azure DevOps")).toBeDefined();
+    expect(screen.getByText(/needs a personal access token/i)).toBeDefined();
+  });
+
+  it("puts the switch before the name, since it works while the section is shut", async () => {
+    api.getSnapshot.mockResolvedValue(azure({ enabled: true, status: "needs-token" }));
+    await openIntegrationsCollapsed();
+
+    const toggle = screen.getByRole("checkbox", { name: "Azure DevOps" });
+    const name = screen.getByText("Azure DevOps");
+
+    // DOCUMENT_POSITION_FOLLOWING: the name comes after the switch in reading order.
+    expect(toggle.compareDocumentPosition(name) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("expands to the setup form when the name is clicked", async () => {
+    api.getSnapshot.mockResolvedValue(azure({ enabled: true, status: "needs-token" }));
+    const user = await openIntegrationsCollapsed();
+
+    await user.click(screen.getByRole("button", { expanded: false }));
+
+    expect(screen.getByRole("button", { expanded: true })).toBeDefined();
+    expect(screen.getByLabelText("Personal access token")).toBeDefined();
+  });
+
+  it("marks the row when it is switched on but has no token", async () => {
+    // Collapsed, an integration that has quietly stopped feeding the note field would
+    // otherwise look exactly like one that is fine.
+    api.getSnapshot.mockResolvedValue(azure({ enabled: true, status: "needs-token" }));
+    await openIntegrationsCollapsed();
+
+    expect(screen.getByLabelText("Azure DevOps is not set up")).toBeDefined();
+  });
+
+  it("marks the row when the token has stopped working", async () => {
+    api.getSnapshot.mockResolvedValue(
+      azure({ enabled: true, status: "error", hasToken: true, error: "Token expired" }),
+    );
+    await openIntegrationsCollapsed();
+
+    expect(screen.getByLabelText("Azure DevOps is not connected")).toBeDefined();
+  });
+
+  it("leaves the row unmarked when it is working", async () => {
+    api.getSnapshot.mockResolvedValue(
+      azure({ enabled: true, status: "connected", hasToken: true }),
+    );
+    await openIntegrationsCollapsed();
+
+    expect(screen.queryByLabelText(/Azure DevOps is not/)).toBeNull();
+  });
+
+  it("leaves the row unmarked when it is deliberately switched off", async () => {
+    // Off is a decision, not a fault.
+    api.getSnapshot.mockResolvedValue(azure());
+    await openIntegrationsCollapsed();
+
+    expect(screen.queryByLabelText(/Azure DevOps is not/)).toBeNull();
+  });
+
+  it("names the one scope the token needs", async () => {
+    // One scope, and the list says so rather than leaving the reader wondering what else
+    // might be required.
+    api.getSnapshot.mockResolvedValue(azure({ enabled: true, status: "needs-token" }));
+    await openIntegrations();
+
+    expect(screen.getByText("Work Items (Read)")).toBeDefined();
+    expect(screen.getByText(/that is the whole list/i)).toBeDefined();
+  });
+
+  it("says plainly that it only ever reads", async () => {
+    api.getSnapshot.mockResolvedValue(azure({ enabled: true, status: "needs-token" }));
+    await openIntegrations();
+
+    expect(screen.getByText(/only ever reads/i)).toBeDefined();
+  });
+
+  it("asks for the URL and the token together", async () => {
+    // Looking the organisation up from the token only ever worked for a token created for
+    // all organisations, so it cost everyone else a failed attempt to reach a field that
+    // always works. Both are asked for at once.
+    api.getSnapshot.mockResolvedValue(azure({ enabled: true, status: "needs-token" }));
+    await openIntegrations();
+
+    expect(screen.getByLabelText(/organisation url/i)).toBeDefined();
+    expect(screen.getByLabelText("Personal access token")).toBeDefined();
+  });
+
+  it("cannot connect without a URL", async () => {
+    api.getSnapshot.mockResolvedValue(azure({ enabled: true, status: "needs-token" }));
+    const user = await openIntegrations();
+
+    await user.type(screen.getByLabelText("Personal access token"), "pat_secret");
+
+    expect(screen.getByRole("button", { name: "Connect" }).hasAttribute("disabled")).toBe(true);
+  });
+
+  it("does not connect when the form is submitted half-filled", async () => {
+    // Submitting a form is not only pressing its button: Enter in a text field does it
+    // too, and that route ignores `disabled`. It fired an IPC call and an error nobody had
+    // asked for. Fired directly because jsdom does not do implicit submission on Enter.
+    api.getSnapshot.mockResolvedValue(azure({ enabled: true, status: "needs-token" }));
+    const user = await openIntegrations();
+    await user.type(screen.getByLabelText(/organisation url/i), "https://dev.azure.com/acme");
+
+    fireEvent.submit(screen.getByRole("button", { name: "Connect" }).closest("form")!);
+
+    expect(api.connectAzure).not.toHaveBeenCalled();
+  });
+
+  it("connects when the form is submitted with both fields filled in", async () => {
+    api.getSnapshot.mockResolvedValue(azure({ enabled: true, status: "needs-token" }));
+    api.connectAzure.mockResolvedValue(azure({ enabled: true, status: "connected" }));
+    const user = await openIntegrations();
+    await user.type(screen.getByLabelText(/organisation url/i), "https://dev.azure.com/acme");
+    await user.type(screen.getByLabelText("Personal access token"), "pat_secret");
+
+    fireEvent.submit(screen.getByRole("button", { name: "Connect" }).closest("form")!);
+
+    expect(api.connectAzure).toHaveBeenCalledWith("pat_secret", "https://dev.azure.com/acme");
+  });
+
+  it("shows a failed connect as an error, not as a form nobody has filled in", async () => {
+    // A connect that fails stores no token, so the card used to say "needs a personal
+    // access token" while showing the error explaining why the one just entered failed.
+    api.getSnapshot.mockResolvedValue(
+      azure({ enabled: true, status: "error", hasToken: false, error: "Azure DevOps refused it." }),
+    );
+    await openIntegrationsCollapsed();
+
+    expect(screen.getByLabelText("Azure DevOps is not connected")).toBeDefined();
+    expect(screen.getByText("Not connected")).toBeDefined();
+  });
+
+  it("connects with both of them at once", async () => {
+    api.getSnapshot.mockResolvedValue(azure({ enabled: true, status: "needs-token" }));
+    api.connectAzure.mockResolvedValue(azure({ enabled: true, status: "connected" }));
+    const user = await openIntegrations();
+
+    await user.type(screen.getByLabelText(/organisation url/i), "https://dev.azure.com/acme");
+    await user.type(screen.getByLabelText("Personal access token"), "pat_secret");
+    await user.click(screen.getByRole("button", { name: "Connect" }));
+
+    expect(api.connectAzure).toHaveBeenCalledWith("pat_secret", "https://dev.azure.com/acme");
+  });
+
+  it("cannot connect with an empty token", async () => {
+    api.getSnapshot.mockResolvedValue(azure({ enabled: true, status: "needs-token" }));
+    await openIntegrations();
+
+    expect(screen.getByRole("button", { name: "Connect" }).hasAttribute("disabled")).toBe(true);
+  });
+
+  it("says which organisation it is connected to", async () => {
+    api.getSnapshot.mockResolvedValue(
+      azure({
+        enabled: true,
+        status: "connected",
+        hasToken: true,
+        organisationUrl: "https://dev.azure.com/acme",
+        workItems: [
+          { id: 1, title: "One", project: "Acme Web", state: "Active", changedDate: null },
+        ],
+      }),
+    );
+    await openIntegrations();
+
+    expect(screen.getByText(/Connected — acme/)).toBeDefined();
+    expect(screen.getByText(/1 work item assigned to you/)).toBeDefined();
+  });
+
+  it("offers to forget the token once one is stored", async () => {
+    api.getSnapshot.mockResolvedValue(
+      azure({ enabled: true, status: "connected", hasToken: true }),
+    );
+    api.disconnectAzure.mockResolvedValue(azure());
+    const user = await openIntegrations();
+
+    await user.click(screen.getByRole("button", { name: "Disconnect" }));
+
+    expect(api.disconnectAzure).toHaveBeenCalledTimes(1);
+  });
+
+  it("never shows the stored token back, only that there is one", async () => {
+    // The renderer is never given the token, the same as the Keito key.
+    api.getSnapshot.mockResolvedValue(
+      azure({ enabled: true, status: "connected", hasToken: true }),
+    );
+    await openIntegrations();
+
+    const field = screen.getByLabelText("Personal access token") as HTMLInputElement;
+    expect(field.value).toBe("");
+    expect(field.type).toBe("password");
+    expect(field.placeholder).toMatch(/a token is stored/i);
+  });
+
+  it("switches the integration on from the toggle", async () => {
+    api.getSnapshot.mockResolvedValue(azure());
+    api.setAzureEnabled.mockResolvedValue(azure({ enabled: true, status: "needs-token" }));
+    const user = await openIntegrations();
+
+    await user.click(screen.getByRole("checkbox", { name: "Azure DevOps" }));
+
+    expect(api.setAzureEnabled).toHaveBeenCalledWith(true);
+  });
 });

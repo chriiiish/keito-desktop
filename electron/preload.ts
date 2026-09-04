@@ -23,6 +23,11 @@ const api = {
   dismissUpdate: (): Promise<Snapshot> => ipcRenderer.invoke("dismiss-update"),
   setIncludePrereleases: (include: boolean): Promise<Snapshot> =>
     ipcRenderer.invoke("set-include-prereleases", include),
+  setAzureEnabled: (enabled: boolean): Promise<Snapshot> =>
+    ipcRenderer.invoke("set-azure-enabled", enabled),
+  connectAzure: (token: string, organisationUrl?: string): Promise<Snapshot> =>
+    ipcRenderer.invoke("connect-azure", token, organisationUrl),
+  disconnectAzure: (): Promise<Snapshot> => ipcRenderer.invoke("disconnect-azure"),
   setOpenAtLogin: (openAtLogin: boolean): Promise<Snapshot> =>
     ipcRenderer.invoke("set-open-at-login", openAtLogin),
   setTrayLabel: (options: {
