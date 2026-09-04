@@ -164,6 +164,8 @@ export const NoteField = forwardRef<NoteFieldHandle, {
       )}
       <input
         ref={inputRef}
+        // Named here rather than by a wrapping label: see the comment in Popover.
+        aria-label="Note"
         placeholder={offered ? "What are you working on? ↓ for your tickets" : "What are you working on?"}
         value={value}
         onChange={(event) => {

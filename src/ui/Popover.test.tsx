@@ -1139,6 +1139,36 @@ describe("the note field with Azure DevOps", () => {
     expect(api.switchTo).toHaveBeenCalledWith("p_acme:t_qa", "88: Rework the timesheet export");
   });
 
+  it("closes the list when you click the caption beside the field", async () => {
+    // A <label> forwards clicks on its whitespace to the first labelable control inside
+    // it, which is now the Azure mark. So clicking near the field closed the list on
+    // pointerdown and the forwarded click reopened it — it could be opened that way but
+    // never closed. CategoryPicker already carries a comment about this exact trap.
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(connected());
+    render(<Popover />);
+
+    await user.click(await screen.findByRole("button", { name: /show your azure devops work items/i }));
+    expect(screen.getByRole("listbox")).toBeDefined();
+
+    await user.click(screen.getByText("Note"));
+
+    expect(screen.queryByRole("listbox")).toBeNull();
+  });
+
+  it("does not open the list by clicking the caption either", async () => {
+    // Only the mark and the down arrow open it. A dropdown appearing because you clicked
+    // near a text field is a surprise nobody asked for.
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(connected());
+    render(<Popover />);
+    await screen.findByPlaceholderText(/What are you working on/);
+
+    await user.click(screen.getByText("Note"));
+
+    expect(screen.queryByRole("listbox")).toBeNull();
+  });
+
   it("closes the list on Escape and keeps what was typed", async () => {
     const user = userEvent.setup();
     api.getSnapshot.mockResolvedValue(connected());

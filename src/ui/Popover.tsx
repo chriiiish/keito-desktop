@@ -184,8 +184,13 @@ export function Popover(): JSX.Element {
           />
         </div>
 
-        <label>
-          Note
+        {/* Not a <label>, for the same reason the picker above is not: a label forwards
+            clicks on its whitespace to the first labelable control inside it, which here is
+            the Azure DevOps mark. Clicking beside the field closed the work item list on
+            pointerdown and the forwarded click reopened it, so it could be opened that way
+            and never closed. */}
+        <div className="field">
+          <span className="field-label">Note</span>
           <div className="with-play">
             <NoteField
               ref={noteRef}
@@ -205,7 +210,7 @@ export function Popover(): JSX.Element {
               {starting ? <Spinner /> : "▶"}
             </button>
           </div>
-        </label>
+        </div>
       </form>
 
       <RecentEntries
