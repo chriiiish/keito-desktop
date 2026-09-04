@@ -11,6 +11,7 @@ import { entryStartMs } from "../src/core/time/elapsed.js";
 import { isNewerVersion, type ReleaseSummary } from "../src/core/version/version.js";
 import { AzureClient, normaliseOrganisationUrl } from "../src/core/azure/client.js";
 import { AzureError } from "../src/core/azure/errors.js";
+import { azureStatus } from "../src/core/azure/status.js";
 import type { WorkItem } from "../src/core/azure/types.js";
 import type { SecretStore } from "./secrets.js";
 import type { Logger } from "./logger.js";
@@ -453,15 +454,12 @@ export class AppService {
   #azureState(): AzureState {
     const prefs = this.#prefs.get();
     const hasToken = this.#azureToken !== null;
-    const status: AzureState["status"] = !prefs.azureEnabled
-      ? "off"
-      : !hasToken
-        ? "needs-token"
-        : this.#azureError
-          ? "error"
-          : this.#azureConnected
-            ? "connected"
-            : "needs-token";
+    const status = azureStatus({
+      enabled: prefs.azureEnabled,
+      hasToken,
+      error: this.#azureError,
+      connected: this.#azureConnected,
+    });
 
     return {
       enabled: prefs.azureEnabled,

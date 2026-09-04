@@ -46,10 +46,18 @@ export const NoteField = forwardRef<NoteFieldHandle, {
   const offered = connected && workItems.length > 0;
   const matches = offered ? searchWorkItems(workItems, value) : [];
 
-  // A filter that no longer matches anything should not leave a highlight pointing past
-  // the end of the list, where Enter would pick nothing.
+  /**
+   * Keep the highlight on a row that exists.
+   *
+   * Clamps in *both* directions. Past the end is the obvious case — a filter that narrows
+   * the list leaves the highlight beyond it. Below zero is the one that bit: arrowing down
+   * while the list is open and nothing matches used to move the cursor to
+   * `matches.length - 1`, which is -1, and a check for "past the end" cannot see that. It
+   * then survived clearing the filter, so Enter picked nothing and `aria-activedescendant`
+   * pointed at no row.
+   */
   useEffect(() => {
-    setCursor((current) => (current < matches.length ? current : 0));
+    setCursor((current) => (current >= 0 && current < matches.length ? current : 0));
   }, [matches.length]);
 
   /**
@@ -99,7 +107,9 @@ export const NoteField = forwardRef<NoteFieldHandle, {
         setOpen(true);
         setCursor(0);
       } else {
-        setCursor((c) => Math.min(c + 1, matches.length - 1));
+        // `Math.max(0, …)` because an empty list makes the last index -1, and moving
+        // "down" onto a row that is not there is worse than staying put.
+        setCursor((c) => Math.min(c + 1, Math.max(0, matches.length - 1)));
       }
       return;
     }

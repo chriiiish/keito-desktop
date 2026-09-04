@@ -124,6 +124,15 @@ function AzureConnectionForm({
   const [token, setToken] = useState("");
   const [url, setUrl] = useState(azure.organisationUrl ?? "");
 
+  /**
+   * One rule for whether Connect can run, used by the button and by the form.
+   *
+   * Submitting a form is not only pressing its button — Enter in a text field does it too,
+   * and that route ignores `disabled`. Without this, Enter on an empty form fired an IPC
+   * call and an avoidable error.
+   */
+  const canConnect = Boolean(token.trim() && url.trim());
+
   const [connecting, connect] = useAsyncAction(async () => {
     const next = await keito.connectAzure(token.trim(), url.trim());
     onChange(next);
@@ -138,6 +147,7 @@ function AzureConnectionForm({
       className="connect azure-connect"
       onSubmit={(event) => {
         event.preventDefault();
+        if (!canConnect || connecting) return;
         void connect();
       }}
     >
@@ -182,7 +192,7 @@ function AzureConnectionForm({
         <button
           type="submit"
           aria-busy={connecting}
-          disabled={connecting || !token.trim() || !url.trim()}
+          disabled={connecting || !canConnect}
         >
           {connecting ? "Connecting…" : "Connect"}
         </button>

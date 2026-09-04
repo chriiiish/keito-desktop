@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { act, cleanup, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Snapshot } from "../../electron/service.js";
@@ -1334,6 +1334,43 @@ describe("the integrations tab", () => {
     await user.type(screen.getByLabelText("Personal access token"), "pat_secret");
 
     expect(screen.getByRole("button", { name: "Connect" }).hasAttribute("disabled")).toBe(true);
+  });
+
+  it("does not connect when the form is submitted half-filled", async () => {
+    // Submitting a form is not only pressing its button: Enter in a text field does it
+    // too, and that route ignores `disabled`. It fired an IPC call and an error nobody had
+    // asked for. Fired directly because jsdom does not do implicit submission on Enter.
+    api.getSnapshot.mockResolvedValue(azure({ enabled: true, status: "needs-token" }));
+    const user = await openIntegrations();
+    await user.type(screen.getByLabelText(/organisation url/i), "https://dev.azure.com/acme");
+
+    fireEvent.submit(screen.getByRole("button", { name: "Connect" }).closest("form")!);
+
+    expect(api.connectAzure).not.toHaveBeenCalled();
+  });
+
+  it("connects when the form is submitted with both fields filled in", async () => {
+    api.getSnapshot.mockResolvedValue(azure({ enabled: true, status: "needs-token" }));
+    api.connectAzure.mockResolvedValue(azure({ enabled: true, status: "connected" }));
+    const user = await openIntegrations();
+    await user.type(screen.getByLabelText(/organisation url/i), "https://dev.azure.com/acme");
+    await user.type(screen.getByLabelText("Personal access token"), "pat_secret");
+
+    fireEvent.submit(screen.getByRole("button", { name: "Connect" }).closest("form")!);
+
+    expect(api.connectAzure).toHaveBeenCalledWith("pat_secret", "https://dev.azure.com/acme");
+  });
+
+  it("shows a failed connect as an error, not as a form nobody has filled in", async () => {
+    // A connect that fails stores no token, so the card used to say "needs a personal
+    // access token" while showing the error explaining why the one just entered failed.
+    api.getSnapshot.mockResolvedValue(
+      azure({ enabled: true, status: "error", hasToken: false, error: "Azure DevOps refused it." }),
+    );
+    await openIntegrationsCollapsed();
+
+    expect(screen.getByLabelText("Azure DevOps is not connected")).toBeDefined();
+    expect(screen.getByText("Not connected")).toBeDefined();
   });
 
   it("connects with both of them at once", async () => {

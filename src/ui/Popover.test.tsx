@@ -13,7 +13,7 @@ import type { TimeEntry } from "../core/keito/types.js";
 
 const api = {
   getSnapshot: vi.fn(),
-  onSnapshot: vi.fn(() => () => {}),
+  onSnapshot: vi.fn((_handler: (snapshot: Snapshot) => void) => () => {}),
   onIdleReturn: vi.fn(() => () => {}),
   onPopoverShown: vi.fn((_handler: () => void) => () => {}),
   switchTo: vi.fn(),
@@ -1151,6 +1151,40 @@ describe("the note field with Azure DevOps", () => {
     expect((input as HTMLInputElement).value).toBe("login");
     // Escape closed the list, not the popover.
     expect(api.closePopover).not.toHaveBeenCalled();
+  });
+
+  it("survives arrowing down while nothing matches", async () => {
+    // Arrowing down with an empty list moved the highlight to matches.length - 1, which is
+    // -1, and a clamp that only looks *past* the end of the list cannot see that. Typing
+    // resets the cursor, so the way it persists is a list that refills without a keystroke
+    // — which is exactly what the ten-minute refresh does.
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(connected());
+    render(<Popover />);
+    const input = await screen.findByPlaceholderText(/What are you working on/);
+
+    await user.type(input, "zzzznothing");
+    await user.keyboard("{ArrowDown}");
+
+    // A refresh brings in a work item that does match what is already typed.
+    const push = api.onSnapshot.mock.calls[0]![0];
+    await act(async () => {
+      push(
+        connected({
+          workItems: [
+            {
+              id: 99,
+              title: "zzzznothing to see here",
+              project: "Acme Web",
+              state: "Active",
+              changedDate: "2026-09-03T12:00:00Z",
+            },
+          ],
+        }),
+      );
+    });
+
+    expect(screen.getAllByRole("option")[0]!.getAttribute("aria-selected")).toBe("true");
   });
 
   it("still lets you type a note that is not a ticket at all", async () => {
