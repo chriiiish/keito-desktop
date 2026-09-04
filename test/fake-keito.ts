@@ -32,6 +32,9 @@ export interface FakeKeitoOptions {
   now?: () => Date;
   /** Reject every request, as an expired or wrong key would. */
   rejectAuth?: boolean;
+  /** The workspace this key belongs to. Two fakes with different companies stand in for
+   *  two Keito accounts, which is the only way to exercise switching between them. */
+  company?: { id: string; name: string };
 }
 
 export class FakeKeito {
@@ -48,6 +51,7 @@ export class FakeKeito {
   #options: Required<Pick<FakeKeitoOptions, "projects" | "tasksByProject" | "now">> & {
     rejectAuth: boolean;
     pageSize: number;
+    company: { id: string; name: string };
   };
   #seq = 0;
 
@@ -58,6 +62,7 @@ export class FakeKeito {
       now: options.now ?? (() => new Date()),
       rejectAuth: options.rejectAuth ?? false,
       pageSize: options.pageSize ?? 200,
+      company: options.company ?? { id: "co_9", name: "Acme" },
     };
   }
 
@@ -100,7 +105,7 @@ export class FakeKeito {
 
   #route(method: string, path: string, url: URL, body: any, headers: Headers): Response {
     if (method === "GET" && path === "/users/me") {
-      return this.#json({ id: "u_1", first_name: "Chris", company: { id: "co_9", name: "Acme" } });
+      return this.#json({ id: "u_1", first_name: "Chris", company: this.#options.company });
     }
     if (method === "GET" && path === "/projects") {
       // Tasks arrive embedded, exactly as the live API returns them.

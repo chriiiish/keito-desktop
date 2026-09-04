@@ -1,5 +1,6 @@
 import { buildPicker } from "../src/core/catalog/picker.js";
 import { loadCatalog, loadEntries } from "../src/core/catalog/workspace.js";
+import { shouldReloadCatalog } from "../src/core/catalog/staleness.js";
 import { KeitoClient, type RequestRecord } from "../src/core/keito/client.js";
 import { KeitoAuthError, KeitoError, KeitoReadOnlyError } from "../src/core/keito/errors.js";
 import type { Identity, Pair, TimeEntry } from "../src/core/keito/types.js";
@@ -123,6 +124,14 @@ export class AppService {
   #identity: Identity | null = null;
   #catalog: Pair[] = [];
   #catalogLoadedAt = 0;
+  /**
+   * The Keito company the cached catalog belongs to.
+   *
+   * Held beside the catalog rather than compared against preferences at connect time, so
+   * the cache carries its own provenance and cannot be left describing a workspace nobody
+   * is in any more — whichever path changed the company.
+   */
+  #catalogAccountId: string | null = null;
   #recents: string[] = [];
   #today: TimeEntry[] = [];
   #yesterday: TimeEntry[] = [];
@@ -291,6 +300,7 @@ export class AppService {
     this.#identity = null;
     this.#catalog = [];
     this.#catalogLoadedAt = 0;
+    this.#catalogAccountId = null;
     this.#recents = [];
     this.#today = [];
     this.#yesterday = [];
@@ -446,14 +456,35 @@ export class AppService {
     return this.#run(async () => {
       const now = new Date();
 
-      const stale = now.getTime() - this.#catalogLoadedAt > CATALOG_TTL_MS;
-      if (options.force || stale || this.#catalog.length === 0) {
+      const accountId = this.#identity?.accountId ?? null;
+      const reload = shouldReloadCatalog({
+        ...(options.force === undefined ? {} : { force: options.force }),
+        cached: this.#catalog.length,
+        loadedAtMs: this.#catalogLoadedAt,
+        loadedForAccountId: this.#catalogAccountId,
+        accountId,
+        nowMs: now.getTime(),
+        ttlMs: CATALOG_TTL_MS,
+      });
+
+      if (reload) {
         try {
           this.#catalog = await loadCatalog(this.#client!, now);
           this.#catalogLoadedAt = now.getTime();
+          this.#catalogAccountId = accountId;
         } catch (error) {
-          // A stale catalog beats an empty one; the client has already logged why.
+          /*
+           * A stale catalog beats an empty one; the client has already logged why. The
+           * exception is a catalog belonging to a *different* workspace — showing someone
+           * another company's projects is worse than showing none, so that is dropped and
+           * the failure raised.
+           */
           if (this.#catalog.length === 0) throw error;
+          if (this.#catalogAccountId !== accountId) {
+            this.#catalog = [];
+            this.#catalogAccountId = null;
+            throw error;
+          }
           this.#log.warn("Kept the previous catalog: reloading it failed", {
             error: error instanceof Error ? error.message : String(error),
           });
