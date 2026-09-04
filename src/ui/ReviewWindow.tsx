@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { TimeEntry } from "../core/keito/types.js";
 import type { Snapshot } from "../../electron/service.js";
 import { keito } from "./keito-api.js";
@@ -61,6 +61,8 @@ function isTab(value: string): value is Tab {
 export function ReviewWindow(): JSX.Element {
   const [snapshot, setSnapshot] = useSnapshot();
   const [tab, setTab] = useState<Tab>("entries");
+  /** A tab the main process asked for that the first-snapshot reset must not overwrite. */
+  const requestedTab = useRef<Tab | null>(null);
 
   /**
    * Connecting opens the entries table, whatever the tabs were last clicked.
@@ -74,12 +76,21 @@ export function ReviewWindow(): JSX.Element {
    * so the first render with a working key would still use the old tab — mounting, say,
    * the About tab for a frame before replacing it. Setting state during render makes
    * React re-run this function before it commits anything, so that frame never exists.
+   *
+   * **Unless the main process asked for a tab.** Opening this window from the popover's
+   * update notice creates it, tells it which tab to show as its page loads, and only then
+   * delivers the first snapshot — so this reset fired *after* the request and threw it
+   * away. The notice landed on Time Entries, and appeared to work only when the window
+   * happened to be open already. A pending request is consumed here, so it survives
+   * exactly the one reset that would have overwritten it and a later sign-out still
+   * returns to the entries table.
    */
   const ready = snapshot?.keyStatus === "ready";
   const [wasReady, setWasReady] = useState(ready);
   if (ready !== wasReady) {
     setWasReady(ready);
-    if (ready) setTab("entries");
+    if (ready && !requestedTab.current) setTab("entries");
+    requestedTab.current = null;
   }
 
   /**
@@ -98,7 +109,11 @@ export function ReviewWindow(): JSX.Element {
   useEffect(
     () =>
       keito.onShowTab((requested) => {
-        if (isTab(requested)) setTab(requested);
+        if (!isTab(requested)) return;
+        // Remembered as well as applied: the connecting-opens-entries reset above runs on
+        // the first snapshot, which arrives after this, and would otherwise discard it.
+        requestedTab.current = requested;
+        setTab(requested);
       }),
     [],
   );
