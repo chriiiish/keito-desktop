@@ -19,6 +19,8 @@ const api = {
   resetAll: vi.fn(),
   openLog: vi.fn(),
   openExternal: vi.fn(),
+  setIncludePrereleases: vi.fn(),
+
   disconnectAzure: vi.fn(),
   connectAzure: vi.fn(),
   setAzureEnabled: vi.fn(),
@@ -61,6 +63,8 @@ const snapshot: Snapshot = {
   platform: "darwin",
   appVersion: "0.1.0",
   update: null,
+  includePrereleases: false,
+
   azure: {
     enabled: false,
     status: "off" as const,
@@ -1051,15 +1055,16 @@ describe("the update tab", () => {
     );
   });
 
-  it("says plainly that it does not update itself", async () => {
-    // These builds are ad-hoc signed, so there is no auto-updater and never silently
-    // will be. A user who downloads and then waits for something to happen is the
-    // failure this sentence exists to prevent.
+  it("says where the button goes, so nobody waits for an install", async () => {
+    // These builds are ad-hoc signed, so there is no auto-updater and never silently will
+    // be. Someone who presses Download and then waits for something to happen is the
+    // failure this line exists to prevent — it now does that by naming the destination
+    // rather than by explaining what the app will not do.
     api.getSnapshot.mockResolvedValue(withUpdate());
     render(<ReviewWindow />);
     await userEvent.setup().click(await screen.findByRole("button", { name: /Update Available/ }));
 
-    expect(screen.getByText(/does not update itself/)).toBeDefined();
+    expect(screen.getByText(/taken to the latest download page/i)).toBeDefined();
   });
 
   it("stays available after the popover notice is dismissed", async () => {
@@ -1190,6 +1195,46 @@ describe("the licence on the about tab", () => {
     expect(api.openExternal).toHaveBeenCalledWith(
       "https://github.com/chriiiish/keito-desktop/blob/main/LICENSE",
     );
+  });
+});
+
+describe("the pre-release setting", () => {
+  const openSettings = async () => {
+    const user = userEvent.setup();
+    render(<ReviewWindow />);
+    await user.click(await screen.findByRole("button", { name: "Settings" }));
+    return user;
+  };
+
+  it("is off unless it has been switched on", async () => {
+    // A release the project has flagged as not ready is not something to push at someone
+    // who never asked for it.
+    api.getSnapshot.mockResolvedValue(snapshot);
+    await openSettings();
+
+    expect(
+      (screen.getByRole("checkbox", { name: "Include pre-releases" }) as HTMLInputElement).checked,
+    ).toBe(false);
+  });
+
+  it("switches on from the toggle", async () => {
+    api.getSnapshot.mockResolvedValue(snapshot);
+    api.setIncludePrereleases.mockResolvedValue({ ...snapshot, includePrereleases: true });
+    const user = await openSettings();
+
+    await user.click(screen.getByRole("checkbox", { name: "Include pre-releases" }));
+
+    expect(api.setIncludePrereleases).toHaveBeenCalledWith(true);
+  });
+
+  it("switches off again", async () => {
+    api.getSnapshot.mockResolvedValue({ ...snapshot, includePrereleases: true });
+    api.setIncludePrereleases.mockResolvedValue(snapshot);
+    const user = await openSettings();
+
+    await user.click(screen.getByRole("checkbox", { name: "Include pre-releases" }));
+
+    expect(api.setIncludePrereleases).toHaveBeenCalledWith(false);
   });
 });
 

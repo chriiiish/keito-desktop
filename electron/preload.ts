@@ -21,6 +21,8 @@ const api = {
     ipcRenderer.invoke("set-hidden", pairIds, hidden),
   setHotkey: (hotkey: string): Promise<Snapshot> => ipcRenderer.invoke("set-hotkey", hotkey),
   dismissUpdate: (): Promise<Snapshot> => ipcRenderer.invoke("dismiss-update"),
+  setIncludePrereleases: (include: boolean): Promise<Snapshot> =>
+    ipcRenderer.invoke("set-include-prereleases", include),
   setAzureEnabled: (enabled: boolean): Promise<Snapshot> =>
     ipcRenderer.invoke("set-azure-enabled", enabled),
   connectAzure: (token: string, organisationUrl?: string): Promise<Snapshot> =>

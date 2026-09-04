@@ -237,15 +237,34 @@ there is no certificate. `electron-updater` wraps Squirrel.Mac too, so it needs 
 things. On Windows the built-in updater needs Squirrel.Windows packaging, which `nsis` is
 not. Auto-update therefore costs an Apple Developer ID and a change of Windows installer
 format, whichever library does it. Until then the honest ceiling is a link to the download
-page, and the tab says so in as many words so nobody waits for an install that is not
-coming.
+page. The tab says where the button goes — "click below to be taken to the latest download
+page" — rather than explaining what the app will not do, which is the same job done in
+fewer words: someone who presses Download and then waits for an install is the failure that
+line exists to prevent.
 
-**`GET /releases/latest` answers 404 for this repo and always will**, because it excludes
-drafts *and* pre-releases and every release here is published as a pre-release. The check
-lists `/releases` and takes the newest **non-draft** — `pickLatestRelease` in
-`src/core/version/version.ts`. Drafts are excluded because they are invisible to anyone
-without write access, so offering one would point users at a 404. Pre-releases are kept
-because they are the thing on the download page.
+**`GET /releases/latest` is not used.** It hides drafts *and* pre-releases, which makes the
+pre-release setting impossible to implement — there would be no way to ask for them. The
+check lists `/releases` and filters itself: `pickLatestRelease` in
+`src/core/version/version.ts`.
+
+**Drafts are always excluded; pre-releases are excluded unless asked for.** A draft is
+invisible to anyone without write access, so offering one would point users at a 404. A
+pre-release is visible but flagged by the project as not ready, so it is offered only to
+someone who switched **Settings → Updates → Include pre-releases** on. Historically every
+release here *was* a pre-release and they were always included; there are stable releases
+now, and the default is the stable channel.
+
+**Opting in adds pre-releases to the running, it does not prefer them.** A stable release
+published after a release candidate is still the newer of the two and still the one
+offered. And it is **GitHub's `prerelease` flag** that decides, not the tag: a tag can
+carry a SemVer pre-release suffix without being flagged and the reverse is equally
+possible, and the flag is what the download page shows.
+
+**Flipping the setting re-checks immediately.** `checkForUpdates` sits at module level in
+`main.ts` for exactly this — behind the daily timer alone, switching the toggle would
+appear to do nothing for up to a day. `setIncludePrereleases` also drops the release it
+already found, so switching *off* while a pre-release notice is showing takes the notice
+with it rather than leaving one that the new channel would never have produced.
 
 **Ordering is SemVer, not string comparison.** `"0.10.0" < "0.9.0"` lexically, so a naive
 comparison would stop offering updates the moment a minor version reached double digits.
