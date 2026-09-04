@@ -1490,3 +1490,128 @@ describe("the integrations tab", () => {
     expect(api.setAzureEnabled).toHaveBeenCalledWith(true);
   });
 });
+
+/**
+ * The page is a set of grouped tables rather than a run of headings with a paragraph under
+ * each. The explanations still exist — they are behind the "i" beside the name they belong
+ * to, which is the whole point of the change and so is what these check.
+ */
+describe("the settings page layout", () => {
+  const openSettings = async (over: Partial<Snapshot> = {}) => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue({ ...snapshot, ...over } satisfies Snapshot);
+    render(<ReviewWindow />);
+    await user.click(await screen.findByRole("button", { name: "Settings" }));
+    return user;
+  };
+
+  it("groups the settings into titled tables", async () => {
+    await openSettings();
+
+    const groups = screen.getAllByRole("table").map((table) => table.querySelector("caption")?.textContent);
+    expect(groups).toContain("General");
+    expect(groups).toContain("Workspace and diagnostics");
+  });
+
+  it("pairs each setting's name with its control as a row header", async () => {
+    await openSettings();
+
+    // `th scope="row"` is what keeps the pairing for a screen reader rather than leaving it
+    // to the alignment.
+    const header = screen.getByRole("rowheader", { name: /Run at startup/ });
+    expect(header.getAttribute("scope")).toBe("row");
+  });
+
+  it("keeps the explanation off the page until the icon is used", async () => {
+    await openSettings();
+
+    expect(screen.queryByText(/Press this anywhere to open the timer/)).toBeNull();
+  });
+
+  it("shows the explanation when the icon is clicked", async () => {
+    const user = await openSettings();
+
+    await user.click(screen.getByRole("button", { name: "About Shortcut" }));
+
+    expect(screen.getByRole("tooltip").textContent).toMatch(/Press this anywhere to open the timer/);
+  });
+
+  /*
+   * A click arrives after the pointer does, so a click that toggled would close the bubble
+   * the hover had just opened. Clicking an "i" twice must not be how you make information
+   * disappear.
+   */
+  it("stays open when the icon is clicked a second time", async () => {
+    const user = await openSettings();
+    const icon = screen.getByRole("button", { name: "About Shortcut" });
+
+    await user.click(icon);
+    await user.click(icon);
+
+    expect(screen.getByRole("tooltip")).toBeDefined();
+  });
+
+  it("puts the explanation away when the pointer leaves", async () => {
+    const user = await openSettings();
+    const icon = screen.getByRole("button", { name: "About Shortcut" });
+    await user.click(icon);
+
+    fireEvent.mouseLeave(icon.parentElement as HTMLElement);
+
+    expect(screen.queryByRole("tooltip")).toBeNull();
+  });
+
+  it("puts it away on Escape, for anyone reading it from the keyboard", async () => {
+    const user = await openSettings();
+    const icon = screen.getByRole("button", { name: "About Shortcut" });
+    act(() => icon.focus());
+
+    await user.keyboard("{Escape}");
+
+    expect(screen.queryByRole("tooltip")).toBeNull();
+  });
+
+  it("names each icon after its own setting, not just 'more information'", async () => {
+    await openSettings();
+
+    expect(screen.getByRole("button", { name: "About Workspace timezone" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "About Log file" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "About Menu bar label" })).toBeDefined();
+  });
+
+  it("names the tray icon by the platform's word for it", async () => {
+    await openSettings({ platform: "win32" });
+
+    expect(screen.getByRole("button", { name: "About Tray label" })).toBeDefined();
+  });
+
+  it("opens on keyboard focus, so the explanation is not mouse-only", async () => {
+    await openSettings();
+
+    const icon = screen.getByRole("button", { name: "About Include pre-releases" });
+    act(() => icon.focus());
+
+    expect(screen.getByRole("tooltip").textContent).toMatch(/pre-releases/i);
+  });
+
+  it("describes the control it belongs to only while it is open", async () => {
+    const user = await openSettings();
+    const icon = screen.getByRole("button", { name: "About Shortcut" });
+    expect(icon.getAttribute("aria-describedby")).toBeNull();
+
+    await user.click(icon);
+
+    expect(icon.getAttribute("aria-describedby")).toBe(screen.getByRole("tooltip").id);
+  });
+
+  /*
+   * An explanation of why a control cannot be used stays on the page. Going hunting for it
+   * behind an icon is no use when the thing you just tried to click did nothing.
+   */
+  it("leaves the reason a disabled control is disabled in plain sight", async () => {
+    await openSettings({ canOpenAtLogin: false });
+
+    expect(screen.getByText(/Electron binary rather than Keito Timer/)).toBeDefined();
+    expect(screen.queryByRole("tooltip")).toBeNull();
+  });
+});

@@ -193,6 +193,25 @@ Connection, Settings (preferences only) and About (licence, tip jar, source link
 version) — plus **Update Available**, which appears only when there is one. Without a
 working key everything falls back to Keito Connection, except the update tab.
 
+**Settings is a set of grouped `<table>`s**, one `SettingRow` per setting: the name in a
+`th scope="row"`, the control in the `td`. The explanation that used to sit under each
+heading is now behind the `InfoTip` "i" beside the name. Two things to know before adding a
+row:
+
+- **There is a global `th` rule** (11px, muted, uppercase) for the entries table's column
+  headings. `.settings-table th` resets it. Without that reset every setting name comes out
+  shouting in grey capitals — which is what the first draft of this did.
+- **A note explaining why a control is disabled stays on the page**, as `SettingRow`'s
+  `note`, not in the "i". An explanation you have to go looking for is no use when the thing
+  you just clicked did nothing.
+
+`InfoTip` opens on hover, focus **and** click, and closes on mouse-out, blur or Escape.
+Clicking deliberately does not toggle: a click is preceded by the pointer arriving, so a
+toggle shuts the bubble the hover just opened. Its state is React state rather than a CSS
+`:hover` rule, so that a component test can watch it open — a bubble that is always in the
+DOM and merely hidden by CSS cannot be told apart from a shown one in jsdom, and the test
+could never fail.
+
 The renderer never receives the API key. `Snapshot.apiKeyHint` is a masked stand-in
 (`kto_••••••••abcd`); the connection form pre-fills it, and a value still equal to the hint
 means "keep the existing key", routing the save to `setCompanyId` instead of `setApiKey`.
