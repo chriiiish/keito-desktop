@@ -237,8 +237,10 @@ there is no certificate. `electron-updater` wraps Squirrel.Mac too, so it needs 
 things. On Windows the built-in updater needs Squirrel.Windows packaging, which `nsis` is
 not. Auto-update therefore costs an Apple Developer ID and a change of Windows installer
 format, whichever library does it. Until then the honest ceiling is a link to the download
-page, and the tab says so in as many words so nobody waits for an install that is not
-coming.
+page. The tab says where the button goes — "click below to be taken to the latest download
+page" — rather than explaining what the app will not do, which is the same job done in
+fewer words: someone who presses Download and then waits for an install is the failure that
+line exists to prevent.
 
 **`GET /releases/latest` is not used.** It hides drafts *and* pre-releases, which makes the
 pre-release setting impossible to implement — there would be no way to ask for them. The

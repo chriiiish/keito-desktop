@@ -35,24 +35,13 @@ export function UpdateTab({
       <h1 className="update-lead">Keito Timer {update.name} is available</h1>
       <p className="hint">
         You are running {snapshot.appVersion}
-        {published ? `. ${update.name} was published on ${published}.` : "."}
+        {published ? `. ${update.name} was published on ${published}.` : "."}<br/>
+        Click below to be taken to the latest download page
       </p>
 
       <AsyncButton className="primary" onClick={() => keito.openExternal(update.url)}>
         Download {update.name} ↗
       </AsyncButton>
-
-      <p className="hint">
-        {/*
-          Not an auto-updater, and saying so is kinder than leaving the user to wonder why
-          nothing installed itself. These builds are ad-hoc signed rather than notarised,
-          and macOS refuses to apply an update to an app it cannot verify — so the download
-          page is where this honestly ends.
-        */}
-        Downloading replaces the app by hand: the installer overwrites the copy you have,
-        and your settings, favourites and API key are kept. Keito Timer does not update
-        itself.
-      </p>
 
       {highlights.length > 0 && (
         <>

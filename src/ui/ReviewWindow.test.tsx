@@ -1041,15 +1041,16 @@ describe("the update tab", () => {
     );
   });
 
-  it("says plainly that it does not update itself", async () => {
-    // These builds are ad-hoc signed, so there is no auto-updater and never silently
-    // will be. A user who downloads and then waits for something to happen is the
-    // failure this sentence exists to prevent.
+  it("says where the button goes, so nobody waits for an install", async () => {
+    // These builds are ad-hoc signed, so there is no auto-updater and never silently will
+    // be. Someone who presses Download and then waits for something to happen is the
+    // failure this line exists to prevent — it now does that by naming the destination
+    // rather than by explaining what the app will not do.
     api.getSnapshot.mockResolvedValue(withUpdate());
     render(<ReviewWindow />);
     await userEvent.setup().click(await screen.findByRole("button", { name: /Update Available/ }));
 
-    expect(screen.getByText(/does not update itself/)).toBeDefined();
+    expect(screen.getByText(/taken to the latest download page/i)).toBeDefined();
   });
 
   it("stays available after the popover notice is dismissed", async () => {
