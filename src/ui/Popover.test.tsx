@@ -60,6 +60,7 @@ const snapshot: Snapshot = {
   appVersion: "0.1.0",
   update: null,
   noteIsInternal: false,
+  internalNotesAvailable: true,
   includePrereleases: false,
   azure: {
     enabled: false,
@@ -1535,5 +1536,56 @@ describe("which note is shown", () => {
     render(<Popover />);
 
     expect(await screen.findByText("No note")).toBeDefined();
+  });
+});
+
+describe("when the plan has no Internal Notes", () => {
+  const unavailable = (over: Partial<Snapshot> = {}): Snapshot => ({
+    ...snapshot,
+    internalNotesAvailable: false,
+    ...over,
+  });
+
+  it("shows no switch at all", async () => {
+    api.getSnapshot.mockResolvedValue(unavailable());
+    render(<Popover />);
+    await screen.findByPlaceholderText(/What are you working on/);
+
+    expect(screen.queryByRole("checkbox", { name: "Internal note" })).toBeNull();
+    expect(document.querySelector(".note-lock")).toBeNull();
+  });
+
+  it("leaves the note field looking like a note field", async () => {
+    api.getSnapshot.mockResolvedValue(unavailable());
+    render(<Popover />);
+
+    expect(await screen.findByText("Note")).toBeDefined();
+    expect(document.querySelector(".with-play.internal")).toBeNull();
+  });
+
+  it("sends notes as client notes, even if the toggle was on before", async () => {
+    // The service reports the effective state, so a preference left over from a plan that
+    // used to have the feature cannot keep writing to a field that is no longer there.
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(unavailable({ noteIsInternal: false }));
+    api.switchTo.mockResolvedValue(snapshot);
+    render(<Popover />);
+
+    await user.type(await screen.findByPlaceholderText(/What are you working on/), "Chasing Bob{Enter}");
+
+    expect(api.switchTo).toHaveBeenCalledWith("p_acme:t_qa", "Chasing Bob", "client");
+  });
+
+  it("still shows an internal note that already exists", async () => {
+    // Reading the field is harmless whatever the plan says, and an entry that has one
+    // should not read as blank because a switch was turned off.
+    api.getSnapshot.mockResolvedValue(
+      unavailable({
+        today: [entry("te_1", "p_acme", "t_dev", { notes: null, internal_notes: "Chasing" })],
+      }),
+    );
+    render(<Popover />);
+
+    expect(await screen.findByText("Chasing")).toBeDefined();
   });
 });

@@ -50,6 +50,16 @@ export interface Preferences {
    * is private. Off by default — a note is client-visible unless someone says otherwise.
    */
   noteIsInternal: boolean;
+  /**
+   * Whether this workspace's Keito plan has Internal Notes at all.
+   *
+   * Declared by the user, because it cannot be detected: `/users/me` carries no plan, tier
+   * or feature list, and there is no endpoint that reports one. Off by default — the cost
+   * of being wrong is asymmetric. Hidden when it is available is an annoyance; offered when
+   * it is not means a note written to a field the plan does not have, which is work lost
+   * with nothing on screen to say so.
+   */
+  internalNotesAvailable: boolean;
   /** Whether the Azure DevOps integration is switched on in Integrations. */
   azureEnabled: boolean;
   /**
@@ -72,6 +82,7 @@ const defaults = (): Preferences => ({
   trayPrefix: "none",
   includePrereleases: false,
   noteIsInternal: false,
+  internalNotesAvailable: false,
   azureEnabled: false,
 });
 

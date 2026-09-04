@@ -19,6 +19,7 @@ const api = {
   resetAll: vi.fn(),
   openLog: vi.fn(),
   openExternal: vi.fn(),
+  setInternalNotesAvailable: vi.fn(),
   setIncludePrereleases: vi.fn(),
 
   disconnectAzure: vi.fn(),
@@ -64,6 +65,7 @@ const snapshot: Snapshot = {
   appVersion: "0.1.0",
   update: null,
   noteIsInternal: false,
+  internalNotesAvailable: true,
   includePrereleases: false,
 
   azure: {
@@ -1538,5 +1540,43 @@ describe("which note the entries table shows", () => {
 
     const notes = await screen.findByDisplayValue("");
     expect((notes as HTMLInputElement).value).toBe("");
+  });
+});
+
+describe("the Internal Notes plan setting", () => {
+  const openSettings = async () => {
+    const user = userEvent.setup();
+    render(<ReviewWindow />);
+    await user.click(await screen.findByRole("button", { name: "Settings" }));
+    return user;
+  };
+
+  it("says why the app has to ask", async () => {
+    // Every other setting is a preference. This one is a fact about billing that the API
+    // gives no way to read, and saying so is better than looking like laziness.
+    api.getSnapshot.mockResolvedValue(snapshot);
+    await openSettings();
+
+    expect(screen.getByText(/no way to tell whether/i)).toBeDefined();
+  });
+
+  it("switches the feature on", async () => {
+    api.getSnapshot.mockResolvedValue({ ...snapshot, internalNotesAvailable: false });
+    api.setInternalNotesAvailable.mockResolvedValue(snapshot);
+    const user = await openSettings();
+
+    await user.click(screen.getByRole("checkbox", { name: "My plan has Internal Notes" }));
+
+    expect(api.setInternalNotesAvailable).toHaveBeenCalledWith(true);
+  });
+
+  it("switches it off again", async () => {
+    api.getSnapshot.mockResolvedValue(snapshot);
+    api.setInternalNotesAvailable.mockResolvedValue({ ...snapshot, internalNotesAvailable: false });
+    const user = await openSettings();
+
+    await user.click(screen.getByRole("checkbox", { name: "My plan has Internal Notes" }));
+
+    expect(api.setInternalNotesAvailable).toHaveBeenCalledWith(false);
   });
 });

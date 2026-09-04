@@ -507,6 +507,21 @@ function Settings({
         </p>
       )}
 
+      <h2>Notes</h2>
+      <p className="hint">
+        Internal Notes are a Keito plan feature, and the API gives no way to tell whether
+        yours has them — so this is the one setting you have to answer for yourself. With it
+        on, the popover gets a switch that keeps a note to your team.
+      </p>
+      <div className="setting-row">
+        <span className="setting-label">My plan has Internal Notes</span>
+        <Toggle
+          checked={snapshot.internalNotesAvailable}
+          label="My plan has Internal Notes"
+          onChange={(next) => keito.setInternalNotesAvailable(next).then(onChange)}
+        />
+      </div>
+
       <h2>Updates</h2>
       <div className="setting-row">
         <span className="setting-label">Include pre-releases</span>

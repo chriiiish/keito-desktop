@@ -135,10 +135,24 @@ until a contract test covers it.
   today as a `YYYY-MM-DD` string rather than a `Date` so the comparison cannot drift.
 - **A time entry has two notes.** Keito calls them **Notes** (client-visible) and
   **Internal Notes** (team-only); so does this app, and so should anything written about it.
-  `notes` is documented; **`internal_notes` is not** — the name was inferred from Keito's
-  own terminology and its snake_case convention, and a contract test exists to prove it
-  round-trips. It is the safe direction to be wrong in: a wrong field name drops a note,
-  where the other way round would publish a private one to a client.
+  `notes` is documented; **`internal_notes` is not**, but the name is confirmed. A contract
+  test still covers the round trip, now as a regression guard rather than a check on a
+  guess.
+
+  **Internal Notes is a paid-plan feature and its availability cannot be detected.**
+  `/users/me` returns only `id`, `first_name`, `last_name`, `email`, `roles`, `user_type`
+  and `company{id,name}` — no plan, tier or feature list — and there is no endpoint that
+  reports entitlements. So `Preferences.internalNotesAvailable` is **declared by the user**
+  in Settings, off by default, and it is the one setting in this app that asks about
+  billing rather than preference. The copy says why, because otherwise it reads as
+  laziness.
+
+  Off by default because the costs are asymmetric: hidden on a plan that has it is an
+  annoyance, offered on a plan that does not is a note written to a field that is not there
+  — work lost with nothing on screen to say so. `Snapshot.noteIsInternal` reports the
+  **effective** state (`available && chosen`) so nothing downstream has to check both, and
+  `switchTo` **clamps to `client`** regardless of what the renderer sent: a window that has
+  not caught up must not write to a field this workspace does not have.
 
   **One display rule everywhere** — `visibleNote` in `src/core/keito/notes.ts`: the client
   note, then the internal one, then whatever that surface already did with no note at all

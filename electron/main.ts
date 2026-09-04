@@ -295,6 +295,9 @@ function registerIpc(): void {
 
   handle("dismiss-update", async () => service.dismissUpdate());
   handle("set-note-is-internal", async (internal: boolean) => service.setNoteIsInternal(internal));
+  handle("set-internal-notes-available", async (available: boolean) =>
+    service.setInternalNotesAvailable(available),
+  );
   handle("set-include-prereleases", async (include: boolean) => {
     await service.setIncludePrereleases(include);
     /*

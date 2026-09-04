@@ -101,8 +101,15 @@ export interface Snapshot {
   update: UpdateStatus | null;
   /** Whether update checks include pre-releases. The Settings toggle reads this. */
   includePrereleases: boolean;
-  /** Whether a typed note goes in Internal Notes. The popover's gold toggle reads this. */
+  /**
+   * Whether a typed note goes in Internal Notes. The popover's gold toggle reads this.
+   *
+   * Effective rather than raw: false whenever the plan does not have the feature, so one
+   * place decides it and nothing downstream has to remember to check both.
+   */
   noteIsInternal: boolean;
+  /** Whether the user has said their Keito plan has Internal Notes. Settings reads this. */
+  internalNotesAvailable: boolean;
   /** Azure DevOps: the toggle, the connection and the tickets the note field offers. */
   azure: AzureState;
   /** The company id sent as Keito-Account-Id, once known. */
@@ -259,7 +266,8 @@ export class AppService {
         ? { ...this.#update, dismissed: prefs.dismissedUpdate === this.#update.version }
         : null,
       includePrereleases: prefs.includePrereleases,
-      noteIsInternal: prefs.noteIsInternal,
+      noteIsInternal: prefs.internalNotesAvailable && prefs.noteIsInternal,
+      internalNotesAvailable: prefs.internalNotesAvailable,
       azure: this.#azureState(),
       accountId: prefs.accountId ?? null,
       apiKeyHint: this.#apiKeyHint,
@@ -376,12 +384,23 @@ export class AppService {
   async switchTo(
     pairId: string,
     notes?: string,
-    visibility: NoteVisibility = this.#prefs.get().noteIsInternal ? "internal" : "client",
+    visibility?: NoteVisibility,
   ): Promise<Snapshot> {
+    const prefs = this.#prefs.get();
+    const internal = prefs.internalNotesAvailable && prefs.noteIsInternal;
+    /*
+     * Clamped rather than trusted. The renderer sends what was on screen, but a window that
+     * has not caught up — or a plan switched off since it loaded — must not put a note in a
+     * field this workspace does not have, where it would be dropped and never seen again.
+     */
+    const field: NoteVisibility = !prefs.internalNotesAvailable
+      ? "client"
+      : (visibility ?? (internal ? "internal" : "client"));
+
     const pair = this.#catalog.find((candidate) => candidate.id === pairId);
     if (!pair || !this.#timer) return this.snapshot();
     return this.#run(async () => {
-      await this.#timer!.switchTo(pair, { text: notes, visibility });
+      await this.#timer!.switchTo(pair, { text: notes, visibility: field });
       const state = this.#timer!.current();
       this.#startedAtMs =
         state.status === "running"
@@ -470,6 +489,18 @@ export class AppService {
   /** Switches a typed note between Notes and Internal Notes. */
   async setNoteIsInternal(internal: boolean): Promise<Snapshot> {
     await this.#prefs.update({ noteIsInternal: internal });
+    return this.snapshot();
+  }
+
+  /**
+   * Records whether this workspace's plan has Internal Notes.
+   *
+   * Switching it off does not clear `noteIsInternal`; the snapshot reports the two together
+   * so nothing internal is sent while the feature is unavailable, and switching it back on
+   * returns the user to where they were.
+   */
+  async setInternalNotesAvailable(available: boolean): Promise<Snapshot> {
+    await this.#prefs.update({ internalNotesAvailable: available });
     return this.snapshot();
   }
 

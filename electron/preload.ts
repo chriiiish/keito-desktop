@@ -25,6 +25,8 @@ const api = {
     ipcRenderer.invoke("set-include-prereleases", include),
   setNoteIsInternal: (internal: boolean): Promise<Snapshot> =>
     ipcRenderer.invoke("set-note-is-internal", internal),
+  setInternalNotesAvailable: (available: boolean): Promise<Snapshot> =>
+    ipcRenderer.invoke("set-internal-notes-available", available),
   setAzureEnabled: (enabled: boolean): Promise<Snapshot> =>
     ipcRenderer.invoke("set-azure-enabled", enabled),
   connectAzure: (token: string, organisationUrl?: string): Promise<Snapshot> =>

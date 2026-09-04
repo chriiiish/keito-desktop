@@ -237,14 +237,21 @@ export function Popover(): JSX.Element {
               right-aligned above the play button, so the thing that decides where a note
               goes sits with the field it governs rather than beside the timer controls.
             */}
-            <span className={`note-visibility${visibility === "internal" ? " on" : ""}`}>
-              <Toggle
-                checked={visibility === "internal"}
-                label="Internal note"
-                onChange={(next) => keito.setNoteIsInternal(next).then(setSnapshot)}
-              />
-              {visibility !== "internal" && <ClosedPadlock />}
-            </span>
+            {/*
+              Only where the plan has Internal Notes. It cannot be detected, so it is
+              declared in Settings — see Preferences.internalNotesAvailable. Offering the
+              switch without the feature would write a note to a field that does not exist.
+            */}
+            {snapshot.internalNotesAvailable && (
+              <span className={`note-visibility${visibility === "internal" ? " on" : ""}`}>
+                <Toggle
+                  checked={visibility === "internal"}
+                  label="Internal note"
+                  onChange={(next) => keito.setNoteIsInternal(next).then(setSnapshot)}
+                />
+                {visibility !== "internal" && <ClosedPadlock />}
+              </span>
+            )}
           </div>
           <div className={`with-play${visibility === "internal" ? " internal" : ""}`}>
             <NoteField
