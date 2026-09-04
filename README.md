@@ -62,10 +62,10 @@ stop the first launch. **This is expected, and only happens once.**
   **More info → Run anyway**. The installer is per-user and lets you pick the directory.
 
   
-  If you get the following error on Windows it's probably because this exe isn't signed:
-  <img width="545" height="136" alt="image" src="https://github.com/user-attachments/assets/69049e8d-6e62-451e-842f-85831f629543" />
+If you see the following error on Windows, it's likely because the `.exe` isn't signed:
+<img width="545" height="136" alt="Windows cannot access the specified device error dialog" src="https://github.com/user-attachments/assets/69049e8d-6e62-451e-842f-85831f629543" />
 
-  Check here for how to be able to run the EXE: [How to Fix "Windows Cannot Access the Specified Device" Error in Windows - GeeksforGeeks](https://www.geeksforgeeks.org/techtips/fix-windows-cannot-access-specified-device-error/)
+Troubleshooting steps: [Fix "Windows Cannot Access the Specified Device" error (GeeksforGeeks)](https://www.geeksforgeeks.org/techtips/fix-windows-cannot-access-specified-device-error/)
 </details>
 
 ### 3. Connect it to Keito
