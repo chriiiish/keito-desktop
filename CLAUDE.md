@@ -133,6 +133,29 @@ until a contract test covers it.
   The suite cannot catch a regression here on its own: the fake echoes whatever
   `spent_date` it is sent, so tests written in UTC pass either way. `rankRecents` takes
   today as a `YYYY-MM-DD` string rather than a `Date` so the comparison cannot drift.
+- **An administrator's token returns the whole company's time entries.** Everything this
+  app shows is meant to be one person's own, so `KeitoClient` takes a `userId` and sends
+  `user_id` on every `/time_entries` call. It is held on the **client**, beside `accountId`,
+  rather than passed per call: three separate places list entries — the catalog load, the
+  entries window, and the running-timer lookup in `Timer.refresh()` — and a filter threaded
+  through each is one somebody eventually forgets. Forgetting it in the third means
+  **adopting a colleague's running timer as your own**.
+
+  The client then **filters the results again**. Not because `user_id` is expected to fail,
+  but because an unrecognised query parameter is far likelier to be *ignored* than to error,
+  and an ignored filter looks exactly like a working one until an administrator opens the
+  app. `belongsTo` treats an entry that does not name an owner as **yours** — hiding
+  somebody's own work because a response omitted a field would be the worse failure, and an
+  invisible one. `test/fake-keito.ts` can be told to ignore the filter (`honoursUserFilter:
+  false`) so that path is exercised, and a contract test prints which owner field the live
+  API actually returns.
+
+  **Projects are deliberately not filtered.** `GET /projects` has no user parameter —
+  `is_active`, `client_id`, `updated_since`, `owner_id`, `page`, `per_page` — and `owner_id`
+  is the project's owner rather than its members, so it would empty the list for almost
+  everyone. Favourites, the 30-day recents ranking and the Projects tab's visibility
+  switches already do that job, driven by the user rather than guessed at.
+
 - **There is no `GET /time_entries/:id`** — it answers `405`. Nothing may depend on reading
   a single entry; `PATCH` and `DELETE` go straight at the id.
 - **No ETags, no `If-Match`.** The docs describe both; the live API sends neither and

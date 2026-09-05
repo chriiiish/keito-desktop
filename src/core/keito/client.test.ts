@@ -6,6 +6,7 @@ import {
   KeitoReadOnlyError,
   KeitoRequestError,
 } from "./errors.js";
+import { FakeKeito } from "../../../test/fake-keito.js";
 
 /** A fetch stand-in that records requests and replays canned responses. */
 function stubFetch(responses: Array<{ status?: number; body?: unknown }>) {
@@ -173,5 +174,99 @@ describe("KeitoClient", () => {
     const client = new KeitoClient({ apiKey: "kto_valid", accountId: "co_9", fetch: fn });
 
     await expect(client.validateKey()).rejects.toBeInstanceOf(KeitoRequestError);
+  });
+});
+
+describe("only the signed-in user's time entries", () => {
+  const clientFor = (keito: FakeKeito, over: { userId?: string } = {}) =>
+    new KeitoClient({
+      apiKey: "kto_secret",
+      accountId: "co_9",
+      fetch: keito.fetch,
+      retryDelayMs: 0,
+      ...over,
+    });
+
+  /** An entry belonging to somebody else in the same workspace. */
+  const colleague = (id: string) => ({
+    id,
+    project_id: "p_acme",
+    task_id: "t_dev",
+    spent_date: "2026-09-04",
+    started_time: "09:00",
+    ended_time: "09:30",
+    timer_started_at: null,
+    hours: 0.5,
+    is_running: false,
+    notes: null,
+    source: null,
+    user_id: "u_someone_else",
+  });
+
+  const mine = (id: string) => ({ ...colleague(id), user_id: "u_1" });
+
+  it("asks Keito for its own user only", async () => {
+    const keito = new FakeKeito();
+    const client = clientFor(keito, { userId: "u_1" });
+
+    await client.listTimeEntries({ from: "2026-09-01", to: "2026-09-30" });
+
+    expect(keito.requests.at(-1)!.query["user_id"]).toBe("u_1");
+  });
+
+  it("leaves a colleague's entries out", async () => {
+    // An administrator's token returns the whole company's entries.
+    const keito = new FakeKeito();
+    keito.entries.push(mine("te_mine"), colleague("te_theirs"));
+    const client = clientFor(keito, { userId: "u_1" });
+
+    const entries = await client.listTimeEntries({});
+
+    expect(entries.map((entry) => entry.id)).toEqual(["te_mine"]);
+  });
+
+  it("leaves them out even when Keito ignores the filter", async () => {
+    // The failure this repository has been caught by before: a parameter the API does not
+    // recognise is ignored rather than rejected, so an unhonoured filter looks exactly
+    // like a working one until an administrator opens the app.
+    const keito = new FakeKeito({ honoursUserFilter: false });
+    keito.entries.push(mine("te_mine"), colleague("te_theirs"));
+    const client = clientFor(keito, { userId: "u_1" });
+
+    const entries = await client.listTimeEntries({});
+
+    expect(entries.map((entry) => entry.id)).toEqual(["te_mine"]);
+  });
+
+  it("keeps entries that do not say whose they are", async () => {
+    // Hiding somebody's own work because a response omitted the field would be worse than
+    // showing a row too many, and invisible: you cannot notice entries that are not there.
+    const keito = new FakeKeito({ honoursUserFilter: false });
+    keito.entries.push({ ...colleague("te_nameless"), user_id: null });
+    const client = clientFor(keito, { userId: "u_1" });
+
+    const entries = await client.listTimeEntries({});
+
+    expect(entries.map((entry) => entry.id)).toEqual(["te_nameless"]);
+  });
+
+  it("asks for nobody in particular before it knows who it is", async () => {
+    // The probe client that validates a key has no identity yet.
+    const keito = new FakeKeito();
+    const client = clientFor(keito);
+
+    await client.listTimeEntries({});
+
+    expect(keito.requests.at(-1)!.query).not.toHaveProperty("user_id");
+  });
+
+  it("filters the running-timer lookup too, so no one adopts a colleague's timer", async () => {
+    const keito = new FakeKeito({ honoursUserFilter: false });
+    keito.entries.push({ ...colleague("te_theirs"), is_running: true, hours: null });
+    const client = clientFor(keito, { userId: "u_1" });
+
+    const running = await client.listTimeEntries({ isRunning: true });
+
+    expect(running).toEqual([]);
   });
 });
