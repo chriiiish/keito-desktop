@@ -106,12 +106,16 @@ export interface CreateTimeEntryInput {
   isRunning?: boolean;
   /** Atomically stops whatever is running before starting this one. */
   replaceRunning?: boolean;
+  /** The client-visible note. */
   notes?: string;
+  /** The team-only note. One or the other is sent, never both — see NoteVisibility. */
+  internalNotes?: string;
   idempotencyKey?: string;
 }
 
 export interface UpdateTimeEntryInput {
   notes?: string;
+  internalNotes?: string;
   /** HH:mm in the workspace timezone — see core/time/workspace-time. */
   startedTime?: string;
   endedTime?: string;
@@ -174,6 +178,7 @@ export class KeitoClient {
     if (input.isRunning) body["is_running"] = true;
     if (input.replaceRunning) body["replace_running"] = true;
     if (input.notes) body["notes"] = input.notes;
+    if (input.internalNotes) body["internal_notes"] = input.internalNotes;
 
     const { body: created } = await this.#request("/time_entries", {
       method: "POST",
@@ -239,6 +244,7 @@ export class KeitoClient {
   async updateTimeEntry(id: string, patch: UpdateTimeEntryInput): Promise<TimeEntry> {
     const body: Record<string, unknown> = {};
     if (patch.notes !== undefined) body["notes"] = patch.notes;
+    if (patch.internalNotes !== undefined) body["internal_notes"] = patch.internalNotes;
     if (patch.startedTime !== undefined) body["started_time"] = patch.startedTime;
     if (patch.endedTime !== undefined) body["ended_time"] = patch.endedTime;
     if (patch.spentDate !== undefined) body["spent_date"] = patch.spentDate;

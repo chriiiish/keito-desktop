@@ -19,6 +19,7 @@ const api = {
   resetAll: vi.fn(),
   openLog: vi.fn(),
   openExternal: vi.fn(),
+  setInternalNotesAvailable: vi.fn(),
   setIncludePrereleases: vi.fn(),
 
   disconnectAzure: vi.fn(),
@@ -63,6 +64,8 @@ const snapshot: Snapshot = {
   platform: "darwin",
   appVersion: "0.1.0",
   update: null,
+  noteIsInternal: false,
+  internalNotesAvailable: true,
   includePrereleases: false,
 
   azure: {
@@ -1528,6 +1531,165 @@ describe("the integrations tab", () => {
   });
 });
 
+describe("which note the entries table shows", () => {
+  const row = (over: Record<string, unknown> = {}) => ({
+    id: "te_1",
+    project_id: "p_acme",
+    task_id: "t_dev",
+    spent_date: "2026-09-02",
+    started_time: "09:00",
+    ended_time: "09:30",
+    timer_started_at: null,
+    duration_seconds: null,
+    hours: 0.5,
+    is_running: false,
+    notes: null,
+    ...over,
+  });
+
+  const openEntries = async () => {
+    const user = userEvent.setup();
+    render(<ReviewWindow />);
+    await user.click(await screen.findByRole("button", { name: "Time Entries" }));
+    return user;
+  };
+
+  it("shows the client note when there is one", async () => {
+    api.listEntries.mockResolvedValue([
+      row({ notes: "Sprint planning", internal_notes: "Chasing the invoice" }),
+    ]);
+    await openEntries();
+
+    expect(await screen.findByDisplayValue("Sprint planning")).toBeDefined();
+  });
+
+  it("falls back to the internal note when the client one is empty", async () => {
+    api.listEntries.mockResolvedValue([row({ notes: "", internal_notes: "Chasing the invoice" })]);
+    await openEntries();
+
+    expect(await screen.findByDisplayValue("Chasing the invoice")).toBeDefined();
+  });
+
+  it("shows an empty field when neither has anything", async () => {
+    // The table's own no-note behaviour: a blank box you can type into.
+    api.listEntries.mockResolvedValue([row({ notes: null, internal_notes: null })]);
+    await openEntries();
+
+    const notes = await screen.findByDisplayValue("");
+    expect((notes as HTMLInputElement).value).toBe("");
+  });
+});
+
+describe("the Internal Notes plan setting", () => {
+  const openSettings = async () => {
+    const user = userEvent.setup();
+    render(<ReviewWindow />);
+    await user.click(await screen.findByRole("button", { name: "Settings" }));
+    return user;
+  };
+
+  it("says why the app has to ask", async () => {
+    // Every other setting is a preference. This one is a fact about billing that the API
+    // gives no way to read, and saying so is better than looking like laziness.
+    //
+    // The reason now lives behind this row's "i", along with every other setting's
+    // explanation, rather than in a paragraph under a heading. It is still said, and still
+    // said in full — this asks for it the way the page now offers it.
+    api.getSnapshot.mockResolvedValue(snapshot);
+    const user = await openSettings();
+
+    await user.click(screen.getByRole("button", { name: "About My plan has Internal Notes" }));
+
+    expect(screen.getByRole("tooltip").textContent).toMatch(/no way to tell whether/i);
+  });
+
+  it("switches the feature on", async () => {
+    api.getSnapshot.mockResolvedValue({ ...snapshot, internalNotesAvailable: false });
+    api.setInternalNotesAvailable.mockResolvedValue(snapshot);
+    const user = await openSettings();
+
+    await user.click(screen.getByRole("checkbox", { name: "My plan has Internal Notes" }));
+
+    expect(api.setInternalNotesAvailable).toHaveBeenCalledWith(true);
+  });
+
+  it("switches it off again", async () => {
+    api.getSnapshot.mockResolvedValue(snapshot);
+    api.setInternalNotesAvailable.mockResolvedValue({ ...snapshot, internalNotesAvailable: false });
+    const user = await openSettings();
+
+    await user.click(screen.getByRole("checkbox", { name: "My plan has Internal Notes" }));
+
+    expect(api.setInternalNotesAvailable).toHaveBeenCalledWith(false);
+  });
+});
+
+/**
+ * The table edits whichever note it displayed, so the save has to name the field it read
+ * from. The main process cannot work that out for itself: it caches only today's and
+ * yesterday's entries, and "This week" lists rows older than both. Left to guess, it
+ * defaults to the client note — which would publish an internal note the table was only
+ * showing as a fallback.
+ */
+describe("which note field an edit is written back to", () => {
+  const row = (over: Record<string, unknown> = {}) => ({
+    id: "te_1",
+    project_id: "p_acme",
+    task_id: "t_dev",
+    spent_date: "2026-09-02",
+    started_time: "09:00",
+    ended_time: "09:30",
+    timer_started_at: null,
+    duration_seconds: null,
+    hours: 0.5,
+    is_running: false,
+    notes: null,
+    ...over,
+  });
+
+  const editNote = async (over: Record<string, unknown>, typed: string) => {
+    api.listEntries.mockResolvedValue([row(over)]);
+    api.updateEntry.mockResolvedValue(snapshot);
+    const user = userEvent.setup();
+    render(<ReviewWindow />);
+    await user.click(await screen.findByRole("button", { name: "Time Entries" }));
+
+    const notes = await screen.findByPlaceholderText("—");
+    await user.clear(notes);
+    await user.type(notes, typed);
+    fireEvent.blur(notes);
+  };
+
+  it("names the internal field when the shown note was the internal fallback", async () => {
+    await editNote({ notes: "", internal_notes: "Chasing the invoice" }, "Chasing it again");
+
+    expect(api.updateEntry).toHaveBeenCalledWith("te_1", {
+      notes: "Chasing it again",
+      noteField: "internal",
+    });
+  });
+
+  it("names the client field when the shown note was the client one", async () => {
+    await editNote(
+      { notes: "Sprint planning", internal_notes: "Chasing the invoice" },
+      "Sprint review",
+    );
+
+    expect(api.updateEntry).toHaveBeenCalledWith("te_1", {
+      notes: "Sprint review",
+      noteField: "client",
+    });
+  });
+
+  it("names the client field for a row that had no note at all", async () => {
+    await editNote({ notes: null, internal_notes: null }, "First note");
+
+    expect(api.updateEntry).toHaveBeenCalledWith("te_1", {
+      notes: "First note",
+      noteField: "client",
+    });
+  });
+});
 /**
  * The page is a set of grouped tables rather than a run of headings with a paragraph under
  * each. The explanations still exist — they are behind the "i" beside the name they belong

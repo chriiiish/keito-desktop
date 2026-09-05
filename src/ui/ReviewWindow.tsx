@@ -14,6 +14,7 @@ import { InfoTip } from "./InfoTip.js";
 import { useSnapshot } from "./useSnapshot.js";
 import { shiftDate, workspaceDate } from "../core/time/workspace-time.js";
 import { entrySeconds, formatDecimalHours } from "../core/time/elapsed.js";
+import { visibleNote, visibleNoteField, type NoteVisibility } from "../core/keito/notes.js";
 import { useNow } from "./useNow.js";
 
 /** The Monday of the week a YYYY-MM-DD date falls in. */
@@ -206,7 +207,16 @@ function Entries({ revision, timeZone }: { revision: number; timeZone: string })
   // `hours` from the API renders as. Ticking only while a timer is actually going.
   const now = useNow(1000, entries.some((entry) => entry.is_running));
 
-  const edit = async (id: string, patch: { notes?: string; startedTime?: string; endedTime?: string }) => {
+  /**
+   * `noteField` travels with a note edit because only this table knows which of the two
+   * notes it put on screen. The main process caches today and yesterday alone, so for a
+   * row from earlier in the week it would have to guess — and its guess is the client
+   * note, which would publish an internal one the table was merely falling back to.
+   */
+  const edit = async (
+    id: string,
+    patch: { notes?: string; noteField?: NoteVisibility; startedTime?: string; endedTime?: string },
+  ) => {
     try {
       const next = await keito.updateEntry(id, patch);
       setError(next.error);
@@ -274,11 +284,14 @@ function Entries({ revision, timeZone }: { revision: number; timeZone: string })
               </td>
               <td>
                 <input
-                  defaultValue={entry.notes ?? ""}
+                  defaultValue={visibleNote(entry)}
                   placeholder="—"
                   onBlur={(event) => {
-                    if (event.target.value !== (entry.notes ?? "")) {
-                      void edit(entry.id, { notes: event.target.value });
+                    if (event.target.value !== visibleNote(entry)) {
+                      void edit(entry.id, {
+                        notes: event.target.value,
+                        noteField: visibleNoteField(entry),
+                      });
                     }
                   }}
                 />
@@ -578,6 +591,19 @@ function Settings({
             checked={snapshot.includePrereleases}
             label="Include pre-releases"
             onChange={(next) => keito.setIncludePrereleases(next).then(onChange)}
+          />
+        </SettingRow>
+      </SettingGroup>
+
+      <SettingGroup title="Notes">
+        <SettingRow
+          name="My plan has Internal Notes"
+          about="Internal Notes are a Keito plan feature, and the API gives no way to tell whether yours has them — so this is the one setting you have to answer for yourself. With it on, the popover gets a switch that keeps a note to your team."
+        >
+          <Toggle
+            checked={snapshot.internalNotesAvailable}
+            label="My plan has Internal Notes"
+            onChange={(next) => keito.setInternalNotesAvailable(next).then(onChange)}
           />
         </SettingRow>
       </SettingGroup>

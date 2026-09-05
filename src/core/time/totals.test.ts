@@ -264,3 +264,55 @@ describe("totalsByTaskAndNote does not trust the order it is handed", () => {
     expect(totals[0]!.latest.id).toBe("te_09");
   });
 });
+
+describe("grouping by the note you can actually see", () => {
+  const withNotes = (id: string, notes: string | null, internal: string | null) =>
+    entry({ id, notes, internal_notes: internal });
+
+  it("keeps two different internal notes apart", () => {
+    // They group by the note that is *displayed*, not by the client-visible field alone.
+    // Keying on `notes` put every internal-only entry in one bucket — both have no client
+    // note — so two unrelated pieces of work merged into a row showing one of them.
+    const totals = totalsByTaskAndNote(
+      [withNotes("te_1", null, "Chasing the invoice"), withNotes("te_2", null, "Prepping the demo")],
+      NOW,
+      TZ,
+    );
+
+    expect(totals).toHaveLength(2);
+  });
+
+  it("still adds up two stretches of the same internal note", () => {
+    const totals = totalsByTaskAndNote(
+      [withNotes("te_1", null, "Chasing the invoice"), withNotes("te_2", null, "Chasing the invoice")],
+      NOW,
+      TZ,
+    );
+
+    expect(totals).toHaveLength(1);
+    expect(totals[0]!.seconds).toBe(60 * 60);
+  });
+
+  it("keeps a client note apart from an internal note of the same words", () => {
+    // Same text, different audience: still two different things.
+    const totals = totalsByTaskAndNote(
+      [withNotes("te_1", "Sprint planning", null), withNotes("te_2", null, "Sprint planning")],
+      NOW,
+      TZ,
+    );
+
+    expect(totals).toHaveLength(2);
+  });
+
+  it("counts an internal note toward the running total on the header clock", () => {
+    const seconds = loggedBeforeRunning(
+      [
+        running({ id: "te_2", notes: null, internal_notes: "Chasing the invoice" }),
+        withNotes("te_1", null, "Chasing the invoice"),
+      ],
+      TZ,
+    );
+
+    expect(seconds).toBe(30 * 60);
+  });
+});

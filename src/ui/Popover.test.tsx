@@ -22,6 +22,7 @@ const api = {
   setHidden: vi.fn(),
   closePopover: vi.fn(),
   openWindow: vi.fn(),
+  setNoteIsInternal: vi.fn(),
   openExternal: vi.fn(),
   dismissUpdate: vi.fn(),
   resolveIdle: vi.fn(),
@@ -58,6 +59,8 @@ const snapshot: Snapshot = {
   platform: "darwin",
   appVersion: "0.1.0",
   update: null,
+  noteIsInternal: false,
+  internalNotesAvailable: true,
   includePrereleases: false,
   azure: {
     enabled: false,
@@ -231,7 +234,7 @@ describe("the start form", () => {
     const note = await screen.findByPlaceholderText(/what are you working on/i);
     await userEvent.setup().type(note, "Sprint planning{Enter}");
 
-    expect(api.switchTo).toHaveBeenCalledWith("p_acme:t_qa", "Sprint planning");
+    expect(api.switchTo).toHaveBeenCalledWith("p_acme:t_qa", "Sprint planning", "client");
   });
 });
 
@@ -740,7 +743,7 @@ describe("yesterday's entries", () => {
 
     await userEvent.setup().click(await screen.findByLabelText(/^Start Ops again today$/));
 
-    expect(api.switchTo).toHaveBeenCalledWith("p_bank:t_ops", "Migration");
+    expect(api.switchTo).toHaveBeenCalledWith("p_bank:t_ops", "Migration", "client");
     expect(api.resumeEntry).not.toHaveBeenCalled();
   });
 
@@ -751,7 +754,7 @@ describe("yesterday's entries", () => {
 
     await userEvent.setup().click(await screen.findByLabelText(/^Start Ops again today$/));
 
-    expect(api.switchTo).toHaveBeenCalledWith("p_bank:t_ops", undefined);
+    expect(api.switchTo).toHaveBeenCalledWith("p_bank:t_ops", undefined, "client");
   });
 
   it("closes the popover once the new timer is running", async () => {
@@ -984,7 +987,7 @@ describe("the note field with Azure DevOps", () => {
 
     await user.type(await screen.findByPlaceholderText("What are you working on?"), "Just a note{Enter}");
 
-    expect(api.switchTo).toHaveBeenCalledWith("p_acme:t_qa", "Just a note");
+    expect(api.switchTo).toHaveBeenCalledWith("p_acme:t_qa", "Just a note", "client");
   });
 
   it("says what the mark means on hover", async () => {
@@ -1136,7 +1139,7 @@ describe("the note field with Azure DevOps", () => {
     expect(api.switchTo).not.toHaveBeenCalled();
 
     await user.keyboard("{Enter}");
-    expect(api.switchTo).toHaveBeenCalledWith("p_acme:t_qa", "88: Rework the timesheet export");
+    expect(api.switchTo).toHaveBeenCalledWith("p_acme:t_qa", "88: Rework the timesheet export", "client");
   });
 
   it("closes the list when you click the caption beside the field", async () => {
@@ -1230,7 +1233,7 @@ describe("the note field with Azure DevOps", () => {
     );
     await user.keyboard("{Enter}");
 
-    expect(api.switchTo).toHaveBeenCalledWith("p_acme:t_qa", "Reviewing a pull request");
+    expect(api.switchTo).toHaveBeenCalledWith("p_acme:t_qa", "Reviewing a pull request", "client");
   });
 
   it("offers nothing while the connection is broken", async () => {
@@ -1328,5 +1331,261 @@ describe("browsing the work item list", () => {
     await user.click(await screen.findByRole("button", { name: /show your azure devops work items/i }));
 
     expect(document.activeElement).toBe(screen.getByPlaceholderText(/What are you working on/));
+  });
+});
+
+describe("the internal-note toggle", () => {
+  const internal = (over: Partial<Snapshot> = {}): Snapshot => ({
+    ...snapshot,
+    noteIsInternal: true,
+    ...over,
+  });
+
+  it("is off by default, because a note is client-visible unless you say otherwise", async () => {
+    render(<Popover />);
+
+    const toggle = (await screen.findByRole("checkbox", { name: "Internal note" })) as HTMLInputElement;
+    expect(toggle.checked).toBe(false);
+    expect(screen.getByText("Note")).toBeDefined();
+  });
+
+  it("shows a padlock in the switch while the note is client-visible", async () => {
+    // An element, not a background image: the app's CSP is `default-src 'self'` with no
+    // `img-src`, so a data: URI is refused — which is how two attempts at this rendered
+    // perfectly in a plain page and not at all in the app. As an element it is assertable,
+    // which a background image never was.
+    render(<Popover />);
+    await screen.findByPlaceholderText(/What are you working on/);
+
+    expect(document.querySelector(".note-lock")).not.toBeNull();
+  });
+
+  it("takes the padlock away once the note is internal", async () => {
+    api.getSnapshot.mockResolvedValue(internal());
+    render(<Popover />);
+    await screen.findByPlaceholderText(/What are you working on/);
+
+    expect(document.querySelector(".note-lock")).toBeNull();
+  });
+
+  it("turns the caption gold with the switch", async () => {
+    // The caption is the plain-language half of the same signal; the colour is the half
+    // you catch out of the corner of your eye.
+    api.getSnapshot.mockResolvedValue(internal());
+    render(<Popover />);
+
+    expect((await screen.findByText("Internal Note")).className).toContain("internal");
+  });
+
+  it("leaves the caption plain while the note is client-visible", async () => {
+    render(<Popover />);
+
+    expect((await screen.findByText("Note")).className).not.toContain("internal");
+  });
+
+  it("names the field rather than labelling the toggle", async () => {
+    // The caption says which note this is, so the switch carries no word of its own.
+    api.getSnapshot.mockResolvedValue(internal());
+    render(<Popover />);
+
+    expect(await screen.findByText("Internal Note")).toBeDefined();
+    expect(screen.queryByText("Note")).toBeNull();
+  });
+
+  it("sits with the note caption rather than beside the timer controls", async () => {
+    render(<Popover />);
+    await screen.findByText("Note");
+
+    const head = screen.getByText("Note").parentElement!;
+    expect(within(head).getByRole("checkbox", { name: "Internal note" })).toBeDefined();
+  });
+
+  it("switches a typed note to internal", async () => {
+    const user = userEvent.setup();
+    api.setNoteIsInternal.mockResolvedValue(internal());
+    render(<Popover />);
+
+    await user.click(await screen.findByRole("checkbox", { name: "Internal note" }));
+
+    expect(api.setNoteIsInternal).toHaveBeenCalledWith(true);
+  });
+
+  it("switches back again", async () => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(internal());
+    api.setNoteIsInternal.mockResolvedValue(snapshot);
+    render(<Popover />);
+
+    await user.click(await screen.findByRole("checkbox", { name: "Internal note" }));
+
+    expect(api.setNoteIsInternal).toHaveBeenCalledWith(false);
+  });
+
+  it("sends a note as internal while it is on, and never as a client note", async () => {
+    // The failure that matters: a note somebody marked private reaching the client field.
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(internal());
+    api.switchTo.mockResolvedValue(internal());
+    render(<Popover />);
+
+    await user.type(await screen.findByPlaceholderText(/What are you working on/), "Chasing Bob{Enter}");
+
+    expect(api.switchTo).toHaveBeenCalledWith("p_acme:t_qa", "Chasing Bob", "internal");
+  });
+
+  it("shows the state on the field as well as the toggle", async () => {
+    // The setting is remembered between timers, so the gold border is what stops someone
+    // typing a private note into a field they last set up days ago.
+    api.getSnapshot.mockResolvedValue(internal());
+    render(<Popover />);
+    await screen.findByPlaceholderText(/What are you working on/);
+
+    expect((screen.getByRole("checkbox", { name: "Internal note" }) as HTMLInputElement).checked).toBe(true);
+    expect(document.querySelector(".note-visibility.on")).not.toBeNull();
+    expect(document.querySelector(".with-play.internal")).not.toBeNull();
+  });
+
+  it("shows the client note, falling back to the internal one", async () => {
+    api.getSnapshot.mockResolvedValue({
+      ...snapshot,
+      today: [
+        entry("te_1", "p_acme", "t_dev", { notes: "Sprint planning", internal_notes: "Chasing" }),
+        entry("te_2", "p_bank", "t_dev", { notes: null, internal_notes: "Chasing the invoice" }),
+      ],
+    } satisfies Snapshot);
+
+    render(<Popover />);
+
+    expect(await screen.findByText("Sprint planning")).toBeDefined();
+    expect(screen.getByText("Chasing the invoice")).toBeDefined();
+  });
+
+  it("starts yesterday's internal note again as internal, not as a client note", async () => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue({
+      ...snapshot,
+      yesterday: [
+        entry("te_y", "p_acme", "t_dev", {
+          spent_date: "2026-09-01",
+          notes: null,
+          internal_notes: "Chasing the invoice",
+        }),
+      ],
+    } satisfies Snapshot);
+    api.switchTo.mockResolvedValue(snapshot);
+    render(<Popover />);
+
+    await user.click(await screen.findByLabelText(/^Start Development again today$/));
+
+    expect(api.switchTo).toHaveBeenCalledWith("p_acme:t_dev", "Chasing the invoice", "internal");
+  });
+});
+
+describe("which note is shown", () => {
+  const shown = (over: Partial<TimeEntry>) => ({
+    ...snapshot,
+    today: [entry("te_1", "p_acme", "t_dev", over)],
+  }) satisfies Snapshot;
+
+  it("shows the client note when there is one", async () => {
+    api.getSnapshot.mockResolvedValue(
+      shown({ notes: "Sprint planning", internal_notes: "Chasing the invoice" }),
+    );
+    render(<Popover />);
+
+    expect(await screen.findByText("Sprint planning")).toBeDefined();
+    expect(screen.queryByText("Chasing the invoice")).toBeNull();
+  });
+
+  it("falls back to the internal note when the client one is empty", async () => {
+    for (const notes of [null, "", "   "]) {
+      api.getSnapshot.mockResolvedValue(shown({ notes, internal_notes: "Chasing the invoice" }));
+      const view = render(<Popover />);
+
+      expect(await screen.findByText("Chasing the invoice"), String(notes)).toBeDefined();
+      view.unmount();
+    }
+  });
+
+  it("falls back to the task name when neither note has anything", async () => {
+    // The no-note behaviour that was there before either field existed.
+    for (const [notes, internal] of [
+      [null, null],
+      ["", ""],
+      ["  ", "  "],
+    ] as const) {
+      api.getSnapshot.mockResolvedValue(shown({ notes, internal_notes: internal }));
+      const view = render(<Popover />);
+
+      expect(await screen.findByText("Development"), `${notes}/${internal}`).toBeDefined();
+      view.unmount();
+    }
+  });
+
+  it("says No note in the header when a running timer has neither", async () => {
+    api.getSnapshot.mockResolvedValue({
+      ...snapshot,
+      timer: {
+        status: "running",
+        pair: snapshot.catalog[0]!,
+        entryId: "te_1",
+        startedAtMs: Date.now(),
+        note: null,
+      },
+    } satisfies Snapshot);
+    render(<Popover />);
+
+    expect(await screen.findByText("No note")).toBeDefined();
+  });
+});
+
+describe("when the plan has no Internal Notes", () => {
+  const unavailable = (over: Partial<Snapshot> = {}): Snapshot => ({
+    ...snapshot,
+    internalNotesAvailable: false,
+    ...over,
+  });
+
+  it("shows no switch at all", async () => {
+    api.getSnapshot.mockResolvedValue(unavailable());
+    render(<Popover />);
+    await screen.findByPlaceholderText(/What are you working on/);
+
+    expect(screen.queryByRole("checkbox", { name: "Internal note" })).toBeNull();
+    expect(document.querySelector(".note-lock")).toBeNull();
+  });
+
+  it("leaves the note field looking like a note field", async () => {
+    api.getSnapshot.mockResolvedValue(unavailable());
+    render(<Popover />);
+
+    expect(await screen.findByText("Note")).toBeDefined();
+    expect(document.querySelector(".with-play.internal")).toBeNull();
+  });
+
+  it("sends notes as client notes, even if the toggle was on before", async () => {
+    // The service reports the effective state, so a preference left over from a plan that
+    // used to have the feature cannot keep writing to a field that is no longer there.
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(unavailable({ noteIsInternal: false }));
+    api.switchTo.mockResolvedValue(snapshot);
+    render(<Popover />);
+
+    await user.type(await screen.findByPlaceholderText(/What are you working on/), "Chasing Bob{Enter}");
+
+    expect(api.switchTo).toHaveBeenCalledWith("p_acme:t_qa", "Chasing Bob", "client");
+  });
+
+  it("still shows an internal note that already exists", async () => {
+    // Reading the field is harmless whatever the plan says, and an entry that has one
+    // should not read as blank because a switch was turned off.
+    api.getSnapshot.mockResolvedValue(
+      unavailable({
+        today: [entry("te_1", "p_acme", "t_dev", { notes: null, internal_notes: "Chasing" })],
+      }),
+    );
+    render(<Popover />);
+
+    expect(await screen.findByText("Chasing")).toBeDefined();
   });
 });

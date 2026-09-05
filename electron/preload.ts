@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { Snapshot } from "./service.js";
 import type { TimeEntry } from "../src/core/keito/types.js";
+import type { NoteVisibility } from "../src/core/keito/notes.js";
 
 /** The only surface the renderer can reach. No node, no direct network. */
 const api = {
@@ -12,8 +13,8 @@ const api = {
   signOut: (): Promise<Snapshot> => ipcRenderer.invoke("sign-out"),
   resetAll: (): Promise<Snapshot> => ipcRenderer.invoke("reset-all"),
   refresh: (): Promise<Snapshot> => ipcRenderer.invoke("refresh"),
-  switchTo: (pairId: string, notes?: string): Promise<Snapshot> =>
-    ipcRenderer.invoke("switch-to", pairId, notes),
+  switchTo: (pairId: string, notes?: string, visibility?: "client" | "internal"): Promise<Snapshot> =>
+    ipcRenderer.invoke("switch-to", pairId, notes, visibility),
   stopTimer: (): Promise<Snapshot> => ipcRenderer.invoke("stop-timer"),
   resumeEntry: (entryId: string): Promise<Snapshot> => ipcRenderer.invoke("resume-entry", entryId),
   toggleFavourite: (pairId: string): Promise<Snapshot> => ipcRenderer.invoke("toggle-favourite", pairId),
@@ -23,6 +24,10 @@ const api = {
   dismissUpdate: (): Promise<Snapshot> => ipcRenderer.invoke("dismiss-update"),
   setIncludePrereleases: (include: boolean): Promise<Snapshot> =>
     ipcRenderer.invoke("set-include-prereleases", include),
+  setNoteIsInternal: (internal: boolean): Promise<Snapshot> =>
+    ipcRenderer.invoke("set-note-is-internal", internal),
+  setInternalNotesAvailable: (available: boolean): Promise<Snapshot> =>
+    ipcRenderer.invoke("set-internal-notes-available", available),
   setAzureEnabled: (enabled: boolean): Promise<Snapshot> =>
     ipcRenderer.invoke("set-azure-enabled", enabled),
   connectAzure: (token: string, organisationUrl?: string): Promise<Snapshot> =>
@@ -38,7 +43,7 @@ const api = {
     ipcRenderer.invoke("list-entries", from, to),
   updateEntry: (
     id: string,
-    patch: { notes?: string; startedTime?: string; endedTime?: string },
+    patch: { notes?: string; noteField?: NoteVisibility; startedTime?: string; endedTime?: string },
   ): Promise<Snapshot> => ipcRenderer.invoke("update-entry", id, patch),
   deleteEntry: (id: string): Promise<Snapshot> => ipcRenderer.invoke("delete-entry", id),
   openLog: (): Promise<void> => ipcRenderer.invoke("open-log"),

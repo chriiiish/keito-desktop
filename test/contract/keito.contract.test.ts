@@ -113,6 +113,53 @@ suite("Keito API contract", () => {
 });
 
 /**
+ * Whether `internal_notes` is really what Keito calls the team-only note.
+ *
+ * The public docs list one notes field. The name used here was inferred from Keito's own
+ * terminology — "Notes" and "Internal Notes" — and its snake_case convention. That is a
+ * reasonable inference and not a verified fact, which is what this is for.
+ *
+ * It is also the safe direction to be wrong in: a wrong field name means a note is dropped,
+ * where guessing the other way would publish a private note to a client. A failure here
+ * means notes marked internal are going nowhere, not going somewhere they should not.
+ */
+suite("internal notes", () => {
+  it("round-trips a note written to internal_notes", async () => {
+    const [pair] = await loadCatalog(client, new Date());
+    if (!pair) return;
+
+    const entry = await client.createTimeEntry({
+      projectId: pair.projectId,
+      taskId: pair.taskId,
+      spentDate: new Date().toISOString().slice(0, 10),
+      internalNotes: "keito-timer contract check — internal",
+    });
+    created.push(entry.id);
+
+    // By id, not the first row: a real workspace may already have entries on this date and
+    // the list is in no guaranteed order, so taking [0] could assert against someone else's
+    // note — or pass while the one just written is wrong.
+    const listed = await client.listTimeEntries({
+      from: entry.spent_date,
+      to: entry.spent_date,
+    });
+    const read = listed.find((candidate) => candidate.id === entry.id);
+    expect(read, "the entry just created was not in the day's listing").toBeTruthy();
+
+    console.log("internal_notes came back as:", read?.internal_notes ?? "(absent)");
+    console.log("notes came back as:", read?.notes ?? "(absent)");
+
+    // If this fails, the field is named something else and `noteFor` needs correcting.
+    expect(entry.internal_notes ?? read?.internal_notes).toBe(
+      "keito-timer contract check — internal",
+    );
+    // And it must not have leaked into the client-visible field, on the way out or back.
+    expect(entry.notes ?? "").not.toContain("internal");
+    expect(read?.notes ?? "").not.toContain("internal");
+  });
+});
+
+/**
  * The `user_id` filter, and whether a time entry says whose it is.
  *
  * Both are documented; neither has been seen working. This repository has been caught by

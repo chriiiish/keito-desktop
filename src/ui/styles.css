@@ -14,6 +14,19 @@
   --accent-soft: #e0e7ff;     /* indigo-100 */
   --on-accent: #ffffff;
   --star: #f59e0b;            /* amber-500 */
+  /*
+   * Gold for a mark drawn on a switch knob.
+   *
+   * The knob is white in both themes — `.switch .track::after` is a fixed #ffffff — so this
+   * has no dark-mode override, deliberately. Following a token that flips with the theme
+   * turns the mark pale on a white knob after dark, which is how the note padlock came to
+   * be invisible there in the first place.
+   *
+   * A shade deeper than --star (amber-500/400), because those are chosen to carry on the
+   * app's backgrounds rather than on white: amber-400 on white is about 1.7:1, which is a
+   * suggestion of a padlock rather than a padlock.
+   */
+  --on-knob: #b45309;         /* amber-700 — gold that still reads on white */
   --success: #059669;         /* emerald-600 */
   --danger: #dc2626;
   --rule-width: 2px;
@@ -209,6 +222,56 @@ button.primary:hover { filter: brightness(1.08); }
   line-height: 1;
 }
 .update-notice-dismiss:hover { color: var(--fg); }
+
+/* ── Internal-note toggle ────────────────────────────────── */
+/* Caption on the left, toggle right-aligned above the play button. */
+.field-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+
+/*
+ * Gold, and only gold, means the note is for the team.
+ *
+ * The app's own switch, recoloured, rather than a control of its own: it behaves like
+ * every other toggle here and carries no word, because the caption beside it already
+ * changes from "Note" to "Internal Note".
+ *
+ * --star is the amber already used for favourites rather than a new colour. This app has
+ * one warm accent, and a second would make two unrelated things look related.
+ */
+.note-visibility { display: inline-flex; position: relative; }
+.note-visibility.on .switch input:checked + .track { background: var(--star); }
+.note-visibility.on .switch input:focus-visible + .track { outline-color: var(--star); }
+
+/* The caption is the plain-language half of the same signal. */
+.field-label.internal { color: var(--star); }
+
+/*
+ * A closed padlock rides in the knob while the switch is off.
+ *
+ * Drawn as an SVG rather than set as a character: the lock codepoint renders as a colour
+ * emoji on macOS, which is the same reason the Yesterday button is two play triangles
+ * rather than a fast-forward glyph.
+ */
+/*
+ * The padlock sits over the knob's resting place — top 2px, left 2px, 16px across — rather
+ * than inside it, since the knob is a pseudo-element and cannot hold a child.
+ *
+ * It is an element and not a background image on purpose: index.html sets
+ * `default-src 'self'` with no `img-src`, so a `data:` URI is refused. That is why the
+ * first two attempts at this were invisible in the app and perfect everywhere else.
+ */
+.note-lock {
+  position: absolute;
+  left: 4px;
+  top: 4px;
+  width: 12px;
+  height: 12px;
+  color: var(--on-knob);
+  pointer-events: none;
+}
+
+/* The field itself carries the state too, so it is visible while you are typing in it. */
+.with-play.internal input { border-color: var(--star); }
+.with-play.internal input:focus { outline-color: var(--star); }
 
 /* ── Note field with Azure DevOps work items ─────────────── */
 /* Position relative so the listbox can hang off it; the popover itself does not scroll. */

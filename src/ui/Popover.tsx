@@ -4,9 +4,38 @@ import { CategoryPicker } from "./CategoryPicker.js";
 import { Elapsed } from "./Elapsed.js";
 import { RecentEntries } from "./RecentEntries.js";
 import { NoteField, type NoteFieldHandle } from "./NoteField.js";
+import { Toggle } from "./Toggle.js";
+import type { NoteVisibility } from "../core/keito/notes.js";
 import { loggedBeforeRunning } from "../core/time/totals.js";
 import { keito } from "./keito-api.js";
 import { useSnapshot } from "./useSnapshot.js";
+
+/**
+ * The padlock that rides in the switch while a note is client-visible.
+ *
+ * An element rather than a CSS `background-image`, because `index.html` sets
+ * `default-src 'self'` and declares no `img-src` — so a `data:` URI is an image the policy
+ * refuses to load. It rendered perfectly in a plain page and not at all in the app, which
+ * is a difference no test would have shown either: jsdom has no opinion about background
+ * images. As an element it is both allowed and assertable.
+ *
+ * Positioned over the knob's resting place rather than inside it: the knob is a
+ * pseudo-element and cannot hold a child.
+ */
+function ClosedPadlock(): JSX.Element {
+  return (
+    <svg className="note-lock" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <rect x="4" y="11" width="16" height="10" rx="2" fill="currentColor" />
+      <path
+        d="M8.5 11V7.5a3.5 3.5 0 0 1 7 0V11"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="3"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
 
 export function Popover(): JSX.Element {
   const [snapshot, setSnapshot] = useSnapshot();
@@ -14,6 +43,8 @@ export function Popover(): JSX.Element {
   const [note, setNote] = useState("");
 
   const [idle, setIdle] = useState<{ awaySinceMs: number; awaySeconds: number } | null>(null);
+  /** Which field a typed note is for. Remembered between timers, so it is read from the snapshot. */
+  const visibility: NoteVisibility = snapshot?.noteIsInternal ? "internal" : "client";
   const noteRef = useRef<NoteFieldHandle>(null);
 
   useEffect(() => keito.onIdleReturn(setIdle), []);
@@ -45,7 +76,7 @@ export function Popover(): JSX.Element {
 
   const [starting, start] = useAsyncAction(async () => {
     if (!selectedId) return;
-    const next = await keito.switchTo(selectedId, note.trim() || undefined);
+    const next = await keito.switchTo(selectedId, note.trim() || undefined, visibility);
     setSnapshot(next);
     if (!next.error) {
       setNote("");
@@ -63,8 +94,14 @@ export function Popover(): JSX.Element {
    * Yesterday's rows start a new entry dated today rather than restarting the old one,
    * which would file today's work under yesterday's date.
    */
-  const startAgain = async (pairId: string, notes: string | undefined) => {
-    const next = await keito.switchTo(pairId, notes);
+  const startAgain = async (
+    pairId: string,
+    notes: string | undefined,
+    visibility: NoteVisibility,
+  ) => {
+    // Keeps the note in the field it was already in: starting yesterday's internal note
+    // again must not publish it today.
+    const next = await keito.switchTo(pairId, notes, visibility);
     setSnapshot(next);
     if (!next.error) void keito.closePopover();
   };
@@ -190,8 +227,39 @@ export function Popover(): JSX.Element {
             pointerdown and the forwarded click reopened it, so it could be opened that way
             and never closed. */}
         <div className="field">
-          <span className="field-label">Note</span>
-          <div className="with-play">
+          <div className="field-head">
+            {/* The caption says which note this is, so the toggle needs no word of its own. */}
+            <span className={`field-label${visibility === "internal" ? " internal" : ""}`}>
+              {visibility === "internal" ? "Internal Note" : "Note"}
+            </span>
+            {/*
+              Gold means the note is for the team only. In line with the caption and
+              right-aligned above the play button, so the thing that decides where a note
+              goes sits with the field it governs rather than beside the timer controls.
+            */}
+            {/*
+              Only where the plan has Internal Notes. It cannot be detected, so it is
+              declared in Settings — see Preferences.internalNotesAvailable. Offering the
+              switch without the feature would write a note to a field that does not exist.
+            */}
+            {/*
+              No in-flight guard, for the same reason the update notice's dismiss has none:
+              `setNoteIsInternal` writes a preference and calls nothing on Keito, and the
+              rule about double-firing is about API calls. Two rapid clicks write the
+              preference twice and land on the state the switch is showing.
+            */}
+            {snapshot.internalNotesAvailable && (
+              <span className={`note-visibility${visibility === "internal" ? " on" : ""}`}>
+                <Toggle
+                  checked={visibility === "internal"}
+                  label="Internal note"
+                  onChange={(next) => keito.setNoteIsInternal(next).then(setSnapshot)}
+                />
+                {visibility !== "internal" && <ClosedPadlock />}
+              </span>
+            )}
+          </div>
+          <div className={`with-play${visibility === "internal" ? " internal" : ""}`}>
             <NoteField
               ref={noteRef}
               value={note}
