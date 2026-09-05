@@ -50,12 +50,34 @@ export interface KeitoClientOptions {
   apiKey: string;
   /** Omitted on first run: validateKey() discovers it from the identity response. */
   accountId?: string;
+  /**
+   * Whose entries to ask for. Omitted on first run, for the same reason as `accountId`.
+   *
+   * Held on the client rather than passed per call, so every caller inherits it. An
+   * administrator's token returns the *whole company's* time entries, and there are three
+   * separate places that list them — including the one that decides which timer is running
+   * and adopts it. Threading a parameter through each is a filter somebody eventually
+   * forgets, and forgetting it here means adopting a colleague's timer as your own.
+   */
+  userId?: string;
   baseUrl?: string;
   fetch: typeof fetch;
   /** Called once per request, for logging. Never receives the API key. */
   onRequest?: (record: RequestRecord) => void;
   /** Base backoff between retries of a throttled request. Tests set this to 0. */
   retryDelayMs?: number;
+}
+
+/**
+ * Is this entry the given user's, as far as the response says?
+ *
+ * Unknown counts as theirs. Hiding somebody's own work because a response did not name an
+ * owner would be a worse failure than showing a row too many, and it would be invisible —
+ * you cannot notice time entries that are not there.
+ */
+export function belongsTo(entry: TimeEntry, userId: string): boolean {
+  const owner = entry.user_id ?? entry.user?.id ?? null;
+  return owner === null || owner === userId;
 }
 
 /** Statuses worth trying again: Keito throttles /tasks under load with a 503. */
@@ -103,6 +125,7 @@ export interface UpdateTimeEntryInput {
 export class KeitoClient {
   #apiKey: string;
   #accountId: string | undefined;
+  #userId: string | undefined;
   #baseUrl: string;
   #fetch: typeof fetch;
   #onRequest: ((record: RequestRecord) => void) | undefined;
@@ -111,6 +134,7 @@ export class KeitoClient {
   constructor(options: KeitoClientOptions) {
     this.#apiKey = options.apiKey;
     this.#accountId = options.accountId;
+    this.#userId = options.userId;
     this.#baseUrl = options.baseUrl ?? KEITO_BASE_URL;
     this.#fetch = options.fetch;
     this.#onRequest = options.onRequest;
@@ -180,7 +204,25 @@ export class KeitoClient {
     if (filter.isRunning !== undefined) params["is_running"] = String(filter.isRunning);
     if (filter.from) params["from"] = filter.from;
     if (filter.to) params["to"] = filter.to;
-    return this.#paged<TimeEntry>("/time_entries", "time_entries", params);
+    // Documented as "filter by user". Asked for whenever we know who we are.
+    if (this.#userId) params["user_id"] = this.#userId;
+
+    const entries = await this.#paged<TimeEntry>("/time_entries", "time_entries", params);
+    if (!this.#userId) return entries;
+
+    /*
+     * Filtered again here, and not because the parameter is expected to fail.
+     *
+     * This repository has been caught before by documented behaviour that did not exist —
+     * ETags, If-Match and a single-entry GET were all built against docs and all fiction.
+     * A query parameter Keito does not recognise is far more likely to be *ignored* than
+     * to error, and an ignored filter looks exactly like a working one until an
+     * administrator opens the app and finds the whole company's day in it.
+     *
+     * Entries that do not say whose they are keep, so a response without the field cannot
+     * silently empty the list.
+     */
+    return entries.filter((entry) => belongsTo(entry, this.#userId!));
   }
 
   /**

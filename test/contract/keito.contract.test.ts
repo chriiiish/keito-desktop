@@ -158,3 +158,53 @@ suite("internal notes", () => {
     expect(read?.notes ?? "").not.toContain("internal");
   });
 });
+
+/**
+ * The `user_id` filter, and whether a time entry says whose it is.
+ *
+ * Both are documented; neither has been seen working. This repository has been caught by
+ * documented behaviour that turned out to be fiction before — ETags, `If-Match` and a
+ * single-entry `GET` were all built against the docs and none of them exist — so the
+ * client asks for the filter *and* filters again itself, and this is what tells us which
+ * of those two is actually doing the work.
+ *
+ * Run it as an administrator and it means something. Run it as a user who can only see
+ * their own entries and it passes trivially, which is worth knowing before reading much
+ * into a green result.
+ */
+suite("filtering time entries to one user", () => {
+  it("reports which field, if any, names the entry's owner", async () => {
+    const identity = await client.validateKey();
+    const entries = await client.listTimeEntries({});
+
+    // Not an assertion about the value — a printed answer to a question the docs do not
+    // cover. If both are undefined the client's second filter can never do anything, and
+    // an unhonoured `user_id` would go unnoticed.
+    const sample = entries[0];
+    console.log("user id from /users/me:", identity.userId);
+    console.log("entries returned:", entries.length);
+    console.log("sample entry user_id:", sample?.user_id ?? "(absent)");
+    console.log("sample entry user.id:", sample?.user?.id ?? "(absent)");
+
+    expect(identity.userId).toBeTruthy();
+  });
+
+  it("returns nobody else's entries", async () => {
+    const identity = await client.validateKey();
+    const scoped = new KeitoClient({
+      apiKey: apiKey ?? "",
+      ...(process.env["KEITO_ACCOUNT_ID"] ? { accountId: process.env["KEITO_ACCOUNT_ID"] } : {}),
+      userId: identity.userId,
+      fetch,
+    });
+
+    const entries = await scoped.listTimeEntries({});
+    const owners = new Set(
+      entries.map((entry) => entry.user_id ?? entry.user?.id).filter(Boolean),
+    );
+
+    // Either every entry names this user, or none of them name anyone — both are fine.
+    // Somebody else's id here means the filter is not working and neither is the fallback.
+    expect([...owners].filter((owner) => owner !== identity.userId)).toEqual([]);
+  });
+});

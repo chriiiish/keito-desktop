@@ -1127,6 +1127,43 @@ describe("the update tab", () => {
     expect(screen.getByRole("button", { name: "Time Entries" }).className).toContain("on");
   });
 
+  it("still opens on the update tab when the window is created for it", async () => {
+    // The real path from the popover notice: the window does not exist yet, so it is
+    // created, told which tab to show as soon as its page loads, and only *then* receives
+    // its first snapshot. Connecting-opens-entries fires on that first snapshot and threw
+    // the requested tab away, so clicking the notice landed on Time Entries — and only
+    // worked when the window happened to be open already.
+    const gate = deferred<Snapshot>();
+    api.getSnapshot.mockReturnValue(gate.promise);
+    render(<ReviewWindow />);
+
+    const show = api.onShowTab.mock.calls[0]![0];
+    await act(async () => show("update"));
+    await act(async () => {
+      gate.resolve(withUpdate());
+    });
+
+    expect(screen.getByText(/Keito Timer 0\.4\.0 is available/)).toBeDefined();
+  });
+
+  it("still opens on entries when nobody asked for a tab", async () => {
+    // The reset has a job: a new user who poked at the tabs while disconnected should
+    // land on their work once a key starts working, not on whatever they poked.
+    const gate = deferred<Snapshot>();
+    api.getSnapshot.mockReturnValue(gate.promise);
+    const user = userEvent.setup();
+    render(<ReviewWindow />);
+    await act(async () => {
+      gate.resolve({ ...snapshot, keyStatus: "missing" });
+    });
+    await user.click(await screen.findByRole("button", { name: "About" }));
+
+    const push = api.onSnapshot.mock.calls[0]![0];
+    await act(async () => push(snapshot));
+
+    expect(await screen.findByText(/nothing logged today/i)).toBeDefined();
+  });
+
   it("selects the tab when the main process asks for it", async () => {
     // How the popover notice gets here: an event, not Snapshot state.
     api.getSnapshot.mockResolvedValue(withUpdate());

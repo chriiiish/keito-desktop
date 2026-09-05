@@ -60,4 +60,15 @@ export interface TimeEntry {
    * empty, and neither is worth failing over — see `visibleNote`.
    */
   internal_notes?: string | null;
+  /**
+   * Who logged it. Both shapes are accepted because the API documents neither, and an
+   * entry that names its owner in *some* form is the only way to check that a filter was
+   * honoured rather than silently ignored.
+   *
+   * Absent means "this response does not say", which is treated as "keep it" — see
+   * `belongsTo`. Guessing that a nameless entry is somebody else's would hide the user's
+   * own work, which is a far worse failure than showing one row too many.
+   */
+  user_id?: string | null;
+  user?: { id?: string | null } | null;
 }
