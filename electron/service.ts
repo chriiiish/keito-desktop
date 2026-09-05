@@ -784,6 +784,9 @@ export class AppService {
     this.#client = new KeitoClient({
       apiKey: key,
       accountId: identity.accountId,
+      // An administrator's token can read the whole company's time entries. Everything
+      // this app shows is meant to be the signed-in user's own.
+      userId: identity.userId,
       fetch,
       onRequest: this.#logRequest,
     });
