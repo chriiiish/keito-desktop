@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { TimeEntry } from "../core/keito/types.js";
 import type { Snapshot } from "../../electron/service.js";
 import { keito } from "./keito-api.js";
@@ -10,6 +10,7 @@ import { IntegrationsTab } from "./IntegrationsTab.js";
 import { UpdateTab } from "./UpdateTab.js";
 import { ProjectsTab } from "./ProjectsTab.js";
 import { Toggle } from "./Toggle.js";
+import { InfoTip } from "./InfoTip.js";
 import { useSnapshot } from "./useSnapshot.js";
 import { shiftDate, workspaceDate } from "../core/time/workspace-time.js";
 import { entrySeconds, formatDecimalHours } from "../core/time/elapsed.js";
@@ -484,6 +485,63 @@ function Connection({
   );
 }
 
+/**
+ * One row of a settings table: what it is on the left, the control that changes it on the
+ * right, and the explanation folded into the "i" rather than printed underneath.
+ */
+function SettingRow({
+  name,
+  about,
+  children,
+  note,
+}: {
+  name: string;
+  about?: ReactNode;
+  children: ReactNode;
+  note?: ReactNode;
+}): JSX.Element {
+  return (
+    <tr>
+      <th scope="row">
+        <span className="setting-name">
+          {name}
+          {about && <InfoTip label={name}>{about}</InfoTip>}
+        </span>
+        {/*
+          A note stays on the page instead of going into the "i". These explain why a
+          control is disabled or unavailable, and an explanation you have to go looking for
+          is no use when the thing you just tried to click did not work.
+        */}
+        {note && <p className="hint">{note}</p>}
+      </th>
+      <td>{children}</td>
+    </tr>
+  );
+}
+
+/** A titled group of settings. The heading is the table's own caption. */
+function SettingGroup({ title, children }: { title: string; children: ReactNode }): JSX.Element {
+  return (
+    <table className="settings-table">
+      <caption>{title}</caption>
+      <tbody>{children}</tbody>
+    </table>
+  );
+}
+
+/**
+ * Preferences only — the connection lives on its own tab and project visibility on
+ * another.
+ *
+ * Grouped into tables rather than a run of headings each trailing a paragraph. There were
+ * six such headings, and the prose between them was most of the page's height while being
+ * the part you least often needed: the explanations now sit behind an "i" beside the name
+ * they explain.
+ *
+ * The menu bar label is its own group rather than a row, because it is five radios and a
+ * live preview rather than a single control, and squeezing that into a right-hand cell
+ * would make the one setting people actually change the hardest to read.
+ */
 function Settings({
   snapshot,
   onChange,
@@ -491,85 +549,95 @@ function Settings({
   snapshot: Snapshot;
   onChange: (next: Snapshot) => void;
 }): JSX.Element {
+  const trayHeading = snapshot.platform === "darwin" ? "Menu bar label" : "Tray label";
+
   return (
     <section className="settings">
-      <h2>Shortcut</h2>
-      <p className="hint">Press this anywhere to open the timer.</p>
-      <HotkeyRecorder
-        hotkey={snapshot.hotkey}
-        platform={snapshot.platform}
-        registered={snapshot.hotkeyRegistered}
-        onRecord={(accelerator) => keito.setHotkey(accelerator).then(onChange)}
-      />
+      <SettingGroup title="General">
+        <SettingRow name="Shortcut" about="Press this anywhere to open the timer.">
+          <HotkeyRecorder
+            hotkey={snapshot.hotkey}
+            platform={snapshot.platform}
+            registered={snapshot.hotkeyRegistered}
+            onRecord={(accelerator) => keito.setHotkey(accelerator).then(onChange)}
+          />
+        </SettingRow>
 
-      <h2>{snapshot.platform === "darwin" ? "Menu bar label" : "Tray label"}</h2>
-      <p className="hint">
-        {snapshot.platform === "darwin"
-          ? "What the menu bar shows while a timer runs."
-          : "What the tray tooltip leads with while a timer runs."}{" "}
-        The note leads by default — it is what says what you are doing.
-      </p>
-      <TrayLabelSettings snapshot={snapshot} onChange={onChange} />
+        <SettingRow
+          name="Run at startup"
+          about={
+            snapshot.platform === "darwin"
+              ? "Open Keito Timer when you log in, so the menu bar icon is there before you think to look for it."
+              : "Open Keito Timer when you sign in, so the tray icon is there before you think to look for it."
+          }
+          note={
+            !snapshot.canOpenAtLogin &&
+            "Unavailable in a development run: the login item would be registered against the Electron binary rather than Keito Timer, and would say so. Try it from an installed build."
+          }
+        >
+          <Toggle
+            checked={snapshot.openAtLogin}
+            label="Run at startup"
+            disabled={!snapshot.canOpenAtLogin}
+            onChange={(next) => keito.setOpenAtLogin(next).then(onChange)}
+          />
+        </SettingRow>
 
-      <h2>Startup</h2>
-      <p className="hint">
-        {snapshot.platform === "darwin"
-          ? "Open Keito Timer when you log in, so the menu bar icon is there before you think to look for it."
-          : "Open Keito Timer when you sign in, so the tray icon is there before you think to look for it."}
-      </p>
-      <div className="setting-row">
-        <span className="setting-label">Run at startup</span>
-        <Toggle
-          checked={snapshot.openAtLogin}
-          label="Run at startup"
-          disabled={!snapshot.canOpenAtLogin}
-          onChange={(next) => keito.setOpenAtLogin(next).then(onChange)}
-        />
+        <SettingRow
+          name="Include pre-releases"
+          about="Offer builds marked as pre-releases when checking for updates. They arrive earlier and have had less use."
+        >
+          <Toggle
+            checked={snapshot.includePrereleases}
+            label="Include pre-releases"
+            onChange={(next) => keito.setIncludePrereleases(next).then(onChange)}
+          />
+        </SettingRow>
+      </SettingGroup>
+
+      <SettingGroup title="Notes">
+        <SettingRow
+          name="My plan has Internal Notes"
+          about="Internal Notes are a Keito plan feature, and the API gives no way to tell whether yours has them — so this is the one setting you have to answer for yourself. With it on, the popover gets a switch that keeps a note to your team."
+        >
+          <Toggle
+            checked={snapshot.internalNotesAvailable}
+            label="My plan has Internal Notes"
+            onChange={(next) => keito.setInternalNotesAvailable(next).then(onChange)}
+          />
+        </SettingRow>
+      </SettingGroup>
+
+      <div className="settings-group">
+        <h2>
+          <span className="setting-name">
+            {trayHeading}
+            <InfoTip label={trayHeading}>
+              {snapshot.platform === "darwin"
+                ? "What the menu bar shows while a timer runs."
+                : "What the tray tooltip leads with while a timer runs."}{" "}
+              The note leads by default — it is what says what you are doing.
+            </InfoTip>
+          </span>
+        </h2>
+        <TrayLabelSettings snapshot={snapshot} onChange={onChange} />
       </div>
-      {!snapshot.canOpenAtLogin && (
-        <p className="hint">
-          Unavailable in a development run: the login item would be registered against the
-          Electron binary rather than Keito Timer, and would say so. Try it from an
-          installed build.
-        </p>
-      )}
 
-      <h2>Notes</h2>
-      <p className="hint">
-        Internal Notes are a Keito plan feature, and the API gives no way to tell whether
-        yours has them — so this is the one setting you have to answer for yourself. With it
-        on, the popover gets a switch that keeps a note to your team.
-      </p>
-      <div className="setting-row">
-        <span className="setting-label">My plan has Internal Notes</span>
-        <Toggle
-          checked={snapshot.internalNotesAvailable}
-          label="My plan has Internal Notes"
-          onChange={(next) => keito.setInternalNotesAvailable(next).then(onChange)}
-        />
-      </div>
+      <SettingGroup title="Workspace and diagnostics">
+        <SettingRow
+          name="Workspace timezone"
+          about="Only used when you edit a time by hand. Timers themselves are stamped by Keito."
+        >
+          <span className="setting-value">{snapshot.workspaceTimezone}</span>
+        </SettingRow>
 
-      <h2>Updates</h2>
-      <div className="setting-row">
-        <span className="setting-label">Include pre-releases</span>
-        <Toggle
-          checked={snapshot.includePrereleases}
-          label="Include pre-releases"
-          onChange={(next) => keito.setIncludePrereleases(next).then(onChange)}
-        />
-      </div>
-
-      <h2>Workspace timezone</h2>
-      <p className="hint">
-        Only used when you edit a time by hand. Timers themselves are stamped by Keito.
-      </p>
-      <input value={snapshot.workspaceTimezone} readOnly />
-
-      <h2>Diagnostics</h2>
-      <p className="hint">
-        Every request is logged with its status and timing. API keys are masked.
-      </p>
-      <AsyncButton onClick={() => keito.openLog()}>Open log file</AsyncButton>
+        <SettingRow
+          name="Log file"
+          about="Every request is logged with its status and timing. API keys are masked."
+        >
+          <AsyncButton onClick={() => keito.openLog()}>Open log file</AsyncButton>
+        </SettingRow>
+      </SettingGroup>
 
       <DangerZone onChange={onChange} />
     </section>

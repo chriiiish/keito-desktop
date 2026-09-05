@@ -464,6 +464,126 @@ button.link.muted:hover { color: var(--danger); }
 /* A label and its switch on one line, the way the per-task rows already read. The label
    is targeted by class, not as a descendant span: the Toggle's own .track is a span and a
    flex item, so `flex: 1` reached inside the switch and collapsed it to nothing. */
+/*
+ * ── Settings, as grouped tables ──────────────────────────
+ *
+ * A settings table is two columns: the name of the thing on the left, the control that
+ * changes it on the right. The row header is a `th scope="row"`, so the pairing survives
+ * for a screen reader rather than living only in the alignment.
+ *
+ * A `--line` hairline under the caption and between the rows — the same weight used within
+ * a section elsewhere, not the heavier `--rule` bars that separate whole sections. A group
+ * reads as a group without needing a box drawn around it.
+ */
+/*
+ * Every group is this wide — the tables and the menu bar label alike. One value, because
+ * three independent numbers is how the menu bar label came to sit 100px wider than
+ * everything above it.
+ */
+.settings { --settings-width: 460px; }
+
+.settings-table {
+  width: 100%;
+  max-width: var(--settings-width);
+  border-collapse: collapse;
+  margin: 0 0 22px;
+}
+.settings-table caption {
+  text-align: left;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  padding: 0 0 6px;
+  border-bottom: 1px solid var(--line);
+}
+/*
+ * The global `th` rule dresses the entries table's column headings — 11px, muted and
+ * uppercase. A setting's name is not a column heading: it is the label you read to find the
+ * thing you came to change, so it is reset to ordinary body text. Left inheriting, the page
+ * came out shouting every setting in grey capitals.
+ */
+.settings-table th {
+  text-align: left;
+  font-weight: normal;
+  font-size: 13px;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--fg);
+  vertical-align: middle;
+  /* The names take the slack, so the controls line up in one column down the page. */
+  width: 100%;
+  padding: 9px 12px 9px 0;
+  border-bottom: 1px solid var(--line);
+}
+.settings-table td {
+  /* The controls line up in one column however wide the names get. */
+  width: 1%;
+  white-space: nowrap;
+  text-align: right;
+  vertical-align: middle;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
+}
+.settings-table tr:last-child th,
+.settings-table tr:last-child td { border-bottom: none; }
+/* A value that cannot be edited is text, not a disabled-looking box you might try to type in. */
+.setting-value { color: var(--muted); }
+/* A note under a row's name is an aside, not a second label. */
+.settings-table th .hint { margin: 4px 0 0; font-size: 12px; white-space: normal; max-width: 300px; }
+
+/* The name and its "i" travel together, so the icon never wraps onto its own line. */
+.setting-name { display: inline-flex; align-items: center; gap: 5px; }
+
+/* The tray label group keeps a heading rather than a caption: it is a radio set, not rows. */
+.settings-group { margin: 0 0 22px; max-width: var(--settings-width); }
+/* The preview and the radio rows fill the group rather than setting a width of their own. */
+.settings-group .tray-label { max-width: 100%; }
+/* Matching the tables' captions exactly, so the two kinds of group read as one sequence. */
+.settings-group h2 { margin: 0 0 6px; font-weight: normal; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+
+/*
+ * ── The "i" beside a setting ─────────────────────────────
+ *
+ * The bubble is positioned against this wrapper, and is only in the DOM while open.
+ */
+.infotip { position: relative; display: inline-flex; }
+.infotip-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  color: var(--muted);
+  padding: 0;
+  border-radius: 50%;
+  /* A 13px glyph is a small target; the padding-free button gets a real one. */
+  width: 18px;
+  height: 18px;
+}
+.infotip-button:hover, .infotip-button[aria-expanded="true"] { color: var(--accent); border-color: transparent; }
+.infotip-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.infotip-bubble {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 6px);
+  left: -8px;
+  width: max-content;
+  max-width: 260px;
+  white-space: normal;
+  text-align: left;
+  font-size: 12px;
+  line-height: 1.45;
+  font-weight: normal;
+  color: var(--fg);
+  background: var(--raised);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 7px 9px;
+  box-shadow: 0 4px 12px rgb(15 23 42 / 0.12);
+}
+
 .setting-row { display: flex; align-items: center; gap: 12px; max-width: 460px; }
 .setting-label { flex: 1; min-width: 0; }
 
