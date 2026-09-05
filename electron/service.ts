@@ -9,7 +9,9 @@ import type { TrayFallback, TrayPrefix } from "../src/core/tray/label.js";
 import { Timer, type TimerState } from "../src/core/timer/timer.js";
 import { formatWorkspaceTime } from "../src/core/time/workspace-time.js";
 import { entryStartMs } from "../src/core/time/elapsed.js";
+import { visibleNote, visibleNoteField } from "../src/core/keito/notes.js";
 import { isNewerVersion, type ReleaseSummary } from "../src/core/version/version.js";
+import type { NoteVisibility } from "../src/core/keito/notes.js";
 import { AzureClient, normaliseOrganisationUrl } from "../src/core/azure/client.js";
 import { AzureError } from "../src/core/azure/errors.js";
 import { azureStatus } from "../src/core/azure/status.js";
@@ -99,6 +101,15 @@ export interface Snapshot {
   update: UpdateStatus | null;
   /** Whether update checks include pre-releases. The Settings toggle reads this. */
   includePrereleases: boolean;
+  /**
+   * Whether a typed note goes in Internal Notes. The popover's gold toggle reads this.
+   *
+   * Effective rather than raw: false whenever the plan does not have the feature, so one
+   * place decides it and nothing downstream has to remember to check both.
+   */
+  noteIsInternal: boolean;
+  /** Whether the user has said their Keito plan has Internal Notes. Settings reads this. */
+  internalNotesAvailable: boolean;
   /** Azure DevOps: the toggle, the connection and the tickets the note field offers. */
   azure: AzureState;
   /** The company id sent as Keito-Account-Id, once known. */
@@ -255,6 +266,8 @@ export class AppService {
         ? { ...this.#update, dismissed: prefs.dismissedUpdate === this.#update.version }
         : null,
       includePrereleases: prefs.includePrereleases,
+      noteIsInternal: prefs.internalNotesAvailable && prefs.noteIsInternal,
+      internalNotesAvailable: prefs.internalNotesAvailable,
       azure: this.#azureState(),
       accountId: prefs.accountId ?? null,
       apiKeyHint: this.#apiKeyHint,
@@ -268,7 +281,9 @@ export class AppService {
               pair: state.pair,
               entryId: state.entry.id,
               startedAtMs: this.#startedAtMs ?? Date.now(),
-              note: state.entry.notes ?? null,
+              // One rule everywhere: the client note, or the internal one when there is
+              // no client note. See visibleNote.
+              note: visibleNote(state.entry) || null,
             }
           : { status: state.status },
       error: this.#error,
@@ -360,11 +375,32 @@ export class AppService {
     this.#startedAtMs = null;
   }
 
-  async switchTo(pairId: string, notes?: string): Promise<Snapshot> {
+  /**
+   * Starts a timer. `visibility` says which of the two note fields the note is for, and
+   * defaults to the toggle's current setting — the popover passes it explicitly so that
+   * what was on screen when Enter was pressed is what gets sent, rather than whatever the
+   * preference happens to say by the time the call lands.
+   */
+  async switchTo(
+    pairId: string,
+    notes?: string,
+    visibility?: NoteVisibility,
+  ): Promise<Snapshot> {
+    const prefs = this.#prefs.get();
+    const internal = prefs.internalNotesAvailable && prefs.noteIsInternal;
+    /*
+     * Clamped rather than trusted. The renderer sends what was on screen, but a window that
+     * has not caught up — or a plan switched off since it loaded — must not put a note in a
+     * field this workspace does not have, where it would be dropped and never seen again.
+     */
+    const field: NoteVisibility = !prefs.internalNotesAvailable
+      ? "client"
+      : (visibility ?? (internal ? "internal" : "client"));
+
     const pair = this.#catalog.find((candidate) => candidate.id === pairId);
     if (!pair || !this.#timer) return this.snapshot();
     return this.#run(async () => {
-      await this.#timer!.switchTo(pair, notes);
+      await this.#timer!.switchTo(pair, { text: notes, visibility: field });
       const state = this.#timer!.current();
       this.#startedAtMs =
         state.status === "running"
@@ -448,6 +484,24 @@ export class AppService {
     if (this.#update && this.#update.version !== previous) {
       this.#log.info(`Update available: ${this.#update.version} (running ${this.#appVersion})`);
     }
+  }
+
+  /** Switches a typed note between Notes and Internal Notes. */
+  async setNoteIsInternal(internal: boolean): Promise<Snapshot> {
+    await this.#prefs.update({ noteIsInternal: internal });
+    return this.snapshot();
+  }
+
+  /**
+   * Records whether this workspace's plan has Internal Notes.
+   *
+   * Switching it off does not clear `noteIsInternal`; the snapshot reports the two together
+   * so nothing internal is sent while the feature is unavailable, and switching it back on
+   * returns the user to where they were.
+   */
+  async setInternalNotesAvailable(available: boolean): Promise<Snapshot> {
+    await this.#prefs.update({ internalNotesAvailable: available });
+    return this.snapshot();
   }
 
   /**
@@ -724,13 +778,41 @@ export class AppService {
     return this.#client.listTimeEntries({ from, to });
   }
 
+  /**
+   * Applies a correction from the entries table.
+   *
+   * A note is written back to **the field it was read from**. The table shows the client
+   * note or, failing that, the internal one — so saving an edited fallback as `notes`
+   * would hand a note somebody marked private straight to the client, without anything on
+   * screen suggesting it had happened.
+   *
+   * The caller says which field that was, in `noteField`. This process cannot work it out
+   * for every row the table can edit: it holds only today's and yesterday's entries, while
+   * the table's "This week" view lists rows older than both. Deciding from `#today` and
+   * `#yesterday` alone meant every one of those older rows fell through to the client
+   * note, which is exactly the disclosure the rule above exists to prevent.
+   *
+   * The local lookup stays as a fallback for a caller that sends no field, and only then
+   * does an unrecognised entry default to client — what typing into an untouched row is
+   * meant to produce.
+   */
   async updateEntry(
     id: string,
-    patch: { notes?: string; startedTime?: string; endedTime?: string },
+    patch: { notes?: string; noteField?: NoteVisibility; startedTime?: string; endedTime?: string },
   ): Promise<Snapshot> {
     if (!this.#client) return this.snapshot();
     return this.#run(async () => {
-      await this.#client!.updateTimeEntry(id, patch);
+      let { notes, noteField, ...rest } = patch;
+      const body: Parameters<KeitoClient["updateTimeEntry"]>[1] = { ...rest };
+
+      if (notes !== undefined) {
+        const entry = [...this.#today, ...this.#yesterday].find((candidate) => candidate.id === id);
+        const field = noteField ?? (entry ? visibleNoteField(entry) : "client");
+        if (field === "internal") body.internalNotes = notes;
+        else body.notes = notes;
+      }
+
+      await this.#client!.updateTimeEntry(id, body);
       await this.#reloadEntries();
     });
   }

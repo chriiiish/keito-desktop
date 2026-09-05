@@ -155,6 +155,64 @@ until a contract test covers it.
   is the project's owner rather than its members, so it would empty the list for almost
   everyone. Favourites, the 30-day recents ranking and the Projects tab's visibility
   switches already do that job, driven by the user rather than guessed at.
+- **A time entry has two notes.** Keito calls them **Notes** (client-visible) and
+  **Internal Notes** (team-only); so does this app, and so should anything written about it.
+  `notes` is documented; **`internal_notes` is not**, but the name is confirmed. A contract
+  test still covers the round trip, now as a regression guard rather than a check on a
+  guess.
+
+  **Internal Notes is a paid-plan feature and its availability cannot be detected.**
+  `/users/me` returns only `id`, `first_name`, `last_name`, `email`, `roles`, `user_type`
+  and `company{id,name}` — no plan, tier or feature list — and there is no endpoint that
+  reports entitlements. So `Preferences.internalNotesAvailable` is **declared by the user**
+  in Settings, off by default, and it is the one setting in this app that asks about
+  billing rather than preference. The copy says why, because otherwise it reads as
+  laziness.
+
+  Off by default because the costs are asymmetric: hidden on a plan that has it is an
+  annoyance, offered on a plan that does not is a note written to a field that is not there
+  — work lost with nothing on screen to say so. `Snapshot.noteIsInternal` reports the
+  **effective** state (`available && chosen`) so nothing downstream has to check both, and
+  `switchTo` **clamps to `client`** regardless of what the renderer sent: a window that has
+  not caught up must not write to a field this workspace does not have.
+
+  **One display rule everywhere** — `visibleNote` in `src/core/keito/notes.ts`: the client
+  note, then the internal one, then whatever that surface already did with no note at all
+  (the task name in the popover lists, the task or project in the menu bar label, an empty
+  box in the entries table). The chain ends where it always did rather than at a blank.
+
+  **`totalsByTaskAndNote` groups on the *visible* note too**, not on `notes`. Keying on the
+  client field alone put every internal-only entry in one bucket — they all have no client
+  note — so two unrelated pieces of work merged into one row showing one of their notes. The
+  field is part of the key as well as the text: the same words as a client note and as an
+  internal note are two different things. The menu bar label, today,
+  yesterday and the entries table all use it, so an entry never reads differently depending
+  on where you look at it. Whitespace is not a note; falling back on `"  "` would show an
+  entry as blank with an internal note sitting behind it.
+
+  **An edit writes back to the field it was read from** (`visibleNoteField`). The entries
+  table edits what it displays, so saving a corrected fallback as `notes` would hand a note
+  somebody marked private straight to the client, with nothing on screen to say so.
+
+  **`index.html` sets `default-src 'self'` and declares no `img-src`, so a `data:` URI is an
+image the renderer refuses to load.** A CSS `background-image: url("data:image/svg+xml,…")`
+therefore draws nothing — silently, with no layout change to notice. It cost two rounds on
+the note padlock, because it renders perfectly in any page without that meta tag and no test
+can see it: jsdom has no opinion about background images. **Draw small marks as inline
+`<svg>` elements**, which the policy does not govern and a test can assert. If a harness
+page is used to check appearance, give it the same CSP as `index.html` — and remember that
+`script-src 'self'` then rules out an inline `<script>` stub too.
+
+**The toggle is remembered between timers** (`Preferences.noteIsInternal`), which is what
+  makes the state load-bearing rather than decorative: the setting is sticky, so the caption,
+  the gold switch and the gold field border are the only things telling you the next note is
+  private. The caption changes from "Note" to "Internal Note", which is why the switch
+  carries no word of its own — the field says which note it is, and a label beside it would
+  be the same sentence twice. The popover passes the visibility explicitly to `switchTo` rather than letting
+  the service read the preference, so what was on screen when Enter was pressed is what
+  gets sent. It is the app's own `Toggle`, recoloured, rather than a control of its own, so it
+  behaves like every other switch here. Gold is `--star`, the amber already used for
+  favourites — one warm accent, not two that look related and are not.
 
 - **There is no `GET /time_entries/:id`** — it answers `405`. Nothing may depend on reading
   a single entry; `PATCH` and `DELETE` go straight at the id.

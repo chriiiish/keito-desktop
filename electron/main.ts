@@ -14,6 +14,7 @@ import { join } from "node:path";
 import { PreferencesStore } from "../src/core/store/preferences.js";
 import { IdleWatcher, shouldAutoStop } from "../src/core/timer/idle.js";
 import { formatTrayLabel } from "../src/core/tray/label.js";
+import type { NoteVisibility } from "../src/core/keito/notes.js";
 import { AppService, type Snapshot } from "./service.js";
 import { SecretStore } from "./secrets.js";
 import { Logger } from "./logger.js";
@@ -277,14 +278,20 @@ function registerIpc(): void {
   handle("set-company-id", async (accountId: string) => service.setCompanyId(accountId));
   handle("sign-out", async () => service.signOut());
   handle("refresh", async () => service.refresh());
-  handle("switch-to", async (pairId: string, notes?: string) => service.switchTo(pairId, notes));
+  handle("switch-to", async (pairId: string, notes?: string, visibility?: "client" | "internal") =>
+    service.switchTo(pairId, notes, visibility),
+  );
   handle("stop-timer", async () => service.stopTimer());
   handle("resume-entry", async (entryId: string) => service.resumeEntry(entryId));
   handle("toggle-favourite", async (pairId: string) => service.toggleFavourite(pairId));
   handle("set-hidden", async (pairIds: string[], hidden: boolean) => service.setHidden(pairIds, hidden));
   handle("list-entries", async (from: string, to: string) => service.listEntries(from, to));
-  handle("update-entry", async (id: string, patch: { notes?: string; startedTime?: string; endedTime?: string }) =>
-    service.updateEntry(id, patch),
+  handle(
+    "update-entry",
+    async (
+      id: string,
+      patch: { notes?: string; noteField?: NoteVisibility; startedTime?: string; endedTime?: string },
+    ) => service.updateEntry(id, patch),
   );
   handle("delete-entry", async (id: string) => service.deleteEntry(id));
   handle("resolve-idle", async (keep: boolean, awaySinceMs: number) =>
@@ -292,6 +299,10 @@ function registerIpc(): void {
   );
 
   handle("dismiss-update", async () => service.dismissUpdate());
+  handle("set-note-is-internal", async (internal: boolean) => service.setNoteIsInternal(internal));
+  handle("set-internal-notes-available", async (available: boolean) =>
+    service.setInternalNotesAvailable(available),
+  );
   handle("set-include-prereleases", async (include: boolean) => {
     await service.setIncludePrereleases(include);
     /*

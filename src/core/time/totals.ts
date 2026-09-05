@@ -1,5 +1,6 @@
 import type { TimeEntry } from "../keito/types.js";
 import { entrySeconds, entryStartMs } from "./elapsed.js";
+import { visibleNote, visibleNoteField, type EntryNotes } from "../keito/notes.js";
 
 /**
  * A day's entries folded into one row per thing actually worked on.
@@ -53,14 +54,23 @@ export interface EntryTotal {
 }
 
 /**
- * A note reduced to what makes two of them the same note.
+ * What makes two entries the same piece of work, as far as their notes go.
+ *
+ * Keyed on the note that is **displayed** — the client one, or the internal one behind it
+ * — because these rows are what the user sees, and two rows they cannot tell apart is a
+ * row that is wrong. Keying on `notes` alone put every internal-only entry in one bucket,
+ * since they all have no client note, so two unrelated pieces of work merged into a single
+ * row showing one of their notes.
+ *
+ * The field is part of the key as well as the text. The same words as a client note and as
+ * an internal note are two different things: one the client reads and one they do not.
  *
  * Keito stores an untouched note as `null` and a cleared one as `""`, and someone who
  * typed neither means the same by both. Trimmed, because trailing whitespace is not a
  * different piece of work.
  */
-function noteKey(notes: string | null | undefined): string {
-  return notes?.trim() ?? "";
+function noteKey(entry: EntryNotes): string {
+  return `${visibleNoteField(entry)}:${visibleNote(entry)}`;
 }
 
 /**
@@ -85,7 +95,7 @@ export function totalsByTaskAndNote(
   const ordered = [...entries].sort(newestFirst(timeZone));
 
   for (const entry of ordered) {
-    const key = `${entry.project_id}:${entry.task_id}:${noteKey(entry.notes)}`;
+    const key = `${entry.project_id}:${entry.task_id}:${noteKey(entry)}`;
     const seconds = entrySeconds(entry, nowMs, timeZone);
     const existing = groups.get(key);
 
@@ -127,11 +137,11 @@ export function loggedBeforeRunning(entries: readonly TimeEntry[], timeZone: str
   const current = entries.find((entry) => entry.is_running);
   if (!current) return 0;
 
-  const key = `${current.project_id}:${current.task_id}:${noteKey(current.notes)}`;
+  const key = `${current.project_id}:${current.task_id}:${noteKey(current)}`;
   let total = 0;
   for (const entry of entries) {
     if (entry.is_running) continue;
-    if (`${entry.project_id}:${entry.task_id}:${noteKey(entry.notes)}` !== key) continue;
+    if (`${entry.project_id}:${entry.task_id}:${noteKey(entry)}` !== key) continue;
     // `nowMs` is irrelevant for a stopped entry — its length comes from hours or
     // duration_seconds — so any instant does, and 0 says so.
     total += entrySeconds(entry, 0, timeZone) ?? 0;
