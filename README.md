@@ -1,7 +1,7 @@
 # Keito Timer
 [![CI](https://github.com/chriiiish/keito-desktop/actions/workflows/ci.yml/badge.svg)](https://github.com/chriiiish/keito-desktop/actions/workflows/ci.yml)
 [![GitHub Release](https://img.shields.io/github/v/release/chriiiish/keito-desktop?label=Latest%20Stable&color=bright%20green)](https://github.com/chriiiish/keito-desktop/releases/latest)
-[![Static Badge](https://img.shields.io/badge/Buy%20me%20a%20Coffee%20%E2%98%95-Donate-bright%20green)](https://buymeacoffee.com/chris.lloyd)
+[![Static Badge](https://img.shields.io/badge/Buy%20me%20a%20Coffee%20%E2%98%95-Donate-yellow)](https://buymeacoffee.com/chris.lloyd)
 [![Licence](https://img.shields.io/badge/Licence-GPL--3.0-blue)](./LICENSE)
 
 [Install](#install) | [Features](#features) | [Integrations](#integrations) | [Build Locally](#developing-locally) | [Contribute](#contributing)
@@ -158,11 +158,6 @@ If this made your life easier, consider buying me a coffee ❤️
   <img width="587" height="389" alt="Change which categories are visible" src="https://github.com/user-attachments/assets/b5e4dacd-0fff-4e96-ba0e-fbddd9c98fc3" />
 
 - **Entries window** for correcting today's or this week's times and notes.  
-- **Azure DevOps work items as notes.** Type to search the open work items assigned to you,
-  or press `↓` to browse, and the note fills in as `1842: Login redirect drops the return
-  URL`. Read-only, optional, and off unless you turn it on — see
-  [Integrations](#integrations).  
-  <img width="895" height="275" alt="List of all entries for today" src="https://github.com/user-attachments/assets/7d5b25f2-5146-4d52-a40b-92c974b341e1" />
 
 - **Tells you when a new version is out**, with a link to the download — stable releases by
   default, or pre-releases too if you switch that on in **Settings → Updates**. It does not
@@ -170,9 +165,9 @@ If this made your life easier, consider buying me a coffee ❤️
   <img width="604" height="166" alt="New version tab" src="https://github.com/user-attachments/assets/f7f8eef8-864c-40d3-9ac5-b13bb1c402a9" />
   <img width="423" height="59" alt="New version message" src="https://github.com/user-attachments/assets/eb4c44da-b038-4ae9-be80-a34e36348885" />
 
-A "category" here is a **(project, task) pair**. Keito has no category resource, and a time
-entry requires both ids.
-
+ - **Internal Notes** vs client-facing notes are supported if your Keito plan supports them. Enable in settings.
+   <img width="428" height="207" alt="internal-note-toggle" src="https://github.com/user-attachments/assets/d44b00c8-4e7e-488e-a789-eced8c56e5dc" />
+   
 ### Known limits
 
 - **Builds are ad-hoc signed, not notarised.** That is what the first-launch warning above
