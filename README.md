@@ -67,7 +67,7 @@ If you see the following error on Windows, it's likely because the `.exe` isn't 
 
 Troubleshooting steps: [Fix "Windows Cannot Access the Specified Device" error (GeeksforGeeks)](https://www.geeksforgeeks.org/techtips/fix-windows-cannot-access-specified-device-error/)
 </details>
-d
+
 ### 3. Connect it to Keito
 
 The app opens its settings window on first launch and asks for two things. **You will
