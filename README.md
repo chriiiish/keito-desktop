@@ -67,13 +67,13 @@ If you see the following error on Windows, it's likely because the `.exe` isn't 
 
 Troubleshooting steps: [Fix "Windows Cannot Access the Specified Device" error (GeeksforGeeks)](https://www.geeksforgeeks.org/techtips/fix-windows-cannot-access-specified-device-error/)
 </details>
-
+d
 ### 3. Connect it to Keito
 
 The app opens its settings window on first launch and asks for two things. **You will
 need to get these from your Keito administrator.**
 
-<img width="558" height="398" alt="Keito credentials page" src="https://github.com/user-attachments/assets/101267f9-4b83-419f-a48d-3419e2cbcc97" />
+<img width="900" height="430" alt="Keito Connection Settings Page" src="https://github.com/user-attachments/assets/e7b8f296-90d0-4948-b9e8-e70e0aeecc47" />
 
 * **An API key.** In Keito: Settings → Integrations → create a **full-access integration
 key**. It starts `kto_`.
