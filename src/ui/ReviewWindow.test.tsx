@@ -192,8 +192,13 @@ describe("collapsing projects", () => {
     expect(screen.getByRole("button", { name: "Collapse all" })).toBeDefined();
   });
 
+  // Both levels start collapsed, so the "No client" bucket has to be opened before a
+  // project inside it is even in the accessible tree — that nesting is the point.
   it("starts collapsed once anything has been switched off", async () => {
-    await openProjects({ hidden: ["p_bank:t_ops"] });
+    const user = await openProjects({ hidden: ["p_bank:t_ops"] });
+
+    expect(screen.getByRole("button", { name: "No client" }).getAttribute("aria-expanded")).toBe("false");
+    await user.click(screen.getByRole("button", { name: "No client" }));
 
     expect(screen.getByRole("button", { name: "Acme Rebuild" }).getAttribute("aria-expanded")).toBe("false");
     expect(screen.getByRole("button", { name: "Expand all" })).toBeDefined();
@@ -201,6 +206,7 @@ describe("collapsing projects", () => {
 
   it("opens and closes one project at a time", async () => {
     const user = await openProjects({ hidden: ["p_bank:t_ops"] });
+    await user.click(screen.getByRole("button", { name: "No client" }));
     const acme = screen.getByRole("button", { name: "Acme Rebuild" });
 
     await user.click(acme);
@@ -218,12 +224,15 @@ describe("collapsing projects", () => {
 
     await user.click(screen.getByRole("button", { name: "Expand all" }));
 
+    expect(screen.getByRole("button", { name: "No client" }).getAttribute("aria-expanded")).toBe("true");
     expect(screen.getByRole("button", { name: "Acme Rebuild" }).getAttribute("aria-expanded")).toBe("true");
     expect(screen.getByRole("button", { name: "Bank Portal" }).getAttribute("aria-expanded")).toBe("true");
 
     await user.click(screen.getByRole("button", { name: "Collapse all" }));
 
-    expect(screen.getByRole("button", { name: "Acme Rebuild" }).getAttribute("aria-expanded")).toBe("false");
+    // The client collapsing takes every project under it out of the accessible tree —
+    // that is the client-level toggle doing its job, not a project losing its own state.
+    expect(screen.getByRole("button", { name: "No client" }).getAttribute("aria-expanded")).toBe("false");
   });
 
   // A filter that answered with collapsed headers would look like it found nothing.
@@ -248,8 +257,10 @@ describe("collapsing projects", () => {
     await user.click(bank);
     expect(bank.getAttribute("aria-expanded")).toBe("true");
 
-    // Clearing the filter leaves it as it was, not secretly toggled underneath.
+    // Clearing the filter leaves it as it was, not secretly toggled underneath — at
+    // either level, so the client collapses back too and has to be reopened to see it.
     await user.clear(filter);
+    await user.click(screen.getByRole("button", { name: "No client" }));
     expect(screen.getByRole("button", { name: "Bank Portal" }).getAttribute("aria-expanded")).toBe(
       "false",
     );
@@ -258,10 +269,11 @@ describe("collapsing projects", () => {
   // Visibility is stored as exclusions, so a project added to the workspace later is
   // shown until someone switches it off. An allow-list would make it invisible instead.
   it("shows a project that appeared after the preferences were written", async () => {
-    await openProjects({
+    const user = await openProjects({
       hidden: ["p_bank:t_ops"],
       catalog: [...snapshot.catalog, pair("p_new:t_new", "Brand New", "Discovery")],
     });
+    await user.click(screen.getByRole("button", { name: "No client" }));
 
     expect(screen.getByRole("button", { name: "Brand New" })).toBeDefined();
     const toggle = screen.getByLabelText("All tasks in Brand New") as HTMLInputElement;

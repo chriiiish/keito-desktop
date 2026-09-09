@@ -762,6 +762,11 @@ select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 /* ── Visible categories ──────────────────────────────────── */
 .visibility { max-width: 560px; }
 .visibility > input { margin-bottom: 10px; }
+.client-group { border: 1px solid var(--rule); border-radius: 8px; margin-bottom: 10px; overflow: hidden; }
+.visibility-row.client { background: var(--tint); font-weight: 700; }
+.visibility-row.client .visibility-name.no-client { font-style: italic; color: var(--muted); }
+.client-body { padding: 8px 8px 8px 14px; }
+.client-body .visibility-project:last-child { margin-bottom: 0; }
 .visibility-project { border: 1px solid var(--line); border-radius: 8px; margin-bottom: 8px; overflow: hidden; }
 .visibility-row { display: flex; align-items: center; gap: 8px; padding: 6px 10px; }
 .visibility-row.project { background: var(--raised); font-weight: 600; }

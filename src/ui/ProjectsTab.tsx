@@ -21,6 +21,7 @@ interface ProjectsTabProps {
 export function ProjectsTab({ snapshot, onChange }: ProjectsTabProps): JSX.Element {
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
+  const [expandedClients, setExpandedClients] = useState<ReadonlySet<string>>(new Set());
 
   const hidden = useMemo(() => new Set(snapshot.hidden), [snapshot.hidden]);
   const favourites = useMemo(() => new Set(snapshot.favourites), [snapshot.favourites]);
@@ -56,6 +57,32 @@ export function ProjectsTab({ snapshot, onChange }: ProjectsTabProps): JSX.Eleme
     [snapshot.catalog],
   );
 
+  // A project's client never varies within itself, so the first pair's clientName names
+  // the whole group. Grouped by an empty-string key rather than "No client" itself, so a
+  // client that happens to be named that can never collide with the fallback bucket.
+  const clientGroups = useMemo(() => {
+    const byClient = new Map<string, { label: string; projects: typeof groups }>();
+    for (const group of groups) {
+      const key = group.pairs[0]?.clientName ?? "";
+      const entry = byClient.get(key) ?? { label: key || "No client", projects: [] };
+      entry.projects.push(group);
+      byClient.set(key, entry);
+    }
+    return [...byClient.entries()]
+      .sort(([aKey, a], [bKey, b]) => {
+        if (aKey === "" || bKey === "") return aKey === bKey ? 0 : aKey === "" ? 1 : -1;
+        return a.label.localeCompare(b.label);
+      })
+      .map(([key, group]) => ({ key, ...group }));
+  }, [groups]);
+
+  // Independent of the filter, the way projectIds is — seeding and "is everything open"
+  // both need the unfiltered shape of the workspace, not what a search happens to match.
+  const clientKeys = useMemo(
+    () => [...new Set(snapshot.catalog.map((pair) => pair.clientName ?? ""))],
+    [snapshot.catalog],
+  );
+
   /**
    * Projects start collapsed, because a workspace with any size to it is a wall of tasks
    * you have already made your mind up about.
@@ -69,20 +96,34 @@ export function ProjectsTab({ snapshot, onChange }: ProjectsTabProps): JSX.Eleme
   useEffect(() => {
     if (seeded.current || projectIds.length === 0) return;
     seeded.current = true;
-    if (snapshot.hidden.length === 0) setExpanded(new Set(projectIds));
-  }, [projectIds, snapshot.hidden.length]);
+    if (snapshot.hidden.length === 0) {
+      setExpanded(new Set(projectIds));
+      setExpandedClients(new Set(clientKeys));
+    }
+  }, [projectIds, clientKeys, snapshot.hidden.length]);
 
   // Filtering opens what it matches: a search that answered with collapsed headers would
   // look like it had found nothing.
   const filtering = query.trim() !== "";
   const isOpen = (projectId: string) => filtering || expanded.has(projectId);
+  const isClientOpen = (key: string) => filtering || expandedClients.has(key);
 
-  const allExpanded = projectIds.length > 0 && projectIds.every((id) => expanded.has(id));
+  const allExpanded =
+    projectIds.length > 0 &&
+    projectIds.every((id) => expanded.has(id)) &&
+    clientKeys.every((key) => expandedClients.has(key));
 
   const toggleProject = (projectId: string) =>
     setExpanded((current) => {
       const next = new Set(current);
       if (!next.delete(projectId)) next.add(projectId);
+      return next;
+    });
+
+  const toggleClient = (key: string) =>
+    setExpandedClients((current) => {
+      const next = new Set(current);
+      if (!next.delete(key)) next.add(key);
       return next;
     });
 
@@ -140,63 +181,111 @@ export function ProjectsTab({ snapshot, onChange }: ProjectsTabProps): JSX.Eleme
               className="link"
               disabled={filtering}
               title={filtering ? "Everything matching a filter is already open" : undefined}
-              onClick={() => setExpanded(allExpanded ? new Set() : new Set(projectIds))}
+              onClick={() => {
+                setExpanded(allExpanded ? new Set() : new Set(projectIds));
+                setExpandedClients(allExpanded ? new Set() : new Set(clientKeys));
+              }}
             >
               {allExpanded ? "Collapse all" : "Expand all"}
             </button>
           </div>
         )}
 
-        {groups.map((group) => {
-          const shownCount = group.pairs.filter((pair) => !hidden.has(pair.id)).length;
-          const open = isOpen(group.projectId);
+        {clientGroups.map((client) => {
+          const clientPairs = client.projects.flatMap((group) => group.pairs);
+          const clientShown = clientPairs.filter((pair) => !hidden.has(pair.id)).length;
+          const clientOpen = isClientOpen(client.key);
 
           return (
-            <div key={group.projectId} className="visibility-project">
-              <div className="visibility-row project">
+            <div key={client.key || "no-client"} className="client-group">
+              <div className="visibility-row client">
                 <button
                   type="button"
                   className="disclosure"
-                  aria-expanded={open}
-                  aria-controls={`tasks-${group.projectId}`}
-                  // Inert while filtering, which forces every match open. Left live it
-                  // would appear to do nothing — aria-expanded could not change either —
-                  // while quietly rewriting what you find on clearing the filter.
+                  aria-expanded={clientOpen}
+                  aria-controls={`client-${client.key || "no-client"}`}
                   disabled={filtering}
                   title={filtering ? "Matches stay open while a filter is active" : undefined}
-                  onClick={() => toggleProject(group.projectId)}
+                  onClick={() => toggleClient(client.key)}
                 >
                   <span className="chevron" aria-hidden="true">
                     ▸
                   </span>
-                  <span className="visibility-name">{group.name}</span>
+                  <span className={`visibility-name${client.key ? "" : " no-client"}`}>
+                    {client.label}
+                  </span>
                 </button>
                 <span className="visibility-count">
-                  {shownCount}/{group.pairs.length} shown
+                  {clientShown}/{clientPairs.length} shown
                 </span>
                 <Toggle
-                  checked={shownCount === group.pairs.length}
-                  label={`All tasks in ${group.name}`}
-                  onChange={(next) => setVisible(group.pairs.map((pair) => pair.id), next)}
+                  checked={clientShown === clientPairs.length}
+                  label={`All tasks for ${client.label}`}
+                  onChange={(next) =>
+                    setVisible(
+                      clientPairs.map((pair) => pair.id),
+                      next,
+                    )
+                  }
                 />
               </div>
 
-              <div id={`tasks-${group.projectId}`} hidden={!open}>
-              {group.pairs.map((pair) => (
-                <div key={pair.id} className="visibility-row task">
-                  <span className="visibility-name">{pair.taskName}</span>
-                  {favourites.has(pair.id) && <span className="badge">Favourite</span>}
-                  {!favourites.has(pair.id) && recents.has(pair.id) && (
-                    <span className="badge">Recent</span>
-                  )}
-                  {star(pair)}
-                  <Toggle
-                    checked={!hidden.has(pair.id)}
-                    label={`${group.name} ${pair.taskName}`}
-                    onChange={(next) => setVisible([pair.id], next)}
-                  />
-                </div>
-              ))}
+              <div id={`client-${client.key || "no-client"}`} className="client-body" hidden={!clientOpen}>
+                {client.projects.map((group) => {
+                  const shownCount = group.pairs.filter((pair) => !hidden.has(pair.id)).length;
+                  const open = isOpen(group.projectId);
+
+                  return (
+                    <div key={group.projectId} className="visibility-project">
+                      <div className="visibility-row project">
+                        <button
+                          type="button"
+                          className="disclosure"
+                          aria-expanded={open}
+                          aria-controls={`tasks-${group.projectId}`}
+                          // Inert while filtering, which forces every match open. Left live
+                          // it would appear to do nothing — aria-expanded could not change
+                          // either — while quietly rewriting what you find on clearing the
+                          // filter.
+                          disabled={filtering}
+                          title={filtering ? "Matches stay open while a filter is active" : undefined}
+                          onClick={() => toggleProject(group.projectId)}
+                        >
+                          <span className="chevron" aria-hidden="true">
+                            ▸
+                          </span>
+                          <span className="visibility-name">{group.name}</span>
+                        </button>
+                        <span className="visibility-count">
+                          {shownCount}/{group.pairs.length} shown
+                        </span>
+                        <Toggle
+                          checked={shownCount === group.pairs.length}
+                          label={`All tasks in ${group.name}`}
+                          onChange={(next) => setVisible(group.pairs.map((pair) => pair.id), next)}
+                        />
+                      </div>
+
+                      <div id={`tasks-${group.projectId}`} hidden={!open}>
+                        {group.pairs.map((pair) => (
+                          <div key={pair.id} className="visibility-row task">
+                            <span className="visibility-name">{pair.taskName}</span>
+                            {favourites.has(pair.id) && <span className="badge">Favourite</span>}
+                            {!favourites.has(pair.id) && recents.has(pair.id) && (
+                              <span className="badge">Recent</span>
+                            )}
+                            {star(pair)}
+                            <Toggle
+                              checked={!hidden.has(pair.id)}
+                              label={`${group.name} ${pair.taskName}`}
+                              onChange={(next) => setVisible([pair.id], next)}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           );
