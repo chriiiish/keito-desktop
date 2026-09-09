@@ -192,7 +192,7 @@ export function ProjectsTab({ snapshot, onChange }: ProjectsTabProps): JSX.Eleme
         )}
 
         {clientGroups.map((client) => {
-          const clientPairs = snapshot.catalog.filter((pair) => (pair.clientName ?? "") === client.key);
+          const clientPairs = client.projects.flatMap((group) => group.pairs);
           const clientShown = clientPairs.filter((pair) => !hidden.has(pair.id)).length;
           const clientOpen = isClientOpen(client.key);
 
@@ -202,7 +202,9 @@ export function ProjectsTab({ snapshot, onChange }: ProjectsTabProps): JSX.Eleme
                 <button
                   type="button"
                   className="disclosure"
-                  aria-controls={client.key === "" ? "client-no-client" : "client-name-" + encodeURIComponent(client.key)}
+                  aria-expanded={clientOpen}
+                  aria-controls={`client-${client.key || "no-client"}`}
+                  disabled={filtering}
                   title={filtering ? "Matches stay open while a filter is active" : undefined}
                   onClick={() => toggleClient(client.key)}
                 >
