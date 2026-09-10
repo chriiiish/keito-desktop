@@ -1321,6 +1321,23 @@ describe("browsing the work item list", () => {
     expect(screen.queryByRole("listbox")).toBeNull();
   });
 
+  it("does not reopen the list on the next popover-shown just because it was left open", async () => {
+    // The window is reused rather than remounted, so `open` would otherwise survive a
+    // close/reopen: type a filter, then start the timer without picking a ticket, and the
+    // note resets but the list does not — the next open must not inherit it.
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue(withItems(many.slice(0, 3)));
+    render(<Popover />);
+
+    await user.click(await screen.findByRole("button", { name: /show your azure devops work items/i }));
+    expect(screen.getByRole("listbox")).toBeDefined();
+
+    const onShown = api.onPopoverShown.mock.calls.at(-1)![0];
+    act(() => onShown());
+
+    expect(screen.queryByRole("listbox")).toBeNull();
+  });
+
   it("keeps the caret in the note after the mark is clicked", async () => {
     // Clicking the mark is a way into the list, not a way out of the field you were typing
     // in — the next keystroke has to go where it would have gone anyway.

@@ -9,6 +9,7 @@ const optionId = (index: number) => `work-item-${index}`;
 
 export interface NoteFieldHandle {
   focus: () => void;
+  closeWorkItems: () => void;
 }
 
 /**
@@ -41,6 +42,12 @@ export const NoteField = forwardRef<NoteFieldHandle, {
       inputRef.current?.focus();
       inputRef.current?.select();
     },
+    // The popover is hidden and shown, never remounted, so `open` would otherwise carry
+    // over from whatever it was left as: type a filter, press Enter to start the timer
+    // without picking a ticket, and the list stays open with nothing to close it. The next
+    // popover-shown must not inherit that — it should show the list only for a fresh click
+    // on the icon or a fresh keystroke.
+    closeWorkItems: () => setOpen(false),
   }));
 
   const offered = connected && workItems.length > 0;
