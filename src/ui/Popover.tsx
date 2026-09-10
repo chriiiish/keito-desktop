@@ -72,7 +72,18 @@ export function Popover(): JSX.Element {
   }, []);
 
   useEffect(focusNote, [focusNote, snapshot?.keyStatus]);
-  useEffect(() => keito.onPopoverShown(focusNote), [focusNote]);
+  // Closing the Azure work-item list is a "the popover just opened" concern, not a
+  // "put the caret in the note" one — it belongs on the real open signal, not the
+  // mount/keyStatus effect above, which would otherwise interrupt a list already open
+  // for a reason unrelated to opening the popover.
+  useEffect(
+    () =>
+      keito.onPopoverShown(() => {
+        noteRef.current?.closeWorkItems();
+        focusNote();
+      }),
+    [focusNote],
+  );
 
   const [starting, start] = useAsyncAction(async () => {
     if (!selectedId) return;
