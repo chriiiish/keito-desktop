@@ -245,7 +245,7 @@ button.primary:hover { filter: brightness(1.08); }
 .field-note > .field-label { grid-area: label; }
 .field-note > .note-visibility { grid-area: toggle; }
 .field-note > .note-field { grid-area: input; }
-.field-note > .play { grid-area: play; }
+.field-note > .play { grid-area: play; align-self: stretch; }
 
 /*
  * Gold, and only gold, means the note is for the team.
