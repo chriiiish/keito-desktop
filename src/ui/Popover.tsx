@@ -226,58 +226,56 @@ export function Popover(): JSX.Element {
             the Azure DevOps mark. Clicking beside the field closed the work item list on
             pointerdown and the forwarded click reopened it, so it could be opened that way
             and never closed. */}
-        <div className="field">
-          <div className="field-head">
-            {/* The caption says which note this is, so the toggle needs no word of its own. */}
-            <span className={`field-label${visibility === "internal" ? " internal" : ""}`}>
-              {visibility === "internal" ? "Internal Note" : "Note"}
+        {/*
+          A CSS grid rather than the field-head/with-play stack this replaced: on screen
+          the toggle still reads as sitting above the play button, in line with the
+          caption, but its DOM position — after the note field, before the play button —
+          is what Tab actually follows. You fill the note in, decide where it goes, then
+          start the timer.
+        */}
+        <div className={`field field-note${visibility === "internal" ? " internal" : ""}`}>
+          {/* The caption says which note this is, so the toggle needs no word of its own. */}
+          <span className={`field-label${visibility === "internal" ? " internal" : ""}`}>
+            {visibility === "internal" ? "Internal Note" : "Note"}
+          </span>
+          <NoteField
+            ref={noteRef}
+            value={note}
+            onChange={setNote}
+            workItems={snapshot.azure.workItems}
+            connected={snapshot.azure.status === "connected"}
+          />
+          {/*
+            Only where the plan has Internal Notes. It cannot be detected, so it is
+            declared in Settings — see Preferences.internalNotesAvailable. Offering the
+            switch without the feature would write a note to a field that does not exist.
+          */}
+          {/*
+            No in-flight guard, for the same reason the update notice's dismiss has none:
+            `setNoteIsInternal` writes a preference and calls nothing on Keito, and the
+            rule about double-firing is about API calls. Two rapid clicks write the
+            preference twice and land on the state the switch is showing.
+          */}
+          {snapshot.internalNotesAvailable && (
+            <span className={`note-visibility${visibility === "internal" ? " on" : ""}`}>
+              <Toggle
+                checked={visibility === "internal"}
+                label="Internal note"
+                onChange={(next) => keito.setNoteIsInternal(next).then(setSnapshot)}
+              />
+              {visibility !== "internal" && <ClosedPadlock />}
             </span>
-            {/*
-              Gold means the note is for the team only. In line with the caption and
-              right-aligned above the play button, so the thing that decides where a note
-              goes sits with the field it governs rather than beside the timer controls.
-            */}
-            {/*
-              Only where the plan has Internal Notes. It cannot be detected, so it is
-              declared in Settings — see Preferences.internalNotesAvailable. Offering the
-              switch without the feature would write a note to a field that does not exist.
-            */}
-            {/*
-              No in-flight guard, for the same reason the update notice's dismiss has none:
-              `setNoteIsInternal` writes a preference and calls nothing on Keito, and the
-              rule about double-firing is about API calls. Two rapid clicks write the
-              preference twice and land on the state the switch is showing.
-            */}
-            {snapshot.internalNotesAvailable && (
-              <span className={`note-visibility${visibility === "internal" ? " on" : ""}`}>
-                <Toggle
-                  checked={visibility === "internal"}
-                  label="Internal note"
-                  onChange={(next) => keito.setNoteIsInternal(next).then(setSnapshot)}
-                />
-                {visibility !== "internal" && <ClosedPadlock />}
-              </span>
-            )}
-          </div>
-          <div className={`with-play${visibility === "internal" ? " internal" : ""}`}>
-            <NoteField
-              ref={noteRef}
-              value={note}
-              onChange={setNote}
-              workItems={snapshot.azure.workItems}
-              connected={snapshot.azure.status === "connected"}
-            />
-            <button
-              type="submit"
-              className="play"
-              title="Start timer"
-              aria-label="Start timer"
-              aria-busy={starting}
-              disabled={!selectedId || starting}
-            >
-              {starting ? <Spinner /> : "▶"}
-            </button>
-          </div>
+          )}
+          <button
+            type="submit"
+            className="play"
+            title="Start timer"
+            aria-label="Start timer"
+            aria-busy={starting}
+            disabled={!selectedId || starting}
+          >
+            {starting ? <Spinner /> : "▶"}
+          </button>
         </div>
       </form>
 

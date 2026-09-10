@@ -224,8 +224,28 @@ button.primary:hover { filter: brightness(1.08); }
 .update-notice-dismiss:hover { color: var(--fg); }
 
 /* ── Internal-note toggle ────────────────────────────────── */
-/* Caption on the left, toggle right-aligned above the play button. */
-.field-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+/*
+ * Caption top-left, toggle top-right above the play button, note field spanning the row
+ * beneath both — a grid rather than a flex stack so that layout can disagree with Tab
+ * order: the toggle's DOM position (after the note field, see Popover) puts it after the
+ * note in Tab order without moving it on screen.
+ */
+/* `.starter .field` (below) sets `display: flex` at equal specificity but later in the
+   file, so this needs the extra `.field` to win: `.starter .field.field-note`.
+   Two rows so the note field can span the width in the second one; two columns so the
+   toggle and the play button share the right-hand one and line up with each other. */
+.starter .field.field-note {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas: "label toggle" "input play";
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 4px;
+}
+.field-note > .field-label { grid-area: label; }
+.field-note > .note-visibility { grid-area: toggle; }
+.field-note > .note-field { grid-area: input; }
+.field-note > .play { grid-area: play; }
 
 /*
  * Gold, and only gold, means the note is for the team.
@@ -270,8 +290,8 @@ button.primary:hover { filter: brightness(1.08); }
 }
 
 /* The field itself carries the state too, so it is visible while you are typing in it. */
-.with-play.internal input { border-color: var(--star); }
-.with-play.internal input:focus { outline-color: var(--star); }
+.field-note.internal input { border-color: var(--star); }
+.field-note.internal input:focus { outline-color: var(--star); }
 
 /* ── Note field with Azure DevOps work items ─────────────── */
 /* Position relative so the listbox can hang off it; the popover itself does not scroll. */
@@ -626,8 +646,8 @@ button.danger-confirm:hover { background: color-mix(in srgb, var(--danger) 12%, 
 
 .starter { display: flex; flex-direction: column; gap: 10px; padding: 12px 12px 10px; }
 .starter label, .starter .field { display: flex; flex-direction: column; gap: 4px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
-.with-star, .with-play { display: flex; gap: 6px; align-items: stretch; }
-.with-star select, .with-play input { flex: 1; min-width: 0; }
+.with-star { display: flex; gap: 6px; align-items: stretch; }
+.with-star select { flex: 1; min-width: 0; }
 
 select {
   font: inherit;

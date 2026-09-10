@@ -321,6 +321,23 @@ describe("focus", () => {
   });
 });
 
+describe("tab order around the internal-note toggle", () => {
+  it("tabs to the toggle after the note, not before it", async () => {
+    // The toggle used to sit ahead of the note field in the markup, which is what put it
+    // ahead of the note in Tab order too — you'd land on it before writing anything.
+    const user = userEvent.setup();
+    render(<Popover />);
+    const note = await screen.findByPlaceholderText(/what are you working on/i);
+
+    note.focus();
+    expect(document.activeElement).toBe(note);
+
+    await user.tab();
+
+    expect(document.activeElement).toBe(screen.getByLabelText("Internal note"));
+  });
+});
+
 describe("while an action is in flight", () => {
   it("starts only one timer however many times Enter is pressed", async () => {
     const user = userEvent.setup();
@@ -1442,7 +1459,7 @@ describe("the internal-note toggle", () => {
 
     expect((screen.getByRole("checkbox", { name: "Internal note" }) as HTMLInputElement).checked).toBe(true);
     expect(document.querySelector(".note-visibility.on")).not.toBeNull();
-    expect(document.querySelector(".with-play.internal")).not.toBeNull();
+    expect(document.querySelector(".field-note.internal")).not.toBeNull();
   });
 
   it("shows the client note, falling back to the internal one", async () => {
@@ -1560,7 +1577,7 @@ describe("when the plan has no Internal Notes", () => {
     render(<Popover />);
 
     expect(await screen.findByText("Note")).toBeDefined();
-    expect(document.querySelector(".with-play.internal")).toBeNull();
+    expect(document.querySelector(".field-note.internal")).toBeNull();
   });
 
   it("sends notes as client notes, even if the toggle was on before", async () => {
