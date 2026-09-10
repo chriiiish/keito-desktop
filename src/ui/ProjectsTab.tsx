@@ -142,10 +142,11 @@ export function ProjectsTab({ snapshot, onChange }: ProjectsTabProps): JSX.Eleme
         </ul>
       )}
 
-      <h2>Projects in the timer</h2>
+      <h2>Projects in the dropdown</h2>
       <p className="hint">
-        Everything is shown by default. Switch off what you never track against. Favourites
-        and anything you have used in the last 30 days stay visible regardless.
+        All tasks are shown in the dropdown by default. 
+        <br />Switch off what you never track against to hide it in the dropdown.
+        <br />Favourites and anything you have used in the last 30 days stay visible in the dropdown regardless.
       </p>
 
       <div className="visibility">
