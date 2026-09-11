@@ -657,6 +657,16 @@ someone notices. A hidden pair is still shown if it is a favourite or appears an
 off must never hide what you are actually working on; the preference is still recorded and
 takes effect once that stops being true.
 
+**The Projects tab groups by client above project** (`Pair.clientName` — issue #38: two
+unrelated projects can share a name across clients, and nothing told them apart). This adds
+no new persisted state: the client row is the same disclosure-and-toggle pattern the project
+row already had, one level up — its toggle batches `setHidden` over every pair in every
+project under it, and its default collapse state is seeded alongside the project level's,
+from the same first-visit (`hidden` empty) check. A project with no client sorts into a
+synthetic **"No client"** bucket, pinned **last** rather than sorted into the alphabet —
+sorting it in front of clients later in the alphabet would read as a client actually named
+that.
+
 `Snapshot.today` and `Snapshot.yesterday` both come free from the 30-day fetch
 `loadEntries` already makes for ranking; only mutations pay for
 `AppService.#reloadEntries()`, one extra request. Both are sliced by *workspace*
