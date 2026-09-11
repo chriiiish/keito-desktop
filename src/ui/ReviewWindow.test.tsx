@@ -183,6 +183,17 @@ describe("collapsing projects", () => {
     return user;
   };
 
+  // The client is a heading, not a disclosure — it names its projects regardless of
+  // whether any of them happen to be collapsed.
+  it("always shows the client heading, collapsed projects or not", async () => {
+    await openProjects({ hidden: ["p_bank:t_ops"] });
+
+    expect(screen.getByText("No client")).toBeDefined();
+    expect(screen.getByRole("button", { name: "Bank Portal" }).getAttribute("aria-expanded")).toBe(
+      "false",
+    );
+  });
+
   // An empty `hidden` means nobody has switched anything off yet, so there is
   // nothing to have tidied away — and the whole list is what a first visit is for.
   it("starts expanded when nothing has been switched off", async () => {
@@ -192,21 +203,17 @@ describe("collapsing projects", () => {
     expect(screen.getByRole("button", { name: "Collapse all" })).toBeDefined();
   });
 
-  // Both levels start collapsed, so the "No client" bucket has to be opened before a
-  // project inside it is even in the accessible tree — that nesting is the point.
   it("starts collapsed once anything has been switched off", async () => {
-    const user = await openProjects({ hidden: ["p_bank:t_ops"] });
+    await openProjects({ hidden: ["p_bank:t_ops"] });
 
-    expect(screen.getByRole("button", { name: "No client" }).getAttribute("aria-expanded")).toBe("false");
-    await user.click(screen.getByRole("button", { name: "No client" }));
-
-    expect(screen.getByRole("button", { name: "Acme Rebuild" }).getAttribute("aria-expanded")).toBe("false");
+    expect(screen.getByRole("button", { name: "Acme Rebuild" }).getAttribute("aria-expanded")).toBe(
+      "false",
+    );
     expect(screen.getByRole("button", { name: "Expand all" })).toBeDefined();
   });
 
   it("opens and closes one project at a time", async () => {
     const user = await openProjects({ hidden: ["p_bank:t_ops"] });
-    await user.click(screen.getByRole("button", { name: "No client" }));
     const acme = screen.getByRole("button", { name: "Acme Rebuild" });
 
     await user.click(acme);
@@ -224,18 +231,17 @@ describe("collapsing projects", () => {
 
     await user.click(screen.getByRole("button", { name: "Expand all" }));
 
-    expect(screen.getByRole("button", { name: "No client" }).getAttribute("aria-expanded")).toBe("true");
     expect(screen.getByRole("button", { name: "Acme Rebuild" }).getAttribute("aria-expanded")).toBe("true");
     expect(screen.getByRole("button", { name: "Bank Portal" }).getAttribute("aria-expanded")).toBe("true");
 
     await user.click(screen.getByRole("button", { name: "Collapse all" }));
 
-    // The client collapsing takes every project under it out of the accessible tree —
-    // that is the client-level toggle doing its job, not a project losing its own state.
-    expect(screen.getByRole("button", { name: "No client" }).getAttribute("aria-expanded")).toBe("false");
+    expect(screen.getByRole("button", { name: "Acme Rebuild" }).getAttribute("aria-expanded")).toBe(
+      "false",
+    );
   });
 
-  // A filter that answered with collapsed headers would look like it found nothing.
+  // A filter that answered with collapsed cards would look like it found nothing.
   it("opens what a filter matches", async () => {
     const user = await openProjects({ hidden: ["p_bank:t_ops"] });
 
@@ -243,6 +249,7 @@ describe("collapsing projects", () => {
 
     expect(screen.getByRole("button", { name: "Bank Portal" }).getAttribute("aria-expanded")).toBe("true");
     expect(screen.getByLabelText("Bank Portal Ops")).toBeDefined();
+    expect(screen.queryByRole("button", { name: "Acme Rebuild" })).toBeNull();
   });
 
   // Filtering forces matches open, so the header cannot honour a click. Left live it
@@ -257,10 +264,8 @@ describe("collapsing projects", () => {
     await user.click(bank);
     expect(bank.getAttribute("aria-expanded")).toBe("true");
 
-    // Clearing the filter leaves it as it was, not secretly toggled underneath — at
-    // either level, so the client collapses back too and has to be reopened to see it.
+    // Clearing the filter leaves it as it was, not secretly toggled underneath.
     await user.clear(filter);
-    await user.click(screen.getByRole("button", { name: "No client" }));
     expect(screen.getByRole("button", { name: "Bank Portal" }).getAttribute("aria-expanded")).toBe(
       "false",
     );
@@ -269,15 +274,88 @@ describe("collapsing projects", () => {
   // Visibility is stored as exclusions, so a project added to the workspace later is
   // shown until someone switches it off. An allow-list would make it invisible instead.
   it("shows a project that appeared after the preferences were written", async () => {
-    const user = await openProjects({
+    await openProjects({
       hidden: ["p_bank:t_ops"],
       catalog: [...snapshot.catalog, pair("p_new:t_new", "Brand New", "Discovery")],
     });
-    await user.click(screen.getByRole("button", { name: "No client" }));
 
     expect(screen.getByRole("button", { name: "Brand New" })).toBeDefined();
     const toggle = screen.getByLabelText("All tasks in Brand New") as HTMLInputElement;
     expect(toggle.checked).toBe(true);
+  });
+
+  // A client's projects are always on screen — its switch is a bulk control over every
+  // task underneath, not a way to hide the section. Even with everything already hidden
+  // one task at a time, the cards stay, and flipping the switch acts on all of them.
+  it("keeps a client's project cards on screen no matter how many of its tasks are hidden", async () => {
+    await openProjects({ hidden: ["p_acme:t_dev", "p_bank:t_ops"] });
+
+    expect(screen.getByText("No client")).toBeDefined();
+    expect(screen.getByRole("button", { name: "Acme Rebuild" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Bank Portal" })).toBeDefined();
+    const clientToggle = screen.getByLabelText("All tasks for No client") as HTMLInputElement;
+    expect(clientToggle.checked).toBe(false);
+  });
+
+  it("selects every task under a client at once from its switch", async () => {
+    const user = await openProjects({ hidden: ["p_acme:t_dev", "p_bank:t_ops"] });
+
+    await user.click(screen.getByLabelText("All tasks for No client"));
+
+    expect(api.setHidden).toHaveBeenCalledWith(["p_acme:t_dev", "p_bank:t_ops"], false);
+  });
+
+  it("deselects every task under a client at once from its switch", async () => {
+    const user = await openProjects();
+
+    await user.click(screen.getByLabelText("All tasks for No client"));
+
+    expect(api.setHidden).toHaveBeenCalledWith(["p_acme:t_dev", "p_bank:t_ops"], true);
+  });
+
+  // A plain switch has no reading for "some" — it is on as soon as anything under the
+  // client is shown, same as the project-level switch one row down.
+  it("reads on when only some of a client's tasks are hidden", async () => {
+    await openProjects({ hidden: ["p_bank:t_ops"] });
+
+    const clientToggle = screen.getByLabelText("All tasks for No client") as HTMLInputElement;
+    expect(clientToggle.checked).toBe(true);
+  });
+
+  // Turning a partially-on switch off hides everything under it — getting from "some"
+  // to "all" is then a deliberate off, then on, not a single click.
+  it("hides everything under a client when a partially-on switch is turned off", async () => {
+    const user = await openProjects({ hidden: ["p_bank:t_ops"] });
+
+    await user.click(screen.getByLabelText("All tasks for No client"));
+
+    expect(api.setHidden).toHaveBeenCalledWith(["p_acme:t_dev", "p_bank:t_ops"], true);
+  });
+
+  // A client's own switch and its one project's switch would otherwise control the
+  // exact same set of tasks — showing both is two controls doing one job.
+  it("hides a client's switch when it has only one project", async () => {
+    await openProjects({
+      catalog: [
+        { ...pair("p_acme:t_dev", "Acme Rebuild", "Development"), clientName: "Solo Client" },
+        { ...pair("p_acme:t_ops", "Acme Rebuild", "Ops"), clientName: "Solo Client" },
+      ],
+    });
+
+    expect(screen.getByText("Solo Client")).toBeDefined();
+    expect(screen.queryByLabelText("All tasks for Solo Client")).toBeNull();
+    expect(screen.getByLabelText("All tasks in Acme Rebuild")).toBeDefined();
+  });
+
+  it("still shows a client's switch once it has more than one project", async () => {
+    await openProjects({
+      catalog: [
+        { ...pair("p_acme:t_dev", "Acme Rebuild", "Development"), clientName: "Multi Client" },
+        { ...pair("p_bank:t_ops", "Bank Portal", "Ops"), clientName: "Multi Client" },
+      ],
+    });
+
+    expect(screen.getByLabelText("All tasks for Multi Client")).toBeDefined();
   });
 });
 

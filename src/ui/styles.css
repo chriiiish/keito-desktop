@@ -762,11 +762,24 @@ select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 /* ── Visible categories ──────────────────────────────────── */
 .visibility { max-width: 560px; }
 .visibility > input { margin-bottom: 10px; }
-.client-group { border: 1px solid var(--rule); border-radius: 8px; margin-bottom: 10px; overflow: hidden; }
-.visibility-row.client { background: var(--tint); font-weight: 700; }
-.visibility-row.client .visibility-name.no-client { font-style: italic; color: var(--muted); }
-.client-body { padding: 8px 8px 8px 14px; }
-.client-body .visibility-project:last-child { margin-bottom: 0; }
+.client-section { margin-bottom: 16px; }
+/* A label above its projects, not a card of its own — same row layout and the same
+   10px right padding as every other row (so its toggle lines up with the ones on the
+   project cards below), just quieter: smaller, muted, a hairline rather than a box. */
+.client-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 10px 6px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--rule);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.client-heading .visibility-name.no-client { font-style: italic; }
 .visibility-project { border: 1px solid var(--line); border-radius: 8px; margin-bottom: 8px; overflow: hidden; }
 .visibility-row { display: flex; align-items: center; gap: 8px; padding: 6px 10px; }
 .visibility-row.project { background: var(--raised); font-weight: 600; }

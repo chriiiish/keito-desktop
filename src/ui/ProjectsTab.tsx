@@ -17,11 +17,15 @@ interface ProjectsTabProps {
  * A category that is favourited or recently used is always shown regardless — switching
  * something off must never hide the thing you are actually working on. The toggle still
  * records the preference, so it takes effect once that stops being true.
+ *
+ * A client is a plain heading, not a card — its projects are always on screen. Its
+ * switch does not hide them; it is a bulk control over every task underneath, the same
+ * shape as a project's own switch one level down. Checked means every task in the
+ * client is shown; flipping it sets them all at once instead of one at a time.
  */
 export function ProjectsTab({ snapshot, onChange }: ProjectsTabProps): JSX.Element {
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
-  const [expandedClients, setExpandedClients] = useState<ReadonlySet<string>>(new Set());
 
   const hidden = useMemo(() => new Set(snapshot.hidden), [snapshot.hidden]);
   const favourites = useMemo(() => new Set(snapshot.favourites), [snapshot.favourites]);
@@ -76,13 +80,6 @@ export function ProjectsTab({ snapshot, onChange }: ProjectsTabProps): JSX.Eleme
       .map(([key, group]) => ({ key, ...group }));
   }, [groups]);
 
-  // Independent of the filter, the way projectIds is — seeding and "is everything open"
-  // both need the unfiltered shape of the workspace, not what a search happens to match.
-  const clientKeys = useMemo(
-    () => [...new Set(snapshot.catalog.map((pair) => pair.clientName ?? ""))],
-    [snapshot.catalog],
-  );
-
   /**
    * Projects start collapsed, because a workspace with any size to it is a wall of tasks
    * you have already made your mind up about.
@@ -96,34 +93,20 @@ export function ProjectsTab({ snapshot, onChange }: ProjectsTabProps): JSX.Eleme
   useEffect(() => {
     if (seeded.current || projectIds.length === 0) return;
     seeded.current = true;
-    if (snapshot.hidden.length === 0) {
-      setExpanded(new Set(projectIds));
-      setExpandedClients(new Set(clientKeys));
-    }
-  }, [projectIds, clientKeys, snapshot.hidden.length]);
+    if (snapshot.hidden.length === 0) setExpanded(new Set(projectIds));
+  }, [projectIds, snapshot.hidden.length]);
 
-  // Filtering opens what it matches: a search that answered with collapsed headers would
+  // Filtering opens what it matches: a search that answered with collapsed cards would
   // look like it had found nothing.
   const filtering = query.trim() !== "";
   const isOpen = (projectId: string) => filtering || expanded.has(projectId);
-  const isClientOpen = (key: string) => filtering || expandedClients.has(key);
 
-  const allExpanded =
-    projectIds.length > 0 &&
-    projectIds.every((id) => expanded.has(id)) &&
-    clientKeys.every((key) => expandedClients.has(key));
+  const allExpanded = projectIds.length > 0 && projectIds.every((id) => expanded.has(id));
 
   const toggleProject = (projectId: string) =>
     setExpanded((current) => {
       const next = new Set(current);
       if (!next.delete(projectId)) next.add(projectId);
-      return next;
-    });
-
-  const toggleClient = (key: string) =>
-    setExpandedClients((current) => {
-      const next = new Set(current);
-      if (!next.delete(key)) next.add(key);
       return next;
     });
 
@@ -159,10 +142,11 @@ export function ProjectsTab({ snapshot, onChange }: ProjectsTabProps): JSX.Eleme
         </ul>
       )}
 
-      <h2>Projects in the timer</h2>
+      <h2>Projects in the dropdown</h2>
       <p className="hint">
-        Everything is shown by default. Switch off what you never track against. Favourites
-        and anything you have used in the last 30 days stay visible regardless.
+        All tasks are shown in the dropdown by default. 
+        <br />Switch off what you never track against to hide it in the dropdown.
+        <br />Favourites and anything you have used in the last 30 days stay visible in the dropdown regardless.
       </p>
 
       <div className="visibility">
@@ -181,10 +165,7 @@ export function ProjectsTab({ snapshot, onChange }: ProjectsTabProps): JSX.Eleme
               className="link"
               disabled={filtering}
               title={filtering ? "Everything matching a filter is already open" : undefined}
-              onClick={() => {
-                setExpanded(allExpanded ? new Set() : new Set(projectIds));
-                setExpandedClients(allExpanded ? new Set() : new Set(clientKeys));
-              }}
+              onClick={() => setExpanded(allExpanded ? new Set() : new Set(projectIds))}
             >
               {allExpanded ? "Collapse all" : "Expand all"}
             </button>
@@ -194,99 +175,93 @@ export function ProjectsTab({ snapshot, onChange }: ProjectsTabProps): JSX.Eleme
         {clientGroups.map((client) => {
           const clientPairs = client.projects.flatMap((group) => group.pairs);
           const clientShown = clientPairs.filter((pair) => !hidden.has(pair.id)).length;
-          const clientOpen = isClientOpen(client.key);
 
           return (
-            <div key={`client:${client.key}`} className="client-group">
-              <div className="visibility-row client">
-                <button
-                  type="button"
-                  className="disclosure"
-                  aria-expanded={clientOpen}
-                  aria-controls={`client-${client.key || "no-client"}`}
-                  disabled={filtering}
-                  title={filtering ? "Matches stay open while a filter is active" : undefined}
-                  onClick={() => toggleClient(client.key)}
-                >
-                  <span className="chevron" aria-hidden="true">
-                    ▸
-                  </span>
-                  <span className={`visibility-name${client.key ? "" : " no-client"}`}>
-                    {client.label}
-                  </span>
-                </button>
-                <span className="visibility-count">
-                  {clientShown}/{clientPairs.length} shown
+            <div key={`client:${client.key}`} className="client-section">
+              <div className="client-heading">
+                <span className={`visibility-name${client.key ? "" : " no-client"}`}>
+                  {client.label}
                 </span>
-                <Toggle
-                  checked={clientShown === clientPairs.length}
-                  label={`All tasks for ${client.label}`}
-                  onChange={(next) =>
-                    setVisible(
-                      clientPairs.map((pair) => pair.id),
-                      next,
-                    )
-                  }
-                />
+                {/* A lone project's own switch already covers the same set of tasks —
+                    a second switch right above it here would be a client-wide control
+                    that means the exact same thing as the one it sits on top of. */}
+                {client.projects.length > 1 && (
+                  <Toggle
+                    // On if anything under the client is shown, not only if everything
+                    // is — there is no in-between reading for a plain switch. Turning it
+                    // off from a partial state hides the rest; turning it back on from
+                    // off shows everything again, so getting from "some" to "all" is a
+                    // deliberate off-then-on rather than one click.
+                    checked={clientShown > 0}
+                    label={`All tasks for ${client.label}`}
+                    onChange={(next) =>
+                      setVisible(
+                        clientPairs.map((pair) => pair.id),
+                        next,
+                      )
+                    }
+                  />
+                )}
               </div>
 
-              <div id={`client-${client.key || "no-client"}`} className="client-body" hidden={!clientOpen}>
-                {client.projects.map((group) => {
-                  const shownCount = group.pairs.filter((pair) => !hidden.has(pair.id)).length;
-                  const open = isOpen(group.projectId);
+              {client.projects.map((group) => {
+                const shownCount = group.pairs.filter((pair) => !hidden.has(pair.id)).length;
+                const open = isOpen(group.projectId);
 
-                  return (
-                    <div key={group.projectId} className="visibility-project">
-                      <div className="visibility-row project">
-                        <button
-                          type="button"
-                          className="disclosure"
-                          aria-expanded={open}
-                          aria-controls={`tasks-${group.projectId}`}
-                          // Inert while filtering, which forces every match open. Left live
-                          // it would appear to do nothing — aria-expanded could not change
-                          // either — while quietly rewriting what you find on clearing the
-                          // filter.
-                          disabled={filtering}
-                          title={filtering ? "Matches stay open while a filter is active" : undefined}
-                          onClick={() => toggleProject(group.projectId)}
-                        >
-                          <span className="chevron" aria-hidden="true">
-                            ▸
-                          </span>
-                          <span className="visibility-name">{group.name}</span>
-                        </button>
-                        <span className="visibility-count">
-                          {shownCount}/{group.pairs.length} shown
+                return (
+                  <div key={group.projectId} className="visibility-project">
+                    <div className="visibility-row project">
+                      <button
+                        type="button"
+                        className="disclosure"
+                        aria-expanded={open}
+                        aria-controls={`tasks-${group.projectId}`}
+                        // Inert while filtering, which forces every match open. Left live
+                        // it would appear to do nothing — aria-expanded could not change
+                        // either — while quietly rewriting what you find on clearing the
+                        // filter.
+                        disabled={filtering}
+                        title={filtering ? "Matches stay open while a filter is active" : undefined}
+                        onClick={() => toggleProject(group.projectId)}
+                      >
+                        <span className="chevron" aria-hidden="true">
+                          ▸
                         </span>
-                        <Toggle
-                          checked={shownCount === group.pairs.length}
-                          label={`All tasks in ${group.name}`}
-                          onChange={(next) => setVisible(group.pairs.map((pair) => pair.id), next)}
-                        />
-                      </div>
-
-                      <div id={`tasks-${group.projectId}`} hidden={!open}>
-                        {group.pairs.map((pair) => (
-                          <div key={pair.id} className="visibility-row task">
-                            <span className="visibility-name">{pair.taskName}</span>
-                            {favourites.has(pair.id) && <span className="badge">Favourite</span>}
-                            {!favourites.has(pair.id) && recents.has(pair.id) && (
-                              <span className="badge">Recent</span>
-                            )}
-                            {star(pair)}
-                            <Toggle
-                              checked={!hidden.has(pair.id)}
-                              label={`${group.name} ${pair.taskName}`}
-                              onChange={(next) => setVisible([pair.id], next)}
-                            />
-                          </div>
-                        ))}
-                      </div>
+                        <span className="visibility-name">{group.name}</span>
+                      </button>
+                      <span className="visibility-count">
+                        {shownCount}/{group.pairs.length} shown
+                      </span>
+                      <Toggle
+                        // Same rule as the client switch above: on if any task in the
+                        // project is shown, off only turns off, on from off turns
+                        // everything back on.
+                        checked={shownCount > 0}
+                        label={`All tasks in ${group.name}`}
+                        onChange={(next) => setVisible(group.pairs.map((pair) => pair.id), next)}
+                      />
                     </div>
-                  );
-                })}
-              </div>
+
+                    <div id={`tasks-${group.projectId}`} hidden={!open}>
+                      {group.pairs.map((pair) => (
+                        <div key={pair.id} className="visibility-row task">
+                          <span className="visibility-name">{pair.taskName}</span>
+                          {favourites.has(pair.id) && <span className="badge">Favourite</span>}
+                          {!favourites.has(pair.id) && recents.has(pair.id) && (
+                            <span className="badge">Recent</span>
+                          )}
+                          {star(pair)}
+                          <Toggle
+                            checked={!hidden.has(pair.id)}
+                            label={`${group.name} ${pair.taskName}`}
+                            onChange={(next) => setVisible([pair.id], next)}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           );
         })}
