@@ -8,7 +8,7 @@ import { PreferencesStore } from "../src/core/store/preferences.js";
 import type { TrayFallback, TrayPrefix } from "../src/core/tray/label.js";
 import { Timer, type TimerState } from "../src/core/timer/timer.js";
 import { formatWorkspaceTime } from "../src/core/time/workspace-time.js";
-import { entryStartMs } from "../src/core/time/elapsed.js";
+import { entrySeconds, entryStartMs } from "../src/core/time/elapsed.js";
 import { visibleNote, visibleNoteField } from "../src/core/keito/notes.js";
 import { isNewerVersion, type ReleaseSummary } from "../src/core/version/version.js";
 import type { NoteVisibility } from "../src/core/keito/notes.js";
@@ -425,6 +425,13 @@ export class AppService {
       : undefined;
     if (!entry || !pair || !this.#timer) return this.snapshot();
 
+    // Keito's restart endpoint hands the entry back with hours reset to null, the same
+    // shape as any freshly running entry — it "reappears in hours once the timer stops".
+    // Read before the call, while the entry is still the stopped one #today has, so the
+    // stretch already logged does not vanish from the header and the row until then.
+    const priorSeconds =
+      entrySeconds(entry, Date.now(), this.#prefs.get().workspaceTimezone) ?? 0;
+
     return this.#run(async () => {
       await this.#timer!.restart(entryId, pair);
       const state = this.#timer!.current();
@@ -433,6 +440,10 @@ export class AppService {
           ? startMsOf(state.entry, () => this.#prefs.get().workspaceTimezone)
           : Date.now();
       await this.#reloadEntries();
+      if (priorSeconds > 0) {
+        const resumed = this.#today.find((candidate) => candidate.id === entryId);
+        if (resumed) resumed.duration_seconds = priorSeconds + (resumed.duration_seconds ?? 0);
+      }
     });
   }
 

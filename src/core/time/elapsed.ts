@@ -30,15 +30,29 @@ export function entryStartMs(
 }
 
 /**
+ * What a stopped entry, or an earlier stretch of a running one, already accounts for —
+ * `duration_seconds` if the caller set it, else `hours` converted, else zero rather than
+ * unknown. Zero is right here: a freshly created running entry has neither field set, and
+ * an entry with truly nothing recorded contributes nothing to a running total.
+ */
+export function recordedSeconds(entry: Pick<TimeEntry, "duration_seconds" | "hours">): number {
+  if (entry.duration_seconds != null) return entry.duration_seconds;
+  if (entry.hours != null) return Math.round(entry.hours * 3600);
+  return 0;
+}
+
+/**
  * How long an entry represents, in seconds.
  *
  * A **running** entry reports `hours: null` — verified against the live API and mirrored
  * by the fake — so formatting `hours` for one yields zero, which is why a running timer
  * used to read `0:00` in the lists. Its length has to be measured from its start instead.
  *
- * That measurement covers the current run only. Resuming an entry through Keito's restart
- * endpoint leaves `hours` null too, so the earlier stretch is not something the API gives
- * us back while the timer is going; it reappears in `hours` once the timer stops.
+ * Resuming an entry through Keito's restart endpoint leaves `hours` null too — the earlier
+ * stretch is not something the API gives back while the timer is going; it reappears once
+ * the timer stops. `AppService.resumeEntry` reads that stretch off the entry just before
+ * restarting it and writes it back onto `duration_seconds` once the reload replaces it, so
+ * `recordedSeconds` picks it up here the same way it would for any other stopped entry.
  */
 export function entrySeconds(
   entry: TimeEntry,
@@ -48,7 +62,8 @@ export function entrySeconds(
   if (entry.is_running) {
     const startedAt = entryStartMs(entry, timeZone);
     if (startedAt === null) return null;
-    return Math.max(0, Math.floor((nowMs - startedAt) / 1000));
+    const elapsed = Math.max(0, Math.floor((nowMs - startedAt) / 1000));
+    return recordedSeconds(entry) + elapsed;
   }
   if (entry.duration_seconds != null) return entry.duration_seconds;
   if (entry.hours != null) return Math.round(entry.hours * 3600);

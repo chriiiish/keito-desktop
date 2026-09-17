@@ -205,6 +205,19 @@ describe("loggedBeforeRunning", () => {
 
     expect(seconds).toBe(0);
   });
+
+  // The bug this exists for: resuming an entry restarts it in place rather than creating a
+  // new one, so there is no separate stopped entry left in the day to sum against — the
+  // 30 minutes worked before the pause has to come from the running entry's own
+  // duration_seconds, which AppService.resumeEntry writes back for exactly this reason.
+  it("includes a resumed entry's own recorded length, since restarting keeps the same id", () => {
+    const seconds = loggedBeforeRunning(
+      [running({ id: "te_1", duration_seconds: 30 * 60 })],
+      TZ,
+    );
+
+    expect(seconds).toBe(30 * 60);
+  });
 });
 
 describe("totalsByTaskAndNote does not trust the order it is handed", () => {
