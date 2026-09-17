@@ -84,6 +84,18 @@ beforeEach(() => {
   api.getSnapshot.mockResolvedValue(snapshot);
 });
 
+/**
+ * Simulates the real `popover-shown` broadcast: every listener registered against it
+ * fires, not just the most recently mounted one. Both `Popover` and `RecentEntries`
+ * subscribe independently, and their registration order is an implementation detail this
+ * suite should not have to track.
+ */
+const firePopoverShown = () => {
+  act(() => {
+    for (const [onShown] of api.onPopoverShown.mock.calls) onShown();
+  });
+};
+
 const entry = (id: string, projectId: string, taskId: string, over: Partial<TimeEntry> = {}) => ({
   id,
   project_id: projectId,
@@ -314,8 +326,7 @@ describe("focus", () => {
     expect(document.activeElement).not.toBe(note);
 
     // The main process announces every show; the renderer never remounts.
-    const onShown = api.onPopoverShown.mock.calls.at(-1)![0];
-    act(() => onShown());
+    firePopoverShown();
 
     expect(document.activeElement).toBe(note);
   });
@@ -744,6 +755,23 @@ describe("yesterday's entries", () => {
     expect(scrollers[0]!.querySelectorAll(".day")).toHaveLength(2);
     // Both headings live inside that one container, not beside it.
     expect(scrollers[0]!.querySelectorAll(".day-heading")).toHaveLength(2);
+  });
+
+  // The popover is hidden and shown, never recreated, so a scroll position left over from
+  // the last time it was open would otherwise still be there the next time it opens.
+  it("scrolls the list back to the top on every popover-shown, not just on mount", async () => {
+    api.getSnapshot.mockResolvedValue(withYesterday({ today: [entry("te_t", "p_acme", "t_dev")] }));
+
+    render(<Popover />);
+    await screen.findByText("Yesterday");
+
+    const scroller = document.querySelector(".recent") as HTMLDivElement;
+    scroller.scrollTop = 200;
+    expect(scroller.scrollTop).toBe(200);
+
+    firePopoverShown();
+
+    expect(scroller.scrollTop).toBe(0);
   });
 
   it("leaves the heading out when there is nothing behind you", async () => {
@@ -1349,8 +1377,7 @@ describe("browsing the work item list", () => {
     await user.click(await screen.findByRole("button", { name: /show your azure devops work items/i }));
     expect(screen.getByRole("listbox")).toBeDefined();
 
-    const onShown = api.onPopoverShown.mock.calls.at(-1)![0];
-    act(() => onShown());
+    firePopoverShown();
 
     expect(screen.queryByRole("listbox")).toBeNull();
   });

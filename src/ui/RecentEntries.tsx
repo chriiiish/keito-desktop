@@ -1,9 +1,11 @@
+import { useEffect, useRef } from "react";
 import type { Pair, TimeEntry } from "../core/keito/types.js";
 import type { EntryTotal } from "../core/time/totals.js";
 import { formatDuration } from "../core/time/elapsed.js";
 import { totalsByTaskAndNote } from "../core/time/totals.js";
 import { visibleNote, visibleNoteField, type NoteVisibility } from "../core/keito/notes.js";
 import { AsyncButton } from "./AsyncButton.js";
+import { keito } from "./keito-api.js";
 import { useNow } from "./useNow.js";
 
 interface RecentEntriesProps {
@@ -46,6 +48,19 @@ export function RecentEntries({
   const running =
     today.some((entry) => entry.is_running) || yesterday.some((entry) => entry.is_running);
   const now = useNow(1000, running);
+
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  // The popover window is hidden and shown, never recreated, so the renderer does not
+  // remount between openings and a mount effect would only ever fire once. A scroll left
+  // wherever the last session left it must be reset on every open, so this listens for the
+  // popover-shown event from main.ts rather than trying to catch it at mount.
+  useEffect(
+    () =>
+      keito.onPopoverShown(() => {
+        if (scrollerRef.current) scrollerRef.current.scrollTop = 0;
+      }),
+    [],
+  );
   const describe = (total: EntryTotal) => {
     const entry = total.latest;
     const pair = catalog.find(
@@ -155,7 +170,7 @@ export function RecentEntries({
      * separately — with a long day today you could not reach yesterday without first
      * scrolling to the bottom of a box that ended halfway up the popover.
      */
-    <div className="recent">
+    <div className="recent" ref={scrollerRef}>
       {day("Today", today, "Nothing logged yet today.", false)}
       {/* Left out entirely on a day with no history behind it, rather than showing an
           empty heading that says nothing. */}
