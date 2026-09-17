@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { TimeEntry } from "../keito/types.js";
-import { loggedBeforeRunning, totalsByTaskAndNote } from "./totals.js";
+import { dayTotalSeconds, loggedBeforeRunning, totalsByTaskAndNote } from "./totals.js";
 
 const TZ = "UTC";
 /** 10:00 on the day every fixture below is filed under. */
@@ -204,6 +204,38 @@ describe("loggedBeforeRunning", () => {
     const seconds = loggedBeforeRunning([running({ id: "te_1" }), running({ id: "te_2" })], TZ);
 
     expect(seconds).toBe(0);
+  });
+});
+
+describe("dayTotalSeconds", () => {
+  it("adds up every task worked on, not just one", () => {
+    const seconds = dayTotalSeconds(
+      [entry({ id: "te_1", task_id: "t_dev" }), entry({ id: "te_2", task_id: "t_design" })],
+      NOW,
+      TZ,
+    );
+
+    expect(seconds).toBe(60 * 60);
+  });
+
+  it("includes a running stretch, measured up to now", () => {
+    const seconds = dayTotalSeconds(
+      [entry({ id: "te_1" }), running({ id: "te_2" })],
+      NOW,
+      TZ,
+    );
+
+    // te_1: 30 min banked. te_2 started at 09:50, NOW is 10:00: 10 more minutes.
+    expect(seconds).toBe(40 * 60);
+  });
+
+  it("is a known zero for an empty day", () => {
+    expect(dayTotalSeconds([], NOW, TZ)).toBe(0);
+  });
+
+  it("is null only when nothing at all is measurable", () => {
+    const unmeasurable = entry({ id: "te_1", hours: null, duration_seconds: null });
+    expect(dayTotalSeconds([unmeasurable], NOW, TZ)).toBe(null);
   });
 });
 

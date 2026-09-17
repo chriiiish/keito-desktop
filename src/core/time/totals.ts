@@ -122,6 +122,30 @@ export function totalsByTaskAndNote(
 }
 
 /**
+ * The whole day's total across every task, running stretches included.
+ *
+ * Sums entries directly rather than through `totalsByTaskAndNote`: that groups by
+ * (project, task, note) for display, but the sum of everyone's seconds is the same total
+ * either way, and this skips building rows nobody asked for. An empty day is a known
+ * zero, not an unknown length, so it reads 0:00 rather than "—" — null is reserved for a
+ * day that has entries but not one of them could be measured.
+ */
+export function dayTotalSeconds(
+  entries: readonly TimeEntry[],
+  nowMs: number,
+  timeZone: string,
+): number | null {
+  if (entries.length === 0) return 0;
+
+  let total: number | null = null;
+  for (const entry of entries) {
+    const seconds = entrySeconds(entry, nowMs, timeZone);
+    if (seconds !== null) total = (total ?? 0) + seconds;
+  }
+  return total;
+}
+
+/**
  * Seconds already logged today against whatever is running, not counting the running
  * stretch itself.
  *
