@@ -1,5 +1,5 @@
 import type { TimeEntry } from "../keito/types.js";
-import { entrySeconds, entryStartMs } from "./elapsed.js";
+import { entrySeconds, entryStartMs, recordedSeconds } from "./elapsed.js";
 import { visibleNote, visibleNoteField, type EntryNotes } from "../keito/notes.js";
 
 /**
@@ -130,15 +130,21 @@ export function totalsByTaskAndNote(
  * and the row for the very same task show two different numbers, both ticking, in a window
  * small enough to see them side by side.
  *
- * Excludes every running entry rather than just the one found, so a workspace that somehow
- * has two going cannot double-count against a clock that is already ticking one of them.
+ * Excludes every running entry's *own* stretch rather than just the one found, so a
+ * workspace that somehow has two going cannot double-count against a clock that is already
+ * ticking one of them — but the running entry's own `recordedSeconds` is still added.
+ * Resuming an earlier entry through Keito's restart endpoint continues the *same* entry
+ * rather than creating a new one, so what it had already logged would otherwise have
+ * nowhere to come from: it is not a separate stopped entry sharing the key, it is this one,
+ * and `AppService.resumeEntry` writes that stretch onto `duration_seconds` for exactly this
+ * reason.
  */
 export function loggedBeforeRunning(entries: readonly TimeEntry[], timeZone: string): number {
   const current = entries.find((entry) => entry.is_running);
   if (!current) return 0;
 
   const key = `${current.project_id}:${current.task_id}:${noteKey(current)}`;
-  let total = 0;
+  let total = recordedSeconds(current);
   for (const entry of entries) {
     if (entry.is_running) continue;
     if (`${entry.project_id}:${entry.task_id}:${noteKey(entry)}` !== key) continue;
