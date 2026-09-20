@@ -759,6 +759,14 @@ select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--muted);
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.day-total {
+  font-variant-numeric: tabular-nums;
+  text-transform: none;
+  letter-spacing: normal;
 }
 .day ul { list-style: none; margin: 0; padding: 0; }
 .day li { display: flex; align-items: center; gap: 8px; padding: 4px 0; }

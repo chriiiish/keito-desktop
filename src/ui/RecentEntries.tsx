@@ -1,7 +1,7 @@
 import type { Pair, TimeEntry } from "../core/keito/types.js";
 import type { EntryTotal } from "../core/time/totals.js";
 import { formatDuration } from "../core/time/elapsed.js";
-import { totalsByTaskAndNote } from "../core/time/totals.js";
+import { dayTotalSeconds, totalsByTaskAndNote } from "../core/time/totals.js";
 import { visibleNote, visibleNoteField, type NoteVisibility } from "../core/keito/notes.js";
 import { AsyncButton } from "./AsyncButton.js";
 import { useNow } from "./useNow.js";
@@ -65,9 +65,13 @@ export function RecentEntries({
     entries: readonly TimeEntry[],
     empty: string,
     startAgain: boolean,
+    total?: number | null,
   ) => (
     <section className="day">
-      <h2 className="day-heading">{heading}</h2>
+      <h2 className="day-heading">
+        {heading}
+        {total !== undefined && <span className="day-total">{formatDuration(total)}</span>}
+      </h2>
       {entries.length === 0 ? (
         <p className="empty">{empty}</p>
       ) : (
@@ -156,7 +160,7 @@ export function RecentEntries({
      * scrolling to the bottom of a box that ended halfway up the popover.
      */
     <div className="recent">
-      {day("Today", today, "Nothing logged yet today.", false)}
+      {day("Today", today, "Nothing logged yet today.", false, dayTotalSeconds(today, now, timeZone))}
       {/* Left out entirely on a day with no history behind it, rather than showing an
           empty heading that says nothing. */}
       {yesterday.length > 0 && day("Yesterday", yesterday, "", true)}
