@@ -673,7 +673,7 @@ describe("a running row's duration", () => {
     render(<Popover />);
     await screen.findByLabelText(/^Stop Development$/);
 
-    expect(screen.getByText("0:30")).toBeDefined();
+    expect(screen.getByText("0:30", { selector: ".entry-hours" })).toBeDefined();
     expect(screen.queryByText("0:00")).toBeNull();
   });
 
@@ -683,7 +683,7 @@ describe("a running row's duration", () => {
     render(<Popover />);
     await screen.findByLabelText(/^Stop Development$/);
 
-    expect(screen.getByText("1:35")).toBeDefined();
+    expect(screen.getByText("1:35", { selector: ".entry-hours" })).toBeDefined();
   });
 
   it("still reads a stopped entry from its recorded hours", async () => {
@@ -695,7 +695,7 @@ describe("a running row's duration", () => {
     render(<Popover />);
     await screen.findByLabelText(/^Resume Development$/);
 
-    expect(screen.getByText("2:30")).toBeDefined();
+    expect(screen.getByText("2:30", { selector: ".entry-hours" })).toBeDefined();
   });
 
   // Yesterday's list is fed by the same formatter, and a timer left running overnight is
@@ -710,6 +710,29 @@ describe("a running row's duration", () => {
     await screen.findByText("Yesterday");
 
     expect(screen.getByText("0:45")).toBeDefined();
+  });
+});
+
+describe("the Today heading's total", () => {
+  it("reads 0:00 rather than nothing on an empty day", async () => {
+    api.getSnapshot.mockResolvedValue({ ...snapshot, today: [] } satisfies Snapshot);
+
+    render(<Popover />);
+
+    expect(await screen.findByText("0:00", { selector: ".day-total" })).toBeDefined();
+  });
+
+  it("does not show a total beside Yesterday", async () => {
+    api.getSnapshot.mockResolvedValue({
+      ...snapshot,
+      today: [entry("te_t", "p_acme", "t_dev", { hours: 1 })],
+      yesterday: [entry("te_y", "p_bank", "t_ops", { spent_date: "2026-09-01" })],
+    } satisfies Snapshot);
+
+    render(<Popover />);
+    await screen.findByText("Yesterday");
+
+    expect(document.querySelectorAll(".day-total")).toHaveLength(1);
   });
 });
 
@@ -923,7 +946,9 @@ describe("a task worked on more than once in a day", () => {
     render(<Popover />);
 
     // 30 minutes logged plus 10 running, on one row rather than two rows of a fraction.
-    expect(await screen.findByText("0:40")).toBeDefined();
+    // The row and the Today heading's total both read 0:40, since the day has one task.
+    expect(await screen.findByText("0:40", { selector: ".entry-hours" })).toBeDefined();
+    expect(screen.getByText("0:40", { selector: ".day-total" })).toBeDefined();
     expect(screen.queryByText("0:30")).toBeNull();
     expect(screen.getAllByText("Sprint planning")).toHaveLength(1);
   });
