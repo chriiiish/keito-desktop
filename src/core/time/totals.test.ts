@@ -229,6 +229,22 @@ describe("dayTotalSeconds", () => {
     expect(seconds).toBe(40 * 60);
   });
 
+  // The resumed-entry bug: restart continues the same entry rather than creating a new
+  // one, so a task run for 30 minutes, stopped, and resumed for 10 is one entry, not two,
+  // and its duration_seconds from the first stretch has to be added to the second.
+  it("adds a resumed entry's earlier duration to its current stretch", () => {
+    const resumed = entry({
+      id: "te_1",
+      is_running: true,
+      hours: null,
+      ended_time: null,
+      duration_seconds: 30 * 60,
+      timer_started_at: "2026-09-03T09:50:00Z",
+    });
+
+    expect(dayTotalSeconds([resumed], NOW, TZ)).toBe(40 * 60);
+  });
+
   it("is a known zero for an empty day", () => {
     expect(dayTotalSeconds([], NOW, TZ)).toBe(0);
   });

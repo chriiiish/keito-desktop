@@ -34,11 +34,15 @@ export function entryStartMs(
  *
  * A **running** entry reports `hours: null` — verified against the live API and mirrored
  * by the fake — so formatting `hours` for one yields zero, which is why a running timer
- * used to read `0:00` in the lists. Its length has to be measured from its start instead.
+ * used to read `0:00` in the lists. Its length is the current stretch, measured from its
+ * start, plus whatever the entry already carries from before that stretch began.
  *
- * That measurement covers the current run only. Resuming an entry through Keito's restart
- * endpoint leaves `hours` null too, so the earlier stretch is not something the API gives
- * us back while the timer is going; it reappears in `hours` once the timer stops.
+ * The second part matters for a resumed entry. `PATCH /time_entries/:id/restart`
+ * continues the entry it is given rather than creating a new one, so a task run for
+ * thirty minutes, stopped, and resumed for ten is one entry whose `duration_seconds` (or
+ * `hours`) still holds the first thirty while `timer_started_at` marks only the second
+ * stretch. Reading the current stretch alone made a resumed task's total shrink back to
+ * whatever has elapsed since the resume, as if the earlier work had not happened.
  */
 export function entrySeconds(
   entry: TimeEntry,
@@ -48,7 +52,10 @@ export function entrySeconds(
   if (entry.is_running) {
     const startedAt = entryStartMs(entry, timeZone);
     if (startedAt === null) return null;
-    return Math.max(0, Math.floor((nowMs - startedAt) / 1000));
+    const elapsed = Math.max(0, Math.floor((nowMs - startedAt) / 1000));
+    const priorSeconds =
+      entry.duration_seconds ?? (entry.hours != null ? Math.round(entry.hours * 3600) : 0);
+    return elapsed + priorSeconds;
   }
   if (entry.duration_seconds != null) return entry.duration_seconds;
   if (entry.hours != null) return Math.round(entry.hours * 3600);

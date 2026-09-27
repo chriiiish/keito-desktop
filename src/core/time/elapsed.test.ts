@@ -96,6 +96,33 @@ describe("entrySeconds", () => {
     expect(entrySeconds(entry({ duration_seconds: 5432, hours: 1.5 }), NOW, "UTC")).toBe(5432);
   });
 
+  // The resumed-entry bug: `restart` continues the same entry rather than creating a new
+  // one, so a task run for 30 minutes, stopped, and resumed for 10 is one entry carrying
+  // both the earlier duration_seconds and a fresh timer_started_at.
+  it("adds the duration from before a resume to the current stretch", () => {
+    const resumed = entry({
+      is_running: true,
+      hours: null,
+      ended_time: null,
+      duration_seconds: 1800,
+      timer_started_at: "2026-09-02T11:20:00Z",
+    });
+
+    expect(entrySeconds(resumed, NOW, "UTC")).toBe(2400);
+  });
+
+  it("does the same falling back to hours when duration_seconds is absent", () => {
+    const resumed = entry({
+      is_running: true,
+      hours: 0.5,
+      ended_time: null,
+      duration_seconds: null,
+      timer_started_at: "2026-09-02T11:20:00Z",
+    });
+
+    expect(entrySeconds(resumed, NOW, "UTC")).toBe(2400);
+  });
+
   it("does not invent a length for a running entry with no start", () => {
     const running = entry({
       is_running: true,
