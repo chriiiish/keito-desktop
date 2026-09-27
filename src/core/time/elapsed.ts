@@ -30,6 +30,18 @@ export function entryStartMs(
 }
 
 /**
+ * What a stopped entry, or an earlier stretch of a running one, already accounts for —
+ * `duration_seconds` if the caller set it, else `hours` converted, else zero rather than
+ * unknown. Zero is right here: a freshly created running entry has neither field set, and
+ * an entry with truly nothing recorded contributes nothing to a running total.
+ */
+export function recordedSeconds(entry: Pick<TimeEntry, "duration_seconds" | "hours">): number {
+  if (entry.duration_seconds != null) return entry.duration_seconds;
+  if (entry.hours != null) return Math.round(entry.hours * 3600);
+  return 0;
+}
+
+/**
  * How long an entry represents, in seconds.
  *
  * A **running** entry reports `hours: null` — verified against the live API and mirrored
@@ -37,12 +49,11 @@ export function entryStartMs(
  * used to read `0:00` in the lists. Its length is the current stretch, measured from its
  * start, plus whatever the entry already carries from before that stretch began.
  *
- * The second part matters for a resumed entry. `PATCH /time_entries/:id/restart`
- * continues the entry it is given rather than creating a new one, so a task run for
- * thirty minutes, stopped, and resumed for ten is one entry whose `duration_seconds` (or
- * `hours`) still holds the first thirty while `timer_started_at` marks only the second
- * stretch. Reading the current stretch alone made a resumed task's total shrink back to
- * whatever has elapsed since the resume, as if the earlier work had not happened.
+ * Resuming an entry through Keito's restart endpoint leaves `hours` null too — the earlier
+ * stretch is not something the API gives back while the timer is going; it reappears once
+ * the timer stops. `AppService.resumeEntry` reads that stretch off the entry just before
+ * restarting it and writes it back onto `duration_seconds` once the reload replaces it, so
+ * `recordedSeconds` picks it up here the same way it would for any other stopped entry.
  */
 export function entrySeconds(
   entry: TimeEntry,
@@ -53,9 +64,7 @@ export function entrySeconds(
     const startedAt = entryStartMs(entry, timeZone);
     if (startedAt === null) return null;
     const elapsed = Math.max(0, Math.floor((nowMs - startedAt) / 1000));
-    const priorSeconds =
-      entry.duration_seconds ?? (entry.hours != null ? Math.round(entry.hours * 3600) : 0);
-    return elapsed + priorSeconds;
+    return recordedSeconds(entry) + elapsed;
   }
   if (entry.duration_seconds != null) return entry.duration_seconds;
   if (entry.hours != null) return Math.round(entry.hours * 3600);

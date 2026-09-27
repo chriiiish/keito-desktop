@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { TimeEntry } from "../keito/types.js";
-import { entrySeconds, entryStartMs, formatDecimalHours, formatDuration } from "./elapsed.js";
+import { entrySeconds, entryStartMs, formatDecimalHours, formatDuration, recordedSeconds } from "./elapsed.js";
 
 const NOW = Date.parse("2026-09-02T11:30:00Z");
 
@@ -96,33 +96,6 @@ describe("entrySeconds", () => {
     expect(entrySeconds(entry({ duration_seconds: 5432, hours: 1.5 }), NOW, "UTC")).toBe(5432);
   });
 
-  // The resumed-entry bug: `restart` continues the same entry rather than creating a new
-  // one, so a task run for 30 minutes, stopped, and resumed for 10 is one entry carrying
-  // both the earlier duration_seconds and a fresh timer_started_at.
-  it("adds the duration from before a resume to the current stretch", () => {
-    const resumed = entry({
-      is_running: true,
-      hours: null,
-      ended_time: null,
-      duration_seconds: 1800,
-      timer_started_at: "2026-09-02T11:20:00Z",
-    });
-
-    expect(entrySeconds(resumed, NOW, "UTC")).toBe(2400);
-  });
-
-  it("does the same falling back to hours when duration_seconds is absent", () => {
-    const resumed = entry({
-      is_running: true,
-      hours: 0.5,
-      ended_time: null,
-      duration_seconds: null,
-      timer_started_at: "2026-09-02T11:20:00Z",
-    });
-
-    expect(entrySeconds(resumed, NOW, "UTC")).toBe(2400);
-  });
-
   it("does not invent a length for a running entry with no start", () => {
     const running = entry({
       is_running: true,
@@ -137,6 +110,37 @@ describe("entrySeconds", () => {
 
   it("nor for a stopped entry that recorded nothing", () => {
     expect(entrySeconds(entry({ hours: null }), NOW, "UTC")).toBeNull();
+  });
+
+  // The bug this exists for: Keito's restart endpoint hands a resumed entry back with
+  // hours reset to null, same as any running entry, so the stretch worked before pausing
+  // used to vanish until the timer stopped again. AppService.resumeEntry writes what had
+  // already been logged onto duration_seconds before the reload replaces the entry, so a
+  // *running* entry can carry a recorded length too.
+  it("adds a running entry's own recorded length to the stretch since it restarted", () => {
+    const resumed = entry({
+      is_running: true,
+      hours: null,
+      duration_seconds: 1800, // 30 minutes logged before the pause.
+      ended_time: null,
+      timer_started_at: "2026-09-02T11:00:00Z", // Resumed 30 minutes before NOW.
+    });
+
+    expect(entrySeconds(resumed, NOW, "UTC")).toBe(1800 + 1800);
+  });
+});
+
+describe("recordedSeconds", () => {
+  it("is zero for a freshly running entry, not unknown", () => {
+    expect(recordedSeconds(entry({ is_running: true, hours: null, duration_seconds: null }))).toBe(0);
+  });
+
+  it("prefers duration_seconds over hours", () => {
+    expect(recordedSeconds(entry({ duration_seconds: 100, hours: 1.5 }))).toBe(100);
+  });
+
+  it("falls back to hours converted to seconds", () => {
+    expect(recordedSeconds(entry({ duration_seconds: null, hours: 1.5 }))).toBe(5400);
   });
 });
 
