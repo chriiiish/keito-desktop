@@ -222,6 +222,40 @@ describe("the start form", () => {
     expect(await screen.findByText("Sprint planning")).toBeDefined();
   });
 
+  it("shows the client ahead of the project on the running timer", async () => {
+    api.getSnapshot.mockResolvedValue({
+      ...snapshot,
+      timer: {
+        status: "running",
+        pair: { ...snapshot.catalog[0]!, clientName: "Acme Corp" },
+        entryId: "te_1",
+        startedAtMs: Date.now(),
+        note: "Sprint planning",
+      },
+    } satisfies Snapshot);
+
+    render(<Popover />);
+
+    expect(await screen.findByText("Acme Corp: Acme Rebuild")).toBeDefined();
+  });
+
+  it("falls back to the project alone when the running timer's project has no client", async () => {
+    api.getSnapshot.mockResolvedValue({
+      ...snapshot,
+      timer: {
+        status: "running",
+        pair: snapshot.catalog[0]!,
+        entryId: "te_1",
+        startedAtMs: Date.now(),
+        note: "Sprint planning",
+      },
+    } satisfies Snapshot);
+
+    render(<Popover />);
+
+    expect(await screen.findByText("Acme Rebuild")).toBeDefined();
+  });
+
   it("says so when the running timer has no note", async () => {
     api.getSnapshot.mockResolvedValue({
       ...snapshot,
