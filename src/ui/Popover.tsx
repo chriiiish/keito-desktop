@@ -163,8 +163,12 @@ export function Popover(): JSX.Element {
               ) : (
                 <strong className="running-note none">No note</strong>
               )}
-              <span>{running.pair.projectName}</span>
               <span>{running.pair.taskName}</span>
+              <span>
+                {running.pair.clientName
+                  ? `${running.pair.clientName}: ${running.pair.projectName}`
+                  : running.pair.projectName}
+              </span>
             </div>
             <div className="running-right">
               <Elapsed

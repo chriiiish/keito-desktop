@@ -222,6 +222,52 @@ describe("the start form", () => {
     expect(await screen.findByText("Sprint planning")).toBeDefined();
   });
 
+  it("shows note, task and client: project in that order on the running timer", async () => {
+    api.getSnapshot.mockResolvedValue({
+      ...snapshot,
+      timer: {
+        status: "running",
+        pair: { ...snapshot.catalog[0]!, clientName: "Acme Corp" },
+        entryId: "te_1",
+        startedAtMs: Date.now(),
+        note: "Sprint planning",
+      },
+    } satisfies Snapshot);
+
+    const { container } = render(<Popover />);
+
+    await screen.findByText("Sprint planning");
+    const header = container.querySelector<HTMLElement>("header.running")!;
+    const lines = Array.from(
+      within(header).getByText("Sprint planning").parentElement!.children,
+      (el) => el.textContent,
+    );
+    expect(lines).toEqual(["Sprint planning", "Development", "Acme Corp: Acme Rebuild"]);
+  });
+
+  it("falls back to the project alone when the running timer's project has no client", async () => {
+    api.getSnapshot.mockResolvedValue({
+      ...snapshot,
+      timer: {
+        status: "running",
+        pair: snapshot.catalog[0]!,
+        entryId: "te_1",
+        startedAtMs: Date.now(),
+        note: "Sprint planning",
+      },
+    } satisfies Snapshot);
+
+    const { container } = render(<Popover />);
+
+    await screen.findByText("Sprint planning");
+    const header = container.querySelector<HTMLElement>("header.running")!;
+    const lines = Array.from(
+      within(header).getByText("Sprint planning").parentElement!.children,
+      (el) => el.textContent,
+    );
+    expect(lines).toEqual(["Sprint planning", "Development", "Acme Rebuild"]);
+  });
+
   it("says so when the running timer has no note", async () => {
     api.getSnapshot.mockResolvedValue({
       ...snapshot,
