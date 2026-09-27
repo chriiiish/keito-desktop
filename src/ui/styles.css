@@ -459,6 +459,18 @@ input.time { width: 74px; font-variant-numeric: tabular-nums; }
 .running-row { background: var(--accent-soft); }
 td.ticking { color: var(--accent); font-variant-numeric: tabular-nums; }
 
+/*
+ * The entries table reuses the popover's CategoryPicker to reassign a row's project and
+ * task, rather than building a second combobox. Sized down for a table cell — the
+ * popover's own trigger is a whole form field — and given the menu a floor width, since a
+ * narrow Project/Task column would otherwise squeeze the filter and the project groups
+ * into something unreadable.
+ */
+.category-cell .picker-trigger { padding: 3px 6px; font-size: 13px; border-color: transparent; background: transparent; }
+.category-cell .picker-trigger:hover, .category-cell .picker-trigger[aria-expanded="true"] { border-color: var(--line); background: var(--bg); }
+.category-cell .picker-value strong { font-size: 13px; }
+.category-cell .picker-menu { min-width: 320px; }
+
 .settings h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 22px 0 6px; }
 .settings h2:first-child { margin-top: 0; }
 .settings form { display: flex; gap: 8px; max-width: 460px; }
@@ -678,6 +690,7 @@ select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
   padding: 6px 8px;
   background: var(--bg);
 }
+.picker-trigger:disabled { opacity: 0.5; cursor: default; }
 .picker-value { display: flex; flex-direction: column; flex: 1; min-width: 0; text-transform: none; letter-spacing: 0; }
 .picker-value strong, .picker-value span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .picker-value span { font-size: 12px; color: var(--muted); }

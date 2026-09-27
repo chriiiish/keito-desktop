@@ -1,7 +1,7 @@
 import { buildPicker } from "../src/core/catalog/picker.js";
 import { loadCatalog, loadEntries } from "../src/core/catalog/workspace.js";
 import { shouldReloadCatalog } from "../src/core/catalog/staleness.js";
-import { KeitoClient, type RequestRecord } from "../src/core/keito/client.js";
+import { KeitoClient, type CategoryReassignment, type RequestRecord } from "../src/core/keito/client.js";
 import { KeitoAuthError, KeitoError, KeitoReadOnlyError } from "../src/core/keito/errors.js";
 import type { Identity, Pair, TimeEntry } from "../src/core/keito/types.js";
 import { PreferencesStore } from "../src/core/store/preferences.js";
@@ -54,6 +54,18 @@ export interface AzureState {
   workItems: WorkItem[];
   error: string | null;
 }
+
+/**
+ * A correction from the entries table. Shared between `main.ts`'s IPC handler and
+ * `preload.ts`'s renderer-facing type, so the three copies this call passes through cannot
+ * drift out of shape from one another.
+ */
+export type EntryPatch = {
+  notes?: string;
+  noteField?: NoteVisibility;
+  startedTime?: string;
+  endedTime?: string;
+} & CategoryReassignment;
 
 /** Everything the renderer needs to draw either window. */
 export interface Snapshot {
@@ -810,11 +822,13 @@ export class AppService {
    * The local lookup stays as a fallback for a caller that sends no field, and only then
    * does an unrecognised entry default to client — what typing into an untouched row is
    * meant to produce.
+   *
+   * `projectId`/`taskId` reassign which (project, task) pair the entry counts against —
+   * Keito issue #36. The two are always sent together: the renderer resolves them from a
+   * single category picker, the same widget the popover starts a new entry from, so there
+   * is no state where one changed without the other.
    */
-  async updateEntry(
-    id: string,
-    patch: { notes?: string; noteField?: NoteVisibility; startedTime?: string; endedTime?: string },
-  ): Promise<Snapshot> {
+  async updateEntry(id: string, patch: EntryPatch): Promise<Snapshot> {
     if (!this.#client) return this.snapshot();
     return this.#run(async () => {
       let { notes, noteField, ...rest } = patch;
@@ -828,7 +842,22 @@ export class AppService {
       }
 
       await this.#client!.updateTimeEntry(id, body);
-      await this.#reloadEntries();
+      const running = await this.#reloadEntries();
+
+      // The timer holds its own cached copy of the running entry, separate from #today, so
+      // that the tray and popover render it without a round trip. Reassigning the running
+      // row's project or task left that copy naming the old pair until the next refresh —
+      // most visibly wrong for a category change, since the tray label is built from it.
+      // #reloadEntries() has already fetched the corrected entry, so this costs no request.
+      //
+      // Taken from the reload's own `running` result rather than searched for in `#today`:
+      // an entry that started before midnight and is still going lands in `#yesterday` once
+      // the workspace date rolls over, and `#today.find` would find nothing and clear the
+      // timer to idle even though Keito is still running it.
+      const state = this.#timer?.current();
+      if (state?.status === "running" && state.entry.id === id) {
+        this.#timer!.adopt(running, this.#catalog);
+      }
     });
   }
 
@@ -909,9 +938,16 @@ export class AppService {
    * Deliberately does not touch the timer state: the mutation's own response is
    * authoritative, and re-deriving it here would race with it.
    */
-  async #reloadEntries(): Promise<void> {
-    if (!this.#client) return;
-    const { recents, today, yesterday } = await loadEntries(
+  /**
+   * Returns the running entry the reload found, if any — so a caller that needs it (only
+   * `updateEntry` currently does) is not left searching `#today` for something that, having
+   * crossed the workspace-date boundary since it started, is sitting in `#yesterday`
+   * instead. Every other caller already ignores the return value; a `void` no-return would
+   * have made that lookup wrong in exactly the same way.
+   */
+  async #reloadEntries(): Promise<TimeEntry | null> {
+    if (!this.#client) return null;
+    const { recents, today, yesterday, running } = await loadEntries(
       this.#client,
       new Date(),
       this.#prefs.get().workspaceTimezone,
@@ -919,6 +955,7 @@ export class AppService {
     this.#recents = recents;
     this.#today = today;
     this.#yesterday = yesterday;
+    return running;
   }
 
   readonly #logRequest = (record: RequestRecord): void => {

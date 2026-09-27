@@ -11,6 +11,14 @@ interface CategoryPickerProps {
   selectedId: string;
   onSelect: (pairId: string) => void;
   onToggleFavourite: (pairId: string) => Promise<unknown>;
+  /**
+   * Overrides the trigger's accessible name, "Category" by default. The popover has one
+   * picker, so the default is unambiguous there; a table with one picker per row needs
+   * something that names the row, or assistive tech announces every one of them the same.
+   */
+  ariaLabel?: string;
+  /** Disables the trigger without hiding it — used while a selection is still saving. */
+  disabled?: boolean;
 }
 
 /**
@@ -39,6 +47,8 @@ export function CategoryPicker({
   selectedId,
   onSelect,
   onToggleFavourite,
+  ariaLabel = "Category",
+  disabled = false,
 }: CategoryPickerProps): JSX.Element {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -207,9 +217,10 @@ export function CategoryPicker({
         ref={triggerRef}
         type="button"
         className="picker-trigger"
-        aria-label="Category"
+        aria-label={ariaLabel}
         aria-haspopup="listbox"
         aria-expanded={open}
+        disabled={disabled}
         onClick={() => (open ? setOpen(false) : openAt(selectedIndex()))}
       >
         <span className="picker-value">

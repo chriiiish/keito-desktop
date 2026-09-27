@@ -447,6 +447,147 @@ describe("the client, project and task columns", () => {
     expect(screen.getByText("—")).toBeDefined();
   });
 
+  // Issue #36: date, start, end and note were already editable; project and task were not.
+  it("reassigns the entry when a different category is picked", async () => {
+    const user = userEvent.setup();
+    api.listEntries.mockResolvedValue([row()]);
+    api.updateEntry.mockResolvedValue(snapshot);
+
+    render(<ReviewWindow />);
+    // Names the row rather than reusing the popover's plain "Category" — with one picker
+    // per row, every trigger sharing that name would announce identically to a screen
+    // reader.
+    await user.click(
+      await screen.findByRole("button", { name: "Category for Development — Acme Rebuild" }),
+    );
+    await user.click(within(screen.getByRole("listbox")).getByText("Ops"));
+
+    // project_id and task_id always travel together — there is no state in Keito where a
+    // time entry names one without the other.
+    expect(api.updateEntry).toHaveBeenCalledWith("te_1", { projectId: "p_bank", taskId: "t_ops" });
+  });
+
+  // The category picker is a whole combobox, not a single AsyncButton click, so it needs
+  // its own re-entry guard. Without it, reopening the dropdown and picking again before the
+  // first PATCH resolves risks the earlier, slower request's response landing last and
+  // leaving the entry assigned to whatever was picked first rather than whatever was picked
+  // most recently.
+  it("disables the picker until a reassignment settles, so a second pick cannot race the first", async () => {
+    const user = userEvent.setup();
+    api.listEntries.mockResolvedValue([row()]);
+    const { promise, resolve } = deferred<Snapshot>();
+    api.updateEntry.mockReturnValue(promise);
+
+    render(<ReviewWindow />);
+    const trigger = await screen.findByRole("button", {
+      name: "Category for Development — Acme Rebuild",
+    });
+    await user.click(trigger);
+    await user.click(within(screen.getByRole("listbox")).getByText("Ops"));
+
+    expect(api.updateEntry).toHaveBeenCalledTimes(1);
+    expect((trigger as HTMLButtonElement).disabled).toBe(true);
+
+    await act(async () => {
+      resolve(snapshot);
+      await promise;
+    });
+
+    expect((trigger as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  // The bug a single shared "which row is saving" flag had: row A finishing cleared the
+  // guard for every row, so row B's trigger re-enabled — and could fire a second PATCH —
+  // while row B's own first request was still in flight.
+  it("keeps a second row's picker disabled while only the first row's save has settled", async () => {
+    const user = userEvent.setup();
+    const rowB = row({
+      id: "te_2",
+      project_id: "p_bank",
+      task_id: "t_ops",
+      project: { id: "p_bank", name: "Bank Portal" },
+      task: { id: "t_ops", name: "Ops" },
+    });
+    api.listEntries.mockResolvedValue([row(), rowB]);
+    const first = deferred<Snapshot>();
+    const second = deferred<Snapshot>();
+    api.updateEntry.mockImplementation((id: string) => (id === "te_1" ? first.promise : second.promise));
+
+    render(<ReviewWindow />);
+    const triggerA = await screen.findByRole("button", {
+      name: "Category for Development — Acme Rebuild",
+    });
+    const triggerB = screen.getByRole("button", { name: "Category for Ops — Bank Portal" });
+
+    await user.click(triggerA);
+    await user.click(within(screen.getByRole("listbox")).getByText("Ops"));
+    await user.click(triggerB);
+    await user.click(within(screen.getByRole("listbox")).getByText("Development"));
+
+    expect(api.updateEntry).toHaveBeenCalledTimes(2);
+    expect((triggerA as HTMLButtonElement).disabled).toBe(true);
+    expect((triggerB as HTMLButtonElement).disabled).toBe(true);
+
+    // Row A settles first.
+    await act(async () => {
+      first.resolve(snapshot);
+      await first.promise;
+    });
+
+    expect((triggerA as HTMLButtonElement).disabled).toBe(false);
+    // Row B's own request is still pending — its trigger must stay disabled regardless.
+    expect((triggerB as HTMLButtonElement).disabled).toBe(true);
+
+    await act(async () => {
+      second.resolve(snapshot);
+      await second.promise;
+    });
+
+    expect((triggerB as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  // A timer can be running against a project archived, or otherwise dropped, from the
+  // catalog since — CLAUDE.md's rule for the running-entry label applies here too: the
+  // entry's own embedded names must still be what the picker shows as selected, not a
+  // "Choose a category…" placeholder that reads as the row having lost its assignment.
+  it("shows an archived pair's own name as selected, and still lets it be reassigned", async () => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue({ ...snapshot, catalog: [] });
+    api.listEntries.mockResolvedValue([row()]);
+    api.updateEntry.mockResolvedValue(snapshot);
+
+    render(<ReviewWindow />);
+
+    // The archived pair's own embedded name resolves the row-specific aria-label too, not
+    // just what the trigger displays — both read from the same synthetic Pair.
+    const trigger = await screen.findByRole("button", {
+      name: "Category for Development — Acme Rebuild",
+    });
+    expect(trigger.textContent).toContain("Development");
+
+    await user.click(trigger);
+    await user.click(within(screen.getByRole("listbox")).getByText("Development"));
+
+    // Choosing the row's own (already-selected) pair from the list is a no-op re-pick,
+    // not a state nothing can recover from — it still resolves to a real project/task id
+    // rather than silently doing nothing.
+    expect(api.updateEntry).toHaveBeenCalledWith("te_1", { projectId: "p_acme", taskId: "t_dev" });
+  });
+
+  it("lets a category be favourited from inside the entries table", async () => {
+    const user = userEvent.setup();
+    api.listEntries.mockResolvedValue([row()]);
+    api.toggleFavourite.mockResolvedValue({ ...snapshot, favourites: ["p_bank:t_ops"] });
+
+    render(<ReviewWindow />);
+    await user.click(
+      await screen.findByRole("button", { name: "Category for Development — Acme Rebuild" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Favourite Bank Portal Ops" }));
+
+    expect(api.toggleFavourite).toHaveBeenCalledWith("p_bank:t_ops");
+  });
+
   it("hides the Date column in Today and shows it in This week", async () => {
     const user = userEvent.setup();
     api.listEntries.mockResolvedValue([row()]);
