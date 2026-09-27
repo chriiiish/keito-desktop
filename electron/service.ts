@@ -55,6 +55,21 @@ export interface AzureState {
   error: string | null;
 }
 
+/**
+ * A correction from the entries table. Shared between `main.ts`'s IPC handler and
+ * `preload.ts`'s renderer-facing type, so the three copies this call passes through cannot
+ * drift out of shape from one another.
+ */
+export interface EntryPatch {
+  notes?: string;
+  noteField?: NoteVisibility;
+  startedTime?: string;
+  endedTime?: string;
+  /** Reassigns the (project, task) pair. Always sent together — see AppService.updateEntry. */
+  projectId?: string;
+  taskId?: string;
+}
+
 /** Everything the renderer needs to draw either window. */
 export interface Snapshot {
   keyStatus: "missing" | "ready" | "rejected";
@@ -810,11 +825,13 @@ export class AppService {
    * The local lookup stays as a fallback for a caller that sends no field, and only then
    * does an unrecognised entry default to client — what typing into an untouched row is
    * meant to produce.
+   *
+   * `projectId`/`taskId` reassign which (project, task) pair the entry counts against —
+   * Keito issue #36. The two are always sent together: the renderer resolves them from a
+   * single category picker, the same widget the popover starts a new entry from, so there
+   * is no state where one changed without the other.
    */
-  async updateEntry(
-    id: string,
-    patch: { notes?: string; noteField?: NoteVisibility; startedTime?: string; endedTime?: string },
-  ): Promise<Snapshot> {
+  async updateEntry(id: string, patch: EntryPatch): Promise<Snapshot> {
     if (!this.#client) return this.snapshot();
     return this.#run(async () => {
       let { notes, noteField, ...rest } = patch;

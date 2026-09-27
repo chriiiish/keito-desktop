@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { TimeEntry } from "../core/keito/types.js";
-import type { Snapshot } from "../../electron/service.js";
+import type { EntryPatch, Snapshot } from "../../electron/service.js";
 import { keito } from "./keito-api.js";
 import { AsyncButton, Spinner, useAsyncAction } from "./AsyncButton.js";
+import { CategoryPicker } from "./CategoryPicker.js";
 import { HotkeyRecorder } from "./HotkeyRecorder.js";
 import { TrayLabelSettings } from "./TrayLabelSettings.js";
 import { AboutTab } from "./AboutTab.js";
@@ -16,7 +17,7 @@ import { pairId } from "../core/catalog/catalog.js";
 import type { Pair } from "../core/keito/types.js";
 import { shiftDate, workspaceDate } from "../core/time/workspace-time.js";
 import { entrySeconds, formatDecimalHours } from "../core/time/elapsed.js";
-import { visibleNote, visibleNoteField, type NoteVisibility } from "../core/keito/notes.js";
+import { visibleNote, visibleNoteField } from "../core/keito/notes.js";
 import { useNow } from "./useNow.js";
 
 /** The Monday of the week a YYYY-MM-DD date falls in. */
@@ -162,13 +163,7 @@ export function ReviewWindow(): JSX.Element {
         ))}
       </nav>
 
-      {active === "entries" && (
-        <Entries
-          revision={snapshot.revision}
-          timeZone={snapshot.workspaceTimezone}
-          catalog={snapshot.catalog}
-        />
-      )}
+      {active === "entries" && <Entries snapshot={snapshot} onChange={setSnapshot} />}
       {active === "projects" && <ProjectsTab snapshot={snapshot} onChange={setSnapshot} />}
       {active === "connection" && <Connection snapshot={snapshot} onChange={setSnapshot} />}
       {active === "settings" && <Settings snapshot={snapshot} onChange={setSnapshot} />}
@@ -186,16 +181,21 @@ export function ReviewWindow(): JSX.Element {
  *
  * "Today" and "this week" are the workspace's days, matching the `spent_date` the rows
  * carry — from UTC they would be off by one for most of the world for part of each day.
+ *
+ * Takes the whole snapshot, the way the other tabs do, rather than the three fields it
+ * used to: reassigning a row's category needs the catalog, favourites and recents that the
+ * embedded CategoryPicker takes, and threading those in one at a time as the feature grew
+ * would have left this the one tab still passed apart from its siblings.
  */
 function Entries({
-  revision,
-  timeZone,
-  catalog,
+  snapshot,
+  onChange,
 }: {
-  revision: number;
-  timeZone: string;
-  catalog: Pair[];
+  snapshot: Snapshot;
+  onChange: (next: Snapshot) => void;
 }): JSX.Element {
+  const catalog = snapshot.catalog;
+  const timeZone = snapshot.workspaceTimezone;
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [range, setRange] = useState<"today" | "week">("today");
   const [error, setError] = useState<string | null>(null);
@@ -215,14 +215,38 @@ function Entries({
     }
   }, [range, timeZone]);
 
-  useEffect(() => void load(), [load, revision]);
+  useEffect(() => void load(), [load, snapshot.revision]);
 
   /**
    * The client name isn't on a time entry, only on a project — `pairId` joins back to the
    * catalog's Pair for it, the same key `ProjectsTab` and the picker use for a project/task.
+   * Purely derived: Keito has no client resource of its own to edit, so reassigning the
+   * project (below) is the only way this column ever changes.
    */
   const clientName = (entry: TimeEntry): string =>
     catalog.find((pair) => pair.id === pairId(entry.project_id, entry.task_id))?.clientName ?? "—";
+
+  /**
+   * The Pair this row's picker should show as selected, plus the catalog to show it
+   * against. `Timer.pairFor` faces the same problem for the running-entry label: a timer
+   * left going against a project that was since archived or hidden from the catalog would
+   * otherwise resolve to nothing and the picker would fall back to "Choose a category…",
+   * which reads as the row having lost its assignment rather than merely predating it. The
+   * entry's own embedded `project`/`task` names cover that case; injected only into this
+   * row's own catalog copy; every other row still sees the real one.
+   */
+  const categoryFor = (entry: TimeEntry): { id: string; catalog: Pair[] } => {
+    const id = pairId(entry.project_id, entry.task_id);
+    if (catalog.some((pair) => pair.id === id)) return { id, catalog };
+    const archived: Pair = {
+      id,
+      projectId: entry.project_id,
+      projectName: entry.project?.name ?? "Unknown project",
+      taskId: entry.task_id,
+      taskName: entry.task?.name ?? "Unknown task",
+    };
+    return { id, catalog: [...catalog, archived] };
+  };
 
   // The running row's hours climb rather than sitting at "—", which is what a null
   // `hours` from the API renders as. Ticking only while a timer is actually going.
@@ -234,10 +258,7 @@ function Entries({
    * row from earlier in the week it would have to guess — and its guess is the client
    * note, which would publish an internal one the table was merely falling back to.
    */
-  const edit = async (
-    id: string,
-    patch: { notes?: string; noteField?: NoteVisibility; startedTime?: string; endedTime?: string },
-  ) => {
+  const edit = async (id: string, patch: EntryPatch) => {
     try {
       const next = await keito.updateEntry(id, patch);
       setError(next.error);
@@ -274,8 +295,7 @@ function Entries({
           <tr>
             {range === "week" && <th>Date</th>}
             <th>Client</th>
-            <th>Project</th>
-            <th>Task</th>
+            <th colSpan={2}>Project / Task</th>
             <th>Start</th>
             <th>End</th>
             <th>Hours</th>
@@ -284,12 +304,36 @@ function Entries({
           </tr>
         </thead>
         <tbody>
-          {entries.map((entry) => (
+          {entries.map((entry) => {
+            const category = categoryFor(entry);
+            return (
             <tr key={entry.id} className={entry.is_running ? "running-row" : ""}>
               {range === "week" && <td>{entry.spent_date}</td>}
               <td>{clientName(entry)}</td>
-              <td>{entry.project?.name ?? "Unknown project"}</td>
-              <td>{entry.task?.name ?? "Unknown task"}</td>
+              {/*
+                One cell spanning both columns rather than one picker per column: Keito has
+                no notion of a project without a task, so "change the project" and "change
+                the task" are the same action — the same (project, task) pair the popover's
+                own CategoryPicker starts a new entry from. Two separate triggers editing
+                the same identity would need to stay in lock-step by hand.
+              */}
+              <td colSpan={2} className="category-cell">
+                <CategoryPicker
+                  catalog={category.catalog}
+                  favourites={snapshot.favourites}
+                  recents={snapshot.recents}
+                  // Not snapshot.hidden: hiding a category declutters where you start new
+                  // work, and must never stand in the way of correcting where old work
+                  // landed. Every category is reachable here regardless of that setting.
+                  hidden={[]}
+                  selectedId={category.id}
+                  onSelect={(nextId) => {
+                    const pair = category.catalog.find((candidate) => candidate.id === nextId);
+                    if (pair) void edit(entry.id, { projectId: pair.projectId, taskId: pair.taskId });
+                  }}
+                  onToggleFavourite={(id) => keito.toggleFavourite(id).then(onChange)}
+                />
+              </td>
               <td>
                 <TimeCell
                   value={entry.started_time}
@@ -341,7 +385,8 @@ function Entries({
                 </AsyncButton>
               </td>
             </tr>
-          ))}
+            );
+          })}
           {entries.length === 0 && (
             <tr>
               <td colSpan={range === "week" ? 9 : 8} className="empty">

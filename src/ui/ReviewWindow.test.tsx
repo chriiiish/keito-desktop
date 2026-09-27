@@ -447,6 +447,58 @@ describe("the client, project and task columns", () => {
     expect(screen.getByText("—")).toBeDefined();
   });
 
+  // Issue #36: date, start, end and note were already editable; project and task were not.
+  it("reassigns the entry when a different category is picked", async () => {
+    const user = userEvent.setup();
+    api.listEntries.mockResolvedValue([row()]);
+    api.updateEntry.mockResolvedValue(snapshot);
+
+    render(<ReviewWindow />);
+    await user.click(await screen.findByRole("button", { name: "Category" }));
+    await user.click(within(screen.getByRole("listbox")).getByText("Ops"));
+
+    // project_id and task_id always travel together — there is no state in Keito where a
+    // time entry names one without the other.
+    expect(api.updateEntry).toHaveBeenCalledWith("te_1", { projectId: "p_bank", taskId: "t_ops" });
+  });
+
+  // A timer can be running against a project archived, or otherwise dropped, from the
+  // catalog since — CLAUDE.md's rule for the running-entry label applies here too: the
+  // entry's own embedded names must still be what the picker shows as selected, not a
+  // "Choose a category…" placeholder that reads as the row having lost its assignment.
+  it("shows an archived pair's own name as selected, and still lets it be reassigned", async () => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue({ ...snapshot, catalog: [] });
+    api.listEntries.mockResolvedValue([row()]);
+    api.updateEntry.mockResolvedValue(snapshot);
+
+    render(<ReviewWindow />);
+
+    expect((await screen.findByRole("button", { name: "Category" })).textContent).toContain(
+      "Development",
+    );
+
+    await user.click(screen.getByRole("button", { name: "Category" }));
+    await user.click(within(screen.getByRole("listbox")).getByText("Development"));
+
+    // Choosing the row's own (already-selected) pair from the list is a no-op re-pick,
+    // not a state nothing can recover from — it still resolves to a real project/task id
+    // rather than silently doing nothing.
+    expect(api.updateEntry).toHaveBeenCalledWith("te_1", { projectId: "p_acme", taskId: "t_dev" });
+  });
+
+  it("lets a category be favourited from inside the entries table", async () => {
+    const user = userEvent.setup();
+    api.listEntries.mockResolvedValue([row()]);
+    api.toggleFavourite.mockResolvedValue({ ...snapshot, favourites: ["p_bank:t_ops"] });
+
+    render(<ReviewWindow />);
+    await user.click(await screen.findByRole("button", { name: "Category" }));
+    await user.click(screen.getByRole("button", { name: "Favourite Bank Portal Ops" }));
+
+    expect(api.toggleFavourite).toHaveBeenCalledWith("p_bank:t_ops");
+  });
+
   it("hides the Date column in Today and shows it in This week", async () => {
     const user = userEvent.setup();
     api.listEntries.mockResolvedValue([row()]);

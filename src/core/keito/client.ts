@@ -120,6 +120,9 @@ export interface UpdateTimeEntryInput {
   startedTime?: string;
   endedTime?: string;
   spentDate?: string;
+  /** Reassigns which (project, task) pair the entry counts against. Always sent together. */
+  projectId?: string;
+  taskId?: string;
 }
 
 export class KeitoClient {
@@ -248,6 +251,8 @@ export class KeitoClient {
     if (patch.startedTime !== undefined) body["started_time"] = patch.startedTime;
     if (patch.endedTime !== undefined) body["ended_time"] = patch.endedTime;
     if (patch.spentDate !== undefined) body["spent_date"] = patch.spentDate;
+    if (patch.projectId !== undefined) body["project_id"] = patch.projectId;
+    if (patch.taskId !== undefined) body["task_id"] = patch.taskId;
 
     const { body: updated } = await this.#request(`/time_entries/${id}`, {
       method: "PATCH",
