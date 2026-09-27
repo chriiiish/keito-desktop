@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { Pair, TimeEntry } from "../core/keito/types.js";
 import type { EntryTotal } from "../core/time/totals.js";
+import { formatPairLine } from "../core/catalog/catalog.js";
 import { formatDuration } from "../core/time/elapsed.js";
 import { totalsByTaskAndNote } from "../core/time/totals.js";
 import { visibleNote, visibleNoteField, type NoteVisibility } from "../core/keito/notes.js";
@@ -66,12 +67,15 @@ export function RecentEntries({
     const pair = catalog.find(
       (candidate) => candidate.projectId === entry.project_id && candidate.taskId === entry.task_id,
     );
+    const taskName = pair?.taskName ?? "Unknown task";
+    const projectName = pair?.projectName ?? "Unknown project";
     return {
       total,
       entry,
       pair,
-      taskName: pair?.taskName ?? "Unknown task",
-      projectName: pair?.projectName ?? "Unknown project",
+      taskName,
+      projectName,
+      pairLine: formatPairLine({ projectName, taskName, ...(pair?.clientName ? { clientName: pair.clientName } : {}) }),
     };
   };
 
@@ -94,13 +98,11 @@ export function RecentEntries({
           */}
           {totalsByTaskAndNote(entries, now, timeZone)
             .map(describe)
-            .map(({ total, entry, pair, taskName, projectName }) => (
+            .map(({ total, entry, pair, taskName, pairLine }) => (
             <li key={total.key} className={total.isRunning ? "running-row" : ""}>
               <div className="entry-text">
                 <strong>{visibleNote(entry) || taskName}</strong>
-                <span>
-                  {projectName} — {taskName}
-                </span>
+                <span>{pairLine}</span>
               </div>
               <span className={`entry-hours${total.isRunning ? " ticking" : ""}`}>
                 {formatDuration(total.seconds)}

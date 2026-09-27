@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCatalog, pairId } from "./catalog.js";
+import { buildCatalog, formatPairLine, pairId } from "./catalog.js";
 
 // GET /projects embeds each project's assigned tasks, so no per-project lookup is needed.
 const projects = [
@@ -67,5 +67,19 @@ describe("buildCatalog", () => {
 
   it("identifies a pair by project and task together", () => {
     expect(pairId("p_apple", "t_dev")).toBe("p_apple:t_dev");
+  });
+});
+
+describe("formatPairLine", () => {
+  it("leads with the client when the pair has one", () => {
+    expect(
+      formatPairLine({ projectName: "Zebra", taskName: "Development", clientName: "Acme" }),
+    ).toBe("Acme: Zebra — Development");
+  });
+
+  it("omits the client entirely when the pair has none", () => {
+    expect(formatPairLine({ projectName: "Zebra", taskName: "Development" })).toBe(
+      "Zebra — Development",
+    );
   });
 });

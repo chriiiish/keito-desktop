@@ -5,6 +5,17 @@ export function pairId(projectId: string, taskId: string): string {
 }
 
 /**
+ * "Client: Project — Task", or "Project — Task" when the pair has no client — the one
+ * line the popover uses everywhere it names a category, so the running timer and its
+ * history read the same way.
+ */
+export function formatPairLine(pair: Pick<Pair, "projectName" | "taskName" | "clientName">): string {
+  return pair.clientName
+    ? `${pair.clientName}: ${pair.projectName} — ${pair.taskName}`
+    : `${pair.projectName} — ${pair.taskName}`;
+}
+
+/**
  * Flattens the workspace into the pairs a timer can actually be started against.
  *
  * Tasks come embedded in the project — GET /projects returns them — so building the whole

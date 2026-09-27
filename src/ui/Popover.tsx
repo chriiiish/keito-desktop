@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AsyncButton, Spinner, useAsyncAction } from "./AsyncButton.js";
 import { CategoryPicker } from "./CategoryPicker.js";
+import { formatPairLine } from "../core/catalog/catalog.js";
 import { Elapsed } from "./Elapsed.js";
 import { RecentEntries } from "./RecentEntries.js";
 import { NoteField, type NoteFieldHandle } from "./NoteField.js";
@@ -163,8 +164,7 @@ export function Popover(): JSX.Element {
               ) : (
                 <strong className="running-note none">No note</strong>
               )}
-              <span>{running.pair.projectName}</span>
-              <span>{running.pair.taskName}</span>
+              <span>{formatPairLine(running.pair)}</span>
             </div>
             <div className="running-right">
               <Elapsed
