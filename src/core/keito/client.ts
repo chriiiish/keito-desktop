@@ -113,17 +113,22 @@ export interface CreateTimeEntryInput {
   idempotencyKey?: string;
 }
 
-export interface UpdateTimeEntryInput {
+/**
+ * Reassigns which (project, task) pair an entry counts against. A type, not just a
+ * convention: Keito has no notion of a project without a task, so patching one id without
+ * the other is not a smaller edit, it is a nonsensical one, and the union makes the
+ * half-sent case impossible to construct rather than merely undocumented.
+ */
+export type CategoryReassignment = { projectId: string; taskId: string } | { projectId?: undefined; taskId?: undefined };
+
+export type UpdateTimeEntryInput = {
   notes?: string;
   internalNotes?: string;
   /** HH:mm in the workspace timezone — see core/time/workspace-time. */
   startedTime?: string;
   endedTime?: string;
   spentDate?: string;
-  /** Reassigns which (project, task) pair the entry counts against. Always sent together. */
-  projectId?: string;
-  taskId?: string;
-}
+} & CategoryReassignment;
 
 export class KeitoClient {
   #apiKey: string;

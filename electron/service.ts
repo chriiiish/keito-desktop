@@ -1,7 +1,7 @@
 import { buildPicker } from "../src/core/catalog/picker.js";
 import { loadCatalog, loadEntries } from "../src/core/catalog/workspace.js";
 import { shouldReloadCatalog } from "../src/core/catalog/staleness.js";
-import { KeitoClient, type RequestRecord } from "../src/core/keito/client.js";
+import { KeitoClient, type CategoryReassignment, type RequestRecord } from "../src/core/keito/client.js";
 import { KeitoAuthError, KeitoError, KeitoReadOnlyError } from "../src/core/keito/errors.js";
 import type { Identity, Pair, TimeEntry } from "../src/core/keito/types.js";
 import { PreferencesStore } from "../src/core/store/preferences.js";
@@ -60,15 +60,12 @@ export interface AzureState {
  * `preload.ts`'s renderer-facing type, so the three copies this call passes through cannot
  * drift out of shape from one another.
  */
-export interface EntryPatch {
+export type EntryPatch = {
   notes?: string;
   noteField?: NoteVisibility;
   startedTime?: string;
   endedTime?: string;
-  /** Reassigns the (project, task) pair. Always sent together — see AppService.updateEntry. */
-  projectId?: string;
-  taskId?: string;
-}
+} & CategoryReassignment;
 
 /** Everything the renderer needs to draw either window. */
 export interface Snapshot {
@@ -846,6 +843,17 @@ export class AppService {
 
       await this.#client!.updateTimeEntry(id, body);
       await this.#reloadEntries();
+
+      // The timer holds its own cached copy of the running entry, separate from #today, so
+      // that the tray and popover render it without a round trip. Reassigning the running
+      // row's project or task left that copy naming the old pair until the next refresh —
+      // most visibly wrong for a category change, since the tray label is built from it.
+      // #reloadEntries() has already fetched the corrected entry, so this costs no request.
+      const state = this.#timer?.current();
+      if (state?.status === "running" && state.entry.id === id) {
+        const updated = this.#today.find((candidate) => candidate.id === id) ?? null;
+        this.#timer!.adopt(updated, this.#catalog);
+      }
     });
   }
 

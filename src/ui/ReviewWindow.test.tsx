@@ -454,12 +454,46 @@ describe("the client, project and task columns", () => {
     api.updateEntry.mockResolvedValue(snapshot);
 
     render(<ReviewWindow />);
-    await user.click(await screen.findByRole("button", { name: "Category" }));
+    // Names the row rather than reusing the popover's plain "Category" — with one picker
+    // per row, every trigger sharing that name would announce identically to a screen
+    // reader.
+    await user.click(
+      await screen.findByRole("button", { name: "Category for Development — Acme Rebuild" }),
+    );
     await user.click(within(screen.getByRole("listbox")).getByText("Ops"));
 
     // project_id and task_id always travel together — there is no state in Keito where a
     // time entry names one without the other.
     expect(api.updateEntry).toHaveBeenCalledWith("te_1", { projectId: "p_bank", taskId: "t_ops" });
+  });
+
+  // The category picker is a whole combobox, not a single AsyncButton click, so it needs
+  // its own re-entry guard. Without it, reopening the dropdown and picking again before the
+  // first PATCH resolves risks the earlier, slower request's response landing last and
+  // leaving the entry assigned to whatever was picked first rather than whatever was picked
+  // most recently.
+  it("disables the picker until a reassignment settles, so a second pick cannot race the first", async () => {
+    const user = userEvent.setup();
+    api.listEntries.mockResolvedValue([row()]);
+    const { promise, resolve } = deferred<Snapshot>();
+    api.updateEntry.mockReturnValue(promise);
+
+    render(<ReviewWindow />);
+    const trigger = await screen.findByRole("button", {
+      name: "Category for Development — Acme Rebuild",
+    });
+    await user.click(trigger);
+    await user.click(within(screen.getByRole("listbox")).getByText("Ops"));
+
+    expect(api.updateEntry).toHaveBeenCalledTimes(1);
+    expect((trigger as HTMLButtonElement).disabled).toBe(true);
+
+    await act(async () => {
+      resolve(snapshot);
+      await promise;
+    });
+
+    expect((trigger as HTMLButtonElement).disabled).toBe(false);
   });
 
   // A timer can be running against a project archived, or otherwise dropped, from the
@@ -474,11 +508,14 @@ describe("the client, project and task columns", () => {
 
     render(<ReviewWindow />);
 
-    expect((await screen.findByRole("button", { name: "Category" })).textContent).toContain(
-      "Development",
-    );
+    // The archived pair's own embedded name resolves the row-specific aria-label too, not
+    // just what the trigger displays — both read from the same synthetic Pair.
+    const trigger = await screen.findByRole("button", {
+      name: "Category for Development — Acme Rebuild",
+    });
+    expect(trigger.textContent).toContain("Development");
 
-    await user.click(screen.getByRole("button", { name: "Category" }));
+    await user.click(trigger);
     await user.click(within(screen.getByRole("listbox")).getByText("Development"));
 
     // Choosing the row's own (already-selected) pair from the list is a no-op re-pick,
@@ -493,7 +530,9 @@ describe("the client, project and task columns", () => {
     api.toggleFavourite.mockResolvedValue({ ...snapshot, favourites: ["p_bank:t_ops"] });
 
     render(<ReviewWindow />);
-    await user.click(await screen.findByRole("button", { name: "Category" }));
+    await user.click(
+      await screen.findByRole("button", { name: "Category for Development — Acme Rebuild" }),
+    );
     await user.click(screen.getByRole("button", { name: "Favourite Bank Portal Ops" }));
 
     expect(api.toggleFavourite).toHaveBeenCalledWith("p_bank:t_ops");

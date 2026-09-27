@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { TimeEntry } from "../core/keito/types.js";
 import type { EntryPatch, Snapshot } from "../../electron/service.js";
 import { keito } from "./keito-api.js";
@@ -227,26 +227,38 @@ function Entries({
     catalog.find((pair) => pair.id === pairId(entry.project_id, entry.task_id))?.clientName ?? "—";
 
   /**
-   * The Pair this row's picker should show as selected, plus the catalog to show it
-   * against. `Timer.pairFor` faces the same problem for the running-entry label: a timer
-   * left going against a project that was since archived or hidden from the catalog would
-   * otherwise resolve to nothing and the picker would fall back to "Choose a category…",
-   * which reads as the row having lost its assignment rather than merely predating it. The
-   * entry's own embedded `project`/`task` names cover that case; injected only into this
-   * row's own catalog copy; every other row still sees the real one.
+   * The Pair each row's picker should show as selected, plus the catalog to show it
+   * against — one lookup per entry, not recomputed on every render. `CategoryPicker` keys
+   * its own memoization off the `catalog` array's identity, and a fresh `[...catalog, x]`
+   * built inline in the render would look like a changed catalog on every keystroke in the
+   * still-open dropdown, even when nothing about it actually changed.
+   *
+   * `Timer.pairFor` faces the same problem for the running-entry label: a timer left going
+   * against a project that was since archived or hidden from the catalog would otherwise
+   * resolve to nothing and the picker would fall back to "Choose a category…", which reads
+   * as the row having lost its assignment rather than merely predating it. The entry's own
+   * embedded `project`/`task` names cover that case; injected only into that one row's own
+   * catalog copy, so every other row still sees the real one.
    */
-  const categoryFor = (entry: TimeEntry): { id: string; catalog: Pair[] } => {
-    const id = pairId(entry.project_id, entry.task_id);
-    if (catalog.some((pair) => pair.id === id)) return { id, catalog };
-    const archived: Pair = {
-      id,
-      projectId: entry.project_id,
-      projectName: entry.project?.name ?? "Unknown project",
-      taskId: entry.task_id,
-      taskName: entry.task?.name ?? "Unknown task",
-    };
-    return { id, catalog: [...catalog, archived] };
-  };
+  const categories = useMemo(() => {
+    const map = new Map<string, { id: string; catalog: Pair[] }>();
+    for (const entry of entries) {
+      const id = pairId(entry.project_id, entry.task_id);
+      if (catalog.some((pair) => pair.id === id)) {
+        map.set(entry.id, { id, catalog });
+        continue;
+      }
+      const archived: Pair = {
+        id,
+        projectId: entry.project_id,
+        projectName: entry.project?.name ?? "Unknown project",
+        taskId: entry.task_id,
+        taskName: entry.task?.name ?? "Unknown task",
+      };
+      map.set(entry.id, { id, catalog: [...catalog, archived] });
+    }
+    return map;
+  }, [entries, catalog]);
 
   // The running row's hours climb rather than sitting at "—", which is what a null
   // `hours` from the API renders as. Ticking only while a timer is actually going.
@@ -265,6 +277,25 @@ function Entries({
       await load();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
+    }
+  };
+
+  /**
+   * The category picker isn't wrapped in `AsyncButton`/`useAsyncAction` like the rest of
+   * this table's controls — it's a whole combobox, not a single click — so it needs its
+   * own re-entry guard. Keyed on entry id rather than a single flag: a PATCH in flight on
+   * one row must not freeze every other row's picker, only the one whose choice is still
+   * being saved. Without this, reopening the dropdown and picking again before the first
+   * PATCH resolves could let the earlier, slower request's response land last and leave
+   * the entry assigned to whatever was picked first.
+   */
+  const [savingCategoryFor, setSavingCategoryFor] = useState<string | null>(null);
+  const editCategory = async (id: string, projectId: string, taskId: string) => {
+    setSavingCategoryFor(id);
+    try {
+      await edit(id, { projectId, taskId });
+    } finally {
+      setSavingCategoryFor(null);
     }
   };
 
@@ -305,7 +336,8 @@ function Entries({
         </thead>
         <tbody>
           {entries.map((entry) => {
-            const category = categoryFor(entry);
+            const category = categories.get(entry.id)!;
+            const selectedPair = category.catalog.find((candidate) => candidate.id === category.id);
             return (
             <tr key={entry.id} className={entry.is_running ? "running-row" : ""}>
               {range === "week" && <td>{entry.spent_date}</td>}
@@ -327,9 +359,18 @@ function Entries({
                   // landed. Every category is reachable here regardless of that setting.
                   hidden={[]}
                   selectedId={category.id}
+                  // A plain "Category" label is fine for the popover's one picker; a table
+                  // with one per row needs something that actually names the row, or every
+                  // trigger announces the same to assistive tech.
+                  ariaLabel={
+                    selectedPair
+                      ? `Category for ${selectedPair.taskName} — ${selectedPair.projectName}`
+                      : "Category"
+                  }
+                  disabled={savingCategoryFor === entry.id}
                   onSelect={(nextId) => {
                     const pair = category.catalog.find((candidate) => candidate.id === nextId);
-                    if (pair) void edit(entry.id, { projectId: pair.projectId, taskId: pair.taskId });
+                    if (pair) void editCategory(entry.id, pair.projectId, pair.taskId);
                   }}
                   onToggleFavourite={(id) => keito.toggleFavourite(id).then(onChange)}
                 />
