@@ -272,7 +272,7 @@ function Entries({
       <table>
         <thead>
           <tr>
-            <th>Date</th>
+            {range === "week" && <th>Date</th>}
             <th>Client</th>
             <th>Project</th>
             <th>Task</th>
@@ -286,7 +286,7 @@ function Entries({
         <tbody>
           {entries.map((entry) => (
             <tr key={entry.id} className={entry.is_running ? "running-row" : ""}>
-              <td>{entry.spent_date}</td>
+              {range === "week" && <td>{entry.spent_date}</td>}
               <td>{clientName(entry)}</td>
               <td>{entry.project?.name ?? "Unknown project"}</td>
               <td>{entry.task?.name ?? "Unknown task"}</td>
@@ -344,7 +344,7 @@ function Entries({
           ))}
           {entries.length === 0 && (
             <tr>
-              <td colSpan={9} className="empty">
+              <td colSpan={range === "week" ? 9 : 8} className="empty">
                 Nothing logged {range === "today" ? "today" : "this week"} yet.
               </td>
             </tr>
