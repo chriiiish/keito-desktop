@@ -156,15 +156,15 @@ export function Popover(): JSX.Element {
         {running ? (
           <>
             <div className="running-what">
-              <strong>{running.pair.taskName}</strong>
-              <span>{running.pair.projectName}</span>
               {running.note?.trim() ? (
-                <span className="running-note" title={running.note}>
+                <strong className="running-note" title={running.note}>
                   {running.note}
-                </span>
+                </strong>
               ) : (
-                <span className="running-note none">No note</span>
+                <strong className="running-note none">No note</strong>
               )}
+              <span>{running.pair.projectName}</span>
+              <span>{running.pair.taskName}</span>
             </div>
             <div className="running-right">
               <Elapsed

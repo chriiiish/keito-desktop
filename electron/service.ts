@@ -442,7 +442,11 @@ export class AppService {
       await this.#reloadEntries();
       if (priorSeconds > 0) {
         const resumed = this.#today.find((candidate) => candidate.id === entryId);
-        if (resumed) resumed.duration_seconds = priorSeconds + (resumed.duration_seconds ?? 0);
+        // Assigned, not added: the reload's response is expected to bring back
+        // duration_seconds: null, per the restart endpoint's documented shape. Adding to
+        // whatever it actually contains would double the stretch if a future API version
+        // ever does preserve it across a restart.
+        if (resumed && resumed.duration_seconds == null) resumed.duration_seconds = priorSeconds;
       }
     });
   }

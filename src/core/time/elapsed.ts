@@ -46,7 +46,8 @@ export function recordedSeconds(entry: Pick<TimeEntry, "duration_seconds" | "hou
  *
  * A **running** entry reports `hours: null` — verified against the live API and mirrored
  * by the fake — so formatting `hours` for one yields zero, which is why a running timer
- * used to read `0:00` in the lists. Its length has to be measured from its start instead.
+ * used to read `0:00` in the lists. Its length is the current stretch, measured from its
+ * start, plus whatever the entry already carries from before that stretch began.
  *
  * Resuming an entry through Keito's restart endpoint leaves `hours` null too — the earlier
  * stretch is not something the API gives back while the timer is going; it reappears once

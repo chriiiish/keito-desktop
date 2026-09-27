@@ -84,6 +84,18 @@ beforeEach(() => {
   api.getSnapshot.mockResolvedValue(snapshot);
 });
 
+/**
+ * Simulates the real `popover-shown` broadcast: every listener registered against it
+ * fires, not just the most recently mounted one. Both `Popover` and `RecentEntries`
+ * subscribe independently, and their registration order is an implementation detail this
+ * suite should not have to track.
+ */
+const firePopoverShown = () => {
+  act(() => {
+    for (const [onShown] of api.onPopoverShown.mock.calls) onShown();
+  });
+};
+
 const entry = (id: string, projectId: string, taskId: string, over: Partial<TimeEntry> = {}) => ({
   id,
   project_id: projectId,
@@ -314,8 +326,7 @@ describe("focus", () => {
     expect(document.activeElement).not.toBe(note);
 
     // The main process announces every show; the renderer never remounts.
-    const onShown = api.onPopoverShown.mock.calls.at(-1)![0];
-    act(() => onShown());
+    firePopoverShown();
 
     expect(document.activeElement).toBe(note);
   });
@@ -662,7 +673,7 @@ describe("a running row's duration", () => {
     render(<Popover />);
     await screen.findByLabelText(/^Stop Development$/);
 
-    expect(screen.getByText("0:30")).toBeDefined();
+    expect(screen.getByText("0:30", { selector: ".entry-hours" })).toBeDefined();
     expect(screen.queryByText("0:00")).toBeNull();
   });
 
@@ -672,7 +683,7 @@ describe("a running row's duration", () => {
     render(<Popover />);
     await screen.findByLabelText(/^Stop Development$/);
 
-    expect(screen.getByText("1:35")).toBeDefined();
+    expect(screen.getByText("1:35", { selector: ".entry-hours" })).toBeDefined();
   });
 
   it("still reads a stopped entry from its recorded hours", async () => {
@@ -684,7 +695,7 @@ describe("a running row's duration", () => {
     render(<Popover />);
     await screen.findByLabelText(/^Resume Development$/);
 
-    expect(screen.getByText("2:30")).toBeDefined();
+    expect(screen.getByText("2:30", { selector: ".entry-hours" })).toBeDefined();
   });
 
   // Yesterday's list is fed by the same formatter, and a timer left running overnight is
@@ -699,6 +710,29 @@ describe("a running row's duration", () => {
     await screen.findByText("Yesterday");
 
     expect(screen.getByText("0:45")).toBeDefined();
+  });
+});
+
+describe("the Today heading's total", () => {
+  it("reads 0:00 rather than nothing on an empty day", async () => {
+    api.getSnapshot.mockResolvedValue({ ...snapshot, today: [] } satisfies Snapshot);
+
+    render(<Popover />);
+
+    expect(await screen.findByText("0:00", { selector: ".day-total" })).toBeDefined();
+  });
+
+  it("does not show a total beside Yesterday", async () => {
+    api.getSnapshot.mockResolvedValue({
+      ...snapshot,
+      today: [entry("te_t", "p_acme", "t_dev", { hours: 1 })],
+      yesterday: [entry("te_y", "p_bank", "t_ops", { spent_date: "2026-09-01" })],
+    } satisfies Snapshot);
+
+    render(<Popover />);
+    await screen.findByText("Yesterday");
+
+    expect(document.querySelectorAll(".day-total")).toHaveLength(1);
   });
 });
 
@@ -744,6 +778,23 @@ describe("yesterday's entries", () => {
     expect(scrollers[0]!.querySelectorAll(".day")).toHaveLength(2);
     // Both headings live inside that one container, not beside it.
     expect(scrollers[0]!.querySelectorAll(".day-heading")).toHaveLength(2);
+  });
+
+  // The popover is hidden and shown, never recreated, so a scroll position left over from
+  // the last time it was open would otherwise still be there the next time it opens.
+  it("scrolls the list back to the top on every popover-shown, not just on mount", async () => {
+    api.getSnapshot.mockResolvedValue(withYesterday({ today: [entry("te_t", "p_acme", "t_dev")] }));
+
+    render(<Popover />);
+    await screen.findByText("Yesterday");
+
+    const scroller = document.querySelector(".recent") as HTMLDivElement;
+    scroller.scrollTop = 200;
+    expect(scroller.scrollTop).toBe(200);
+
+    firePopoverShown();
+
+    expect(scroller.scrollTop).toBe(0);
   });
 
   it("leaves the heading out when there is nothing behind you", async () => {
@@ -895,7 +946,9 @@ describe("a task worked on more than once in a day", () => {
     render(<Popover />);
 
     // 30 minutes logged plus 10 running, on one row rather than two rows of a fraction.
-    expect(await screen.findByText("0:40")).toBeDefined();
+    // The row and the Today heading's total both read 0:40, since the day has one task.
+    expect(await screen.findByText("0:40", { selector: ".entry-hours" })).toBeDefined();
+    expect(screen.getByText("0:40", { selector: ".day-total" })).toBeDefined();
     expect(screen.queryByText("0:30")).toBeNull();
     expect(screen.getAllByText("Sprint planning")).toHaveLength(1);
   });
@@ -1349,8 +1402,7 @@ describe("browsing the work item list", () => {
     await user.click(await screen.findByRole("button", { name: /show your azure devops work items/i }));
     expect(screen.getByRole("listbox")).toBeDefined();
 
-    const onShown = api.onPopoverShown.mock.calls.at(-1)![0];
-    act(() => onShown());
+    firePopoverShown();
 
     expect(screen.queryByRole("listbox")).toBeNull();
   });
