@@ -446,6 +446,21 @@ describe("the client, project and task columns", () => {
     expect(screen.getByText("Unknown task")).toBeDefined();
     expect(screen.getByText("—")).toBeDefined();
   });
+
+  it("hides the Date column in Today and shows it in This week", async () => {
+    const user = userEvent.setup();
+    api.listEntries.mockResolvedValue([row()]);
+
+    render(<ReviewWindow />);
+    await screen.findByText("Acme Rebuild");
+
+    expect(screen.queryByRole("columnheader", { name: "Date" })).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "This week" }));
+
+    expect(await screen.findByRole("columnheader", { name: "Date" })).toBeDefined();
+    expect(screen.getByRole("cell", { name: "2026-09-02" })).toBeDefined();
+  });
 });
 
 describe("the window title", () => {
