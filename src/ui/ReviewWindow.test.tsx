@@ -402,6 +402,52 @@ describe("the hours column while a timer runs", () => {
   });
 });
 
+describe("the client, project and task columns", () => {
+  const row = (over: Record<string, unknown> = {}) => ({
+    id: "te_1",
+    project_id: "p_acme",
+    task_id: "t_dev",
+    project: { id: "p_acme", name: "Acme Rebuild" },
+    task: { id: "t_dev", name: "Development" },
+    spent_date: "2026-09-02",
+    started_time: "09:00",
+    ended_time: "09:30",
+    timer_started_at: null,
+    duration_seconds: null,
+    hours: 0.5,
+    is_running: false,
+    notes: null,
+    ...over,
+  });
+
+  it("reads the project and task off the entry, and the client from the matching catalog pair", async () => {
+    api.getSnapshot.mockResolvedValue({
+      ...snapshot,
+      catalog: [{ ...pair("p_acme:t_dev", "Acme Rebuild", "Development"), clientName: "Acme Corp" }],
+    });
+    api.listEntries.mockResolvedValue([row()]);
+
+    render(<ReviewWindow />);
+
+    expect(await screen.findByText("Acme Corp")).toBeDefined();
+    expect(screen.getByText("Acme Rebuild")).toBeDefined();
+    expect(screen.getByText("Development")).toBeDefined();
+  });
+
+  // The catalog only lists what a project embeds today; a row can still name a pair the
+  // catalog no longer carries a client for, or an entry can omit the embed outright.
+  it("falls back when the entry has no embedded names or no catalog match", async () => {
+    api.getSnapshot.mockResolvedValue({ ...snapshot, catalog: [] });
+    api.listEntries.mockResolvedValue([row({ project: null, task: null })]);
+
+    render(<ReviewWindow />);
+
+    expect(await screen.findByText("Unknown project")).toBeDefined();
+    expect(screen.getByText("Unknown task")).toBeDefined();
+    expect(screen.getByText("—")).toBeDefined();
+  });
+});
+
 describe("the window title", () => {
   const show = async (over: Partial<Snapshot> = {}) => {
     // Set deliberately wrong first, so a passing assertion cannot be a leftover from the
