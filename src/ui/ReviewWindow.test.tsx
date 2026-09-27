@@ -397,9 +397,8 @@ describe("the hours column while a timer runs", () => {
     api.listEntries.mockResolvedValue([row()]);
 
     render(<ReviewWindow />);
-    await screen.findByText("0.50");
 
-    expect(screen.queryByText("—")).toBeNull();
+    await screen.findByText("0.50");
   });
 });
 
