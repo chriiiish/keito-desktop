@@ -282,20 +282,37 @@ function Entries({
 
   /**
    * The category picker isn't wrapped in `AsyncButton`/`useAsyncAction` like the rest of
-   * this table's controls — it's a whole combobox, not a single click — so it needs its
-   * own re-entry guard. Keyed on entry id rather than a single flag: a PATCH in flight on
-   * one row must not freeze every other row's picker, only the one whose choice is still
-   * being saved. Without this, reopening the dropdown and picking again before the first
-   * PATCH resolves could let the earlier, slower request's response land last and leave
-   * the entry assigned to whatever was picked first.
+   * this table's controls — it's a whole combobox, not a single click — so it needs its own
+   * re-entry guard. Tracks a *set* of in-flight ids, not one flag: a single slot meant one
+   * row's save completing cleared the guard for every row, so editing two rows at once let
+   * the second row's trigger re-enable while its own PATCH was still in flight, reopening
+   * the exact race this exists to prevent.
+   *
+   * Membership is checked against the ref, not the state, the same reason
+   * `useAsyncAction`'s guard is a ref: two picks on the same row in one tick would both read
+   * a stale membership from state and both fire before either update lands.
    */
-  const [savingCategoryFor, setSavingCategoryFor] = useState<string | null>(null);
+  const savingCategoryRef = useRef<Set<string>>(new Set());
+  const [savingCategoryIds, setSavingCategoryIds] = useState<ReadonlySet<string>>(new Set());
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   const editCategory = async (id: string, projectId: string, taskId: string) => {
-    setSavingCategoryFor(id);
+    if (savingCategoryRef.current.has(id)) return;
+    savingCategoryRef.current.add(id);
+    setSavingCategoryIds(new Set(savingCategoryRef.current));
     try {
       await edit(id, { projectId, taskId });
     } finally {
-      setSavingCategoryFor(null);
+      savingCategoryRef.current.delete(id);
+      // The entries tab unmounts when another tab is selected; a save that outlives that
+      // must not set state into the void, the same rule useAsyncAction follows.
+      if (mountedRef.current) setSavingCategoryIds(new Set(savingCategoryRef.current));
     }
   };
 
@@ -367,7 +384,7 @@ function Entries({
                       ? `Category for ${selectedPair.taskName} — ${selectedPair.projectName}`
                       : "Category"
                   }
-                  disabled={savingCategoryFor === entry.id}
+                  disabled={savingCategoryIds.has(entry.id)}
                   onSelect={(nextId) => {
                     const pair = category.catalog.find((candidate) => candidate.id === nextId);
                     if (pair) void editCategory(entry.id, pair.projectId, pair.taskId);

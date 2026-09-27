@@ -496,6 +496,56 @@ describe("the client, project and task columns", () => {
     expect((trigger as HTMLButtonElement).disabled).toBe(false);
   });
 
+  // The bug a single shared "which row is saving" flag had: row A finishing cleared the
+  // guard for every row, so row B's trigger re-enabled — and could fire a second PATCH —
+  // while row B's own first request was still in flight.
+  it("keeps a second row's picker disabled while only the first row's save has settled", async () => {
+    const user = userEvent.setup();
+    const rowB = row({
+      id: "te_2",
+      project_id: "p_bank",
+      task_id: "t_ops",
+      project: { id: "p_bank", name: "Bank Portal" },
+      task: { id: "t_ops", name: "Ops" },
+    });
+    api.listEntries.mockResolvedValue([row(), rowB]);
+    const first = deferred<Snapshot>();
+    const second = deferred<Snapshot>();
+    api.updateEntry.mockImplementation((id: string) => (id === "te_1" ? first.promise : second.promise));
+
+    render(<ReviewWindow />);
+    const triggerA = await screen.findByRole("button", {
+      name: "Category for Development — Acme Rebuild",
+    });
+    const triggerB = screen.getByRole("button", { name: "Category for Ops — Bank Portal" });
+
+    await user.click(triggerA);
+    await user.click(within(screen.getByRole("listbox")).getByText("Ops"));
+    await user.click(triggerB);
+    await user.click(within(screen.getByRole("listbox")).getByText("Development"));
+
+    expect(api.updateEntry).toHaveBeenCalledTimes(2);
+    expect((triggerA as HTMLButtonElement).disabled).toBe(true);
+    expect((triggerB as HTMLButtonElement).disabled).toBe(true);
+
+    // Row A settles first.
+    await act(async () => {
+      first.resolve(snapshot);
+      await first.promise;
+    });
+
+    expect((triggerA as HTMLButtonElement).disabled).toBe(false);
+    // Row B's own request is still pending — its trigger must stay disabled regardless.
+    expect((triggerB as HTMLButtonElement).disabled).toBe(true);
+
+    await act(async () => {
+      second.resolve(snapshot);
+      await second.promise;
+    });
+
+    expect((triggerB as HTMLButtonElement).disabled).toBe(false);
+  });
+
   // A timer can be running against a project archived, or otherwise dropped, from the
   // catalog since — CLAUDE.md's rule for the running-entry label applies here too: the
   // entry's own embedded names must still be what the picker shows as selected, not a
