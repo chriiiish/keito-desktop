@@ -12,6 +12,8 @@ import { ProjectsTab } from "./ProjectsTab.js";
 import { Toggle } from "./Toggle.js";
 import { InfoTip } from "./InfoTip.js";
 import { useSnapshot } from "./useSnapshot.js";
+import { pairId } from "../core/catalog/catalog.js";
+import type { Pair } from "../core/keito/types.js";
 import { shiftDate, workspaceDate } from "../core/time/workspace-time.js";
 import { entrySeconds, formatDecimalHours } from "../core/time/elapsed.js";
 import { visibleNote, visibleNoteField, type NoteVisibility } from "../core/keito/notes.js";
@@ -161,7 +163,11 @@ export function ReviewWindow(): JSX.Element {
       </nav>
 
       {active === "entries" && (
-        <Entries revision={snapshot.revision} timeZone={snapshot.workspaceTimezone} />
+        <Entries
+          revision={snapshot.revision}
+          timeZone={snapshot.workspaceTimezone}
+          catalog={snapshot.catalog}
+        />
       )}
       {active === "projects" && <ProjectsTab snapshot={snapshot} onChange={setSnapshot} />}
       {active === "connection" && <Connection snapshot={snapshot} onChange={setSnapshot} />}
@@ -181,7 +187,15 @@ export function ReviewWindow(): JSX.Element {
  * "Today" and "this week" are the workspace's days, matching the `spent_date` the rows
  * carry — from UTC they would be off by one for most of the world for part of each day.
  */
-function Entries({ revision, timeZone }: { revision: number; timeZone: string }): JSX.Element {
+function Entries({
+  revision,
+  timeZone,
+  catalog,
+}: {
+  revision: number;
+  timeZone: string;
+  catalog: Pair[];
+}): JSX.Element {
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [range, setRange] = useState<"today" | "week">("today");
   const [error, setError] = useState<string | null>(null);
@@ -202,6 +216,13 @@ function Entries({ revision, timeZone }: { revision: number; timeZone: string })
   }, [range, timeZone]);
 
   useEffect(() => void load(), [load, revision]);
+
+  /**
+   * The client name isn't on a time entry, only on a project — `pairId` joins back to the
+   * catalog's Pair for it, the same key `ProjectsTab` and the picker use for a project/task.
+   */
+  const clientName = (entry: TimeEntry): string =>
+    catalog.find((pair) => pair.id === pairId(entry.project_id, entry.task_id))?.clientName ?? "—";
 
   // The running row's hours climb rather than sitting at "—", which is what a null
   // `hours` from the API renders as. Ticking only while a timer is actually going.
@@ -251,7 +272,10 @@ function Entries({ revision, timeZone }: { revision: number; timeZone: string })
       <table>
         <thead>
           <tr>
-            <th>Date</th>
+            {range === "week" && <th>Date</th>}
+            <th>Client</th>
+            <th>Project</th>
+            <th>Task</th>
             <th>Start</th>
             <th>End</th>
             <th>Hours</th>
@@ -262,7 +286,10 @@ function Entries({ revision, timeZone }: { revision: number; timeZone: string })
         <tbody>
           {entries.map((entry) => (
             <tr key={entry.id} className={entry.is_running ? "running-row" : ""}>
-              <td>{entry.spent_date}</td>
+              {range === "week" && <td>{entry.spent_date}</td>}
+              <td>{clientName(entry)}</td>
+              <td>{entry.project?.name ?? "Unknown project"}</td>
+              <td>{entry.task?.name ?? "Unknown task"}</td>
               <td>
                 <TimeCell
                   value={entry.started_time}
@@ -317,7 +344,7 @@ function Entries({ revision, timeZone }: { revision: number; timeZone: string })
           ))}
           {entries.length === 0 && (
             <tr>
-              <td colSpan={6} className="empty">
+              <td colSpan={range === "week" ? 9 : 8} className="empty">
                 Nothing logged {range === "today" ? "today" : "this week"} yet.
               </td>
             </tr>
