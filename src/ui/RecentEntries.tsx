@@ -174,7 +174,7 @@ export function RecentEntries({
      * separately — with a long day today you could not reach yesterday without first
      * scrolling to the bottom of a box that ended halfway up the popover.
      */
-    <div className="recent">
+    <div className="recent" ref={scrollerRef}>
       {day("Today", today, "Nothing logged yet today.", false, dayTotalSeconds(today, now, timeZone))}
       {/* Left out entirely on a day with no history behind it, rather than showing an
           empty heading that says nothing. */}
