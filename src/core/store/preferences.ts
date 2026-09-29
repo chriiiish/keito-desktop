@@ -24,6 +24,8 @@ export interface Preferences {
   trayFallback: TrayFallback;
   /** What, if anything, precedes the note in the tray. */
   trayPrefix: TrayPrefix;
+  /** Appends the running entry's own elapsed time to the end of the tray label. */
+  trayShowElapsed: boolean;
   /**
    * The version of an update notice the user has dismissed, e.g. "0.3.0".
    *
@@ -80,6 +82,7 @@ const defaults = (): Preferences => ({
   hotkey: DEFAULT_HOTKEY,
   trayFallback: "task",
   trayPrefix: "none",
+  trayShowElapsed: false,
   includePrereleases: false,
   noteIsInternal: false,
   internalNotesAvailable: false,

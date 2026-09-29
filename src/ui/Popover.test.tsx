@@ -74,6 +74,7 @@ const snapshot: Snapshot = {
   apiKeyHint: "kto_••••••••abcd",
   trayFallback: "task",
   trayPrefix: "none",
+  trayShowElapsed: false,
   revision: 1,
   timer: { status: "idle" },
   error: null,

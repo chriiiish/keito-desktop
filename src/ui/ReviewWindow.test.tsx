@@ -80,6 +80,7 @@ const snapshot: Snapshot = {
   apiKeyHint: "kto_••••••••abcd",
   trayFallback: "task",
   trayPrefix: "none",
+  trayShowElapsed: false,
   revision: 1,
   timer: { status: "idle" },
   error: null,
@@ -864,13 +865,62 @@ describe("the menu bar label settings", () => {
     expect(screen.getByTestId("tray-preview").textContent).toBe("Development: Sprint planning");
   });
 
-  it("saves both settings together so one cannot clobber the other", async () => {
+  it("saves all three settings together so one cannot clobber another", async () => {
     const user = await openSettings();
     api.setTrayLabel.mockResolvedValue(snapshot);
 
     await user.click(screen.getByRole("radio", { name: /show the project/i }));
 
-    expect(api.setTrayLabel).toHaveBeenCalledWith({ prefix: "none", fallback: "project" });
+    expect(api.setTrayLabel).toHaveBeenCalledWith({
+      prefix: "none",
+      fallback: "project",
+      showElapsed: false,
+    });
+  });
+
+  it("offers a checkbox for elapsed time, unchecked by default", async () => {
+    await openSettings();
+
+    const checkbox = screen.getByRole("checkbox", {
+      name: /also show how long the timer has been running/i,
+    }) as HTMLInputElement;
+    expect(checkbox.checked).toBe(false);
+  });
+
+  it("checks the elapsed-time box when it is already on", async () => {
+    api.getSnapshot.mockResolvedValue({ ...snapshot, trayShowElapsed: true } satisfies Snapshot);
+    await openSettings();
+
+    const checkbox = screen.getByRole("checkbox", {
+      name: /also show how long the timer has been running/i,
+    }) as HTMLInputElement;
+    expect(checkbox.checked).toBe(true);
+  });
+
+  it("appends elapsed time to the preview as soon as the checkbox is ticked", async () => {
+    const user = await openSettings();
+    api.setTrayLabel.mockReturnValue(new Promise(() => {}));
+
+    await user.click(
+      screen.getByRole("checkbox", { name: /also show how long the timer has been running/i }),
+    );
+
+    expect(screen.getByTestId("tray-preview").textContent).toBe("Sprint planning 1:23");
+  });
+
+  it("saves the elapsed-time preference alongside the other two, unchanged", async () => {
+    const user = await openSettings();
+    api.setTrayLabel.mockResolvedValue(snapshot);
+
+    await user.click(
+      screen.getByRole("checkbox", { name: /also show how long the timer has been running/i }),
+    );
+
+    expect(api.setTrayLabel).toHaveBeenCalledWith({
+      prefix: "none",
+      fallback: "task",
+      showElapsed: true,
+    });
   });
 });
 
