@@ -357,6 +357,37 @@ describe("collapsing projects", () => {
 
     expect(screen.getByLabelText("All tasks for Multi Client")).toBeDefined();
   });
+
+  it("offers Show all when something is hidden, and shows it all when clicked", async () => {
+    const user = await openProjects({ hidden: ["p_bank:t_ops"] });
+
+    const button = screen.getByRole("button", { name: "Show all" });
+    await user.click(button);
+
+    expect(api.setHidden).toHaveBeenCalledWith(["p_acme:t_dev", "p_bank:t_ops"], false);
+  });
+
+  it("offers Hide all when everything is shown, and hides it all when clicked", async () => {
+    const user = await openProjects({ hidden: ["p_bank:t_ops"] });
+    api.setHidden.mockResolvedValue({ ...snapshot, hidden: [] });
+
+    await user.click(screen.getByRole("button", { name: "Show all" }));
+    const button = await screen.findByRole("button", { name: "Hide all" });
+    await user.click(button);
+
+    expect(api.setHidden).toHaveBeenLastCalledWith(["p_acme:t_dev", "p_bank:t_ops"], true);
+  });
+
+  // Unlike Expand/Collapse all, which is inert while filtering, Show/Hide all is a real
+  // preference change — it must act on what the filter narrowed to, never reach past it.
+  it("scopes Show all / Hide all to what the filter currently matches", async () => {
+    const user = await openProjects({ hidden: ["p_bank:t_ops"] });
+
+    await user.type(screen.getByPlaceholderText("Filter projects and tasks…"), "Ops");
+    await user.click(screen.getByRole("button", { name: "Show all" }));
+
+    expect(api.setHidden).toHaveBeenCalledWith(["p_bank:t_ops"], false);
+  });
 });
 
 describe("the hours column while a timer runs", () => {

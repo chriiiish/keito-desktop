@@ -103,6 +103,13 @@ export function ProjectsTab({ snapshot, onChange }: ProjectsTabProps): JSX.Eleme
 
   const allExpanded = projectIds.length > 0 && projectIds.every((id) => expanded.has(id));
 
+  // Scoped to whatever the filter currently matches, not the whole catalog — unlike
+  // Expand/Collapse (a view-only convenience, useless once filtering already forces
+  // everything open), Show/Hide all changes real preferences. Filtering down to one
+  // client and hiding everything in view must not reach outside it.
+  const visiblePairs = useMemo(() => groups.flatMap((group) => group.pairs), [groups]);
+  const allShown = visiblePairs.length > 0 && visiblePairs.every((pair) => !hidden.has(pair.id));
+
   const toggleProject = (projectId: string) =>
     setExpanded((current) => {
       const next = new Set(current);
@@ -169,6 +176,12 @@ export function ProjectsTab({ snapshot, onChange }: ProjectsTabProps): JSX.Eleme
             >
               {allExpanded ? "Collapse all" : "Expand all"}
             </button>
+            <AsyncButton
+              className="link"
+              onClick={() => setVisible(visiblePairs.map((pair) => pair.id), !allShown)}
+            >
+              {allShown ? "Hide all" : "Show all"}
+            </AsyncButton>
           </div>
         )}
 
