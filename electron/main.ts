@@ -38,6 +38,13 @@ let tray: Tray | null = null;
 let popover: BrowserWindow | null = null;
 let mainWindow: BrowserWindow | null = null;
 let service: AppService;
+/**
+ * Lets the "snapshot" IPC handler wait for `AppService.create()` rather than reading
+ * `service` before it exists. The popover window is now created concurrently with that
+ * call (see `start()`) instead of lazily on first click, so its own first `getSnapshot()`
+ * request can genuinely land before `service` is assigned.
+ */
+let serviceReady: Promise<AppService>;
 /** Held so the update check can read the channel the user chose. */
 let prefsStore: PreferencesStore;
 let registeredHotkey: string | null = null;
@@ -279,7 +286,13 @@ function registerIpc(): void {
       return result;
     });
 
-  handle("snapshot", async () => service.snapshot());
+  // The one handler that can be invoked before `service` exists — the popover is now
+  // created concurrently with AppService.create(), and its first request for a snapshot
+  // can land before that call resolves.
+  handle("snapshot", async () => {
+    await serviceReady;
+    return service.snapshot();
+  });
   handle("set-api-key", async (key: string, accountId?: string) => service.setApiKey(key, accountId));
   handle("set-company-id", async (accountId: string) => service.setCompanyId(accountId));
   handle("sign-out", async () => service.signOut());
@@ -523,10 +536,26 @@ async function start(): Promise<void> {
   // A second store rather than a second field: SecretStore is one encrypted value at one
   // path, and the Azure token has a different lifetime to the Keito key.
   const azureSecrets = new SecretStore(join(app.getPath("userData"), "azure.bin"));
-  service = await AppService.create(prefs, secrets, log, app.getVersion(), azureSecrets);
+
+  // IPC handlers are safe to register before `service` exists — every handler but
+  // "snapshot" reads the module-level `service` only when actually invoked, by which
+  // point some user action has already happened, and by then AppService.create() below
+  // has long since resolved. "snapshot" is the exception: it's what the popover calls the
+  // instant its renderer mounts, which can now genuinely race AppService.create() — see
+  // registerIpc()'s own handler for how it waits on `serviceReady` instead.
+  registerIpc();
+
+  // Created here, concurrently with AppService.create()'s network calls below, rather
+  // than lazily on the first tray click. Building the BrowserWindow and loading its
+  // renderer bundle is CPU/IO-bound and doesn't depend on the service existing, so
+  // overlapping the two instead of paying for them back-to-back is what makes that first
+  // click feel as instant as every later one.
+  popover = createPopover();
+
+  serviceReady = AppService.create(prefs, secrets, log, app.getVersion(), azureSecrets);
+  service = await serviceReady;
 
   createTray();
-  registerIpc();
   service.setHotkeyRegistered(registerHotkey(prefs.get().hotkey));
   service.setOpenAtLogin(readOpenAtLogin(), app.isPackaged);
   startMonitors();

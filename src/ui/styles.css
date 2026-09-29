@@ -95,7 +95,8 @@ input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 
 /* ── Popover ─────────────────────────────────────────────── */
 .popover { display: flex; flex-direction: column; height: 100vh; }
-.popover.loading { align-items: center; justify-content: center; color: var(--muted); }
+.popover.loading { align-items: center; justify-content: center; gap: 8px; color: var(--muted); }
+.window.loading { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 40px 0; color: var(--muted); }
 
 /* The first thing the app ever shows, in a 420x520 window with nothing else in it — so
    it is centred and given room rather than sat in the top corner as a line of text. */

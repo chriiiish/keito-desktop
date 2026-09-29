@@ -128,7 +128,14 @@ export function ReviewWindow(): JSX.Element {
     document.title = company ? `Keito Timer - ${company}` : "Keito Timer";
   }, [company]);
 
-  if (!snapshot) return <div className="window loading">Loading…</div>;
+  if (!snapshot) {
+    return (
+      <div className="window loading">
+        <Spinner />
+        Loading…
+      </div>
+    );
+  }
 
   const update = snapshot.update;
   const tabs = update ? ALL_TABS : TABS;
