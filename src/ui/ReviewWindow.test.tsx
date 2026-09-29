@@ -430,7 +430,7 @@ describe("the client, project and task columns", () => {
     render(<ReviewWindow />);
 
     const trigger = await screen.findByRole("button", {
-      name: "Category for Development — Acme Rebuild",
+      name: "Category for Development — Acme Corp: Acme Rebuild",
     });
     const lines = Array.from(within(trigger).getByText("Development").parentElement!.children, (el) =>
       el.textContent,

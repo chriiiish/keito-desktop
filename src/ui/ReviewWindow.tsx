@@ -367,10 +367,17 @@ function Entries({
                   selectedId={category.id}
                   // A plain "Category" label is fine for the popover's one picker; a table
                   // with one per row needs something that actually names the row, or every
-                  // trigger announces the same to assistive tech.
+                  // trigger announces the same to assistive tech. The client rides along too
+                  // — dropping it from the visible cell (CategoryLines) left it nowhere for a
+                  // screen reader to find, and two rows can share a task and project name
+                  // across different clients.
                   ariaLabel={
                     selectedPair
-                      ? `Category for ${selectedPair.taskName} — ${selectedPair.projectName}`
+                      ? `Category for ${selectedPair.taskName} — ${
+                          selectedPair.clientName
+                            ? `${selectedPair.clientName}: ${selectedPair.projectName}`
+                            : selectedPair.projectName
+                        }`
                       : "Category"
                   }
                   disabled={savingCategoryIds.has(entry.id)}
