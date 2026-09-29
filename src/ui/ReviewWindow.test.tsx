@@ -358,35 +358,33 @@ describe("collapsing projects", () => {
     expect(screen.getByLabelText("All tasks for Multi Client")).toBeDefined();
   });
 
-  it("offers Show all when something is hidden, and shows it all when clicked", async () => {
+  it("hides every shown project and task when Deselect all is clicked", async () => {
     const user = await openProjects({ hidden: ["p_bank:t_ops"] });
 
-    const button = screen.getByRole("button", { name: "Show all" });
+    const button = screen.getByRole("button", { name: "Deselect all" });
     await user.click(button);
 
-    expect(api.setHidden).toHaveBeenCalledWith(["p_acme:t_dev", "p_bank:t_ops"], false);
+    expect(api.setHidden).toHaveBeenCalledWith(["p_acme:t_dev", "p_bank:t_ops"], true);
   });
 
-  it("offers Hide all when everything is shown, and hides it all when clicked", async () => {
-    const user = await openProjects({ hidden: ["p_bank:t_ops"] });
-    api.setHidden.mockResolvedValue({ ...snapshot, hidden: [] });
+  it("disables Deselect all once nothing is left shown", async () => {
+    const user = await openProjects({ hidden: ["p_acme:t_dev", "p_bank:t_ops"] });
 
-    await user.click(screen.getByRole("button", { name: "Show all" }));
-    const button = await screen.findByRole("button", { name: "Hide all" });
-    await user.click(button);
-
-    expect(api.setHidden).toHaveBeenLastCalledWith(["p_acme:t_dev", "p_bank:t_ops"], true);
+    expect(screen.getByRole("button", { name: "Deselect all" }).hasAttribute("disabled")).toBe(true);
+    // Nothing to click through to, but confirms it truly is inert.
+    await user.click(screen.getByRole("button", { name: "Deselect all" }));
+    expect(api.setHidden).not.toHaveBeenCalled();
   });
 
-  // Unlike Expand/Collapse all, which is inert while filtering, Show/Hide all is a real
+  // Unlike Expand/Collapse all, which is inert while filtering, Deselect all is a real
   // preference change — it must act on what the filter narrowed to, never reach past it.
-  it("scopes Show all / Hide all to what the filter currently matches", async () => {
-    const user = await openProjects({ hidden: ["p_bank:t_ops"] });
+  it("scopes Deselect all to what the filter currently matches", async () => {
+    const user = await openProjects();
 
     await user.type(screen.getByPlaceholderText("Filter projects and tasks…"), "Ops");
-    await user.click(screen.getByRole("button", { name: "Show all" }));
+    await user.click(screen.getByRole("button", { name: "Deselect all" }));
 
-    expect(api.setHidden).toHaveBeenCalledWith(["p_bank:t_ops"], false);
+    expect(api.setHidden).toHaveBeenCalledWith(["p_bank:t_ops"], true);
   });
 });
 
