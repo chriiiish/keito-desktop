@@ -103,6 +103,13 @@ export function ProjectsTab({ snapshot, onChange }: ProjectsTabProps): JSX.Eleme
 
   const allExpanded = projectIds.length > 0 && projectIds.every((id) => expanded.has(id));
 
+  // Scoped to whatever the filter currently matches, not the whole catalog — unlike
+  // Expand/Collapse (a view-only convenience, useless once filtering already forces
+  // everything open), Deselect all changes a real preference. Filtering down to one
+  // client and clicking it must not reach outside what is on screen.
+  const visiblePairs = useMemo(() => groups.flatMap((group) => group.pairs), [groups]);
+  const someShown = visiblePairs.some((pair) => !hidden.has(pair.id));
+
   const toggleProject = (projectId: string) =>
     setExpanded((current) => {
       const next = new Set(current);
@@ -160,6 +167,17 @@ export function ProjectsTab({ snapshot, onChange }: ProjectsTabProps): JSX.Eleme
 
         {groups.length > 0 && (
           <div className="visibility-actions">
+            <AsyncButton
+              className="link"
+              disabled={!someShown}
+              title={someShown ? undefined : "Nothing shown to deselect"}
+              onClick={() => setVisible(visiblePairs.map((pair) => pair.id), false)}
+            >
+              Deselect all
+            </AsyncButton>
+            <span className="visibility-actions-separator" aria-hidden="true">
+              |
+            </span>
             <button
               type="button"
               className="link"

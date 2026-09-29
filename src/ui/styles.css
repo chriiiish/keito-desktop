@@ -826,7 +826,8 @@ select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 
 /* The whole project name is the hit target, so opening one is not a game of darts
    against a 10px chevron. */
-.visibility-actions { display: flex; justify-content: flex-end; margin-bottom: 6px; }
+.visibility-actions { display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-bottom: 6px; }
+.visibility-actions-separator { color: var(--line); }
 .disclosure {
   flex: 1;
   min-width: 0;
