@@ -176,8 +176,12 @@ export function ProjectsTab({ snapshot, onChange }: ProjectsTabProps): JSX.Eleme
             >
               {allExpanded ? "Collapse all" : "Expand all"}
             </button>
+            {/*
+              A plain bordered button, not `.link` like Expand all: that one only ever
+              changes what is on screen, this one changes a real preference — the two
+              should not look like the same kind of action.
+            */}
             <AsyncButton
-              className="link"
               disabled={!someShown}
               title={someShown ? undefined : "Nothing shown to deselect"}
               onClick={() => setVisible(visiblePairs.map((pair) => pair.id), false)}
