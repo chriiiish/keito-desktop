@@ -113,19 +113,24 @@ describe("PreferencesStore", () => {
     expect((await PreferencesStore.open(file)).get().accountId).toBeUndefined();
   });
 
-  it("defaults the tray label to the note, falling back to the task", async () => {
+  it("defaults the tray label to the note, falling back to the task, with elapsed time off", async () => {
     const store = await PreferencesStore.open(file);
 
-    expect(store.get()).toMatchObject({ trayFallback: "task", trayPrefix: "none" });
+    expect(store.get()).toMatchObject({
+      trayFallback: "task",
+      trayPrefix: "none",
+      trayShowElapsed: false,
+    });
   });
 
   it("remembers tray label choices", async () => {
     const store = await PreferencesStore.open(file);
-    await store.update({ trayFallback: "project", trayPrefix: "task" });
+    await store.update({ trayFallback: "project", trayPrefix: "task", trayShowElapsed: true });
 
     expect((await PreferencesStore.open(file)).get()).toMatchObject({
       trayFallback: "project",
       trayPrefix: "task",
+      trayShowElapsed: true,
     });
   });
 
@@ -192,6 +197,7 @@ describe("reset", () => {
       hotkey: "CommandOrControl+Alt+J",
       trayFallback: "project",
       trayPrefix: "task",
+      trayShowElapsed: true,
     });
 
     await store.reset();
@@ -202,6 +208,7 @@ describe("reset", () => {
       hotkey: DEFAULT_HOTKEY,
       trayFallback: "task",
       trayPrefix: "none",
+      trayShowElapsed: false,
     });
     // Gone entirely rather than present-and-undefined, which is what reaches the file:
     // JSON.stringify drops an undefined value, so the two would be indistinguishable

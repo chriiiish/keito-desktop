@@ -139,6 +139,7 @@ export interface Snapshot {
     | { status: "needs-auth" };
   trayFallback: TrayFallback;
   trayPrefix: TrayPrefix;
+  trayShowElapsed: boolean;
   error: string | null;
 }
 
@@ -285,6 +286,7 @@ export class AppService {
       apiKeyHint: this.#apiKeyHint,
       trayFallback: prefs.trayFallback,
       trayPrefix: prefs.trayPrefix,
+      trayShowElapsed: prefs.trayShowElapsed,
       revision: this.#revision,
       timer:
         state.status === "running"
@@ -486,8 +488,16 @@ export class AppService {
     return this.snapshot();
   }
 
-  async setTrayLabel(options: { fallback: TrayFallback; prefix: TrayPrefix }): Promise<Snapshot> {
-    await this.#prefs.update({ trayFallback: options.fallback, trayPrefix: options.prefix });
+  async setTrayLabel(options: {
+    fallback: TrayFallback;
+    prefix: TrayPrefix;
+    showElapsed: boolean;
+  }): Promise<Snapshot> {
+    await this.#prefs.update({
+      trayFallback: options.fallback,
+      trayPrefix: options.prefix,
+      trayShowElapsed: options.showElapsed,
+    });
     return this.snapshot();
   }
 

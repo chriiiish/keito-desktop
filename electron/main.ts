@@ -27,6 +27,12 @@ const IDLE_POLL_MS = 30_000;
 const REFRESH_MS = 5 * 60_000;
 /** How often the Azure DevOps work item list is reloaded while the app is running. */
 const AZURE_REFRESH_MS = 10 * 60_000;
+/**
+ * How often the tray title is refreshed on its own while a timer runs, so elapsed time
+ * moves without waiting for the next snapshot broadcast. Matches the minute granularity
+ * `formatTrayLabel` actually displays — no reason to tick faster than the label can show.
+ */
+const TRAY_ELAPSED_REFRESH_MS = 60_000;
 
 let tray: Tray | null = null;
 let popover: BrowserWindow | null = null;
@@ -64,10 +70,11 @@ function broadcast(snapshot: Snapshot): void {
 function updateTrayTitle(snapshot: Snapshot): void {
   if (!tray) return;
   if (snapshot.timer.status === "running") {
-    const { pair, note } = snapshot.timer;
+    const { pair, note, startedAtMs } = snapshot.timer;
+    const elapsedSeconds = Math.max(0, Math.floor((Date.now() - startedAtMs) / 1000));
     const label = formatTrayLabel(
-      { note, projectName: pair.projectName, taskName: pair.taskName },
-      { fallback: snapshot.trayFallback, prefix: snapshot.trayPrefix },
+      { note, projectName: pair.projectName, taskName: pair.taskName, elapsedSeconds },
+      { fallback: snapshot.trayFallback, prefix: snapshot.trayPrefix, showElapsed: snapshot.trayShowElapsed },
     );
     // The tooltip has room for the full context the short label had to drop.
     const context = [`${pair.projectName} — ${pair.taskName}`, note?.trim()]
@@ -421,6 +428,13 @@ function startMonitors(): void {
     () => void service.refreshWorkItems({ force: true }).then(broadcast),
     AZURE_REFRESH_MS,
   );
+
+  // Nothing else changed, so a full broadcast (and its snapshot IPC to both windows)
+  // would be wasted work — the tray is the only thing elapsed time moves on its own.
+  setInterval(() => {
+    const snapshot = service.snapshot();
+    if (snapshot.timer.status === "running") updateTrayTitle(snapshot);
+  }, TRAY_ELAPSED_REFRESH_MS);
 }
 
 /**

@@ -80,6 +80,7 @@ const snapshot: Snapshot = {
   apiKeyHint: "kto_••••••••abcd",
   trayFallback: "task",
   trayPrefix: "none",
+  trayShowElapsed: false,
   revision: 1,
   timer: { status: "idle" },
   error: null,
@@ -864,13 +865,129 @@ describe("the menu bar label settings", () => {
     expect(screen.getByTestId("tray-preview").textContent).toBe("Development: Sprint planning");
   });
 
-  it("saves both settings together so one cannot clobber the other", async () => {
+  it("saves all three settings together so one cannot clobber another", async () => {
     const user = await openSettings();
     api.setTrayLabel.mockResolvedValue(snapshot);
 
     await user.click(screen.getByRole("radio", { name: /show the project/i }));
 
-    expect(api.setTrayLabel).toHaveBeenCalledWith({ prefix: "none", fallback: "project" });
+    expect(api.setTrayLabel).toHaveBeenCalledWith({
+      prefix: "none",
+      fallback: "project",
+      showElapsed: false,
+    });
+  });
+
+  it("offers a checkbox for elapsed time, unchecked by default", async () => {
+    await openSettings();
+
+    const checkbox = screen.getByRole("checkbox", {
+      name: /also show how long the timer has been running/i,
+    }) as HTMLInputElement;
+    expect(checkbox.checked).toBe(false);
+  });
+
+  it("checks the elapsed-time box when it is already on", async () => {
+    api.getSnapshot.mockResolvedValue({ ...snapshot, trayShowElapsed: true } satisfies Snapshot);
+    await openSettings();
+
+    const checkbox = screen.getByRole("checkbox", {
+      name: /also show how long the timer has been running/i,
+    }) as HTMLInputElement;
+    expect(checkbox.checked).toBe(true);
+  });
+
+  it("appends elapsed time to the preview as soon as the checkbox is ticked", async () => {
+    const user = await openSettings();
+    api.setTrayLabel.mockReturnValue(new Promise(() => {}));
+
+    await user.click(
+      screen.getByRole("checkbox", { name: /also show how long the timer has been running/i }),
+    );
+
+    expect(screen.getByTestId("tray-preview").textContent).toBe("Sprint planning 1:23");
+  });
+
+  it("saves the elapsed-time preference alongside the other two, unchanged", async () => {
+    const user = await openSettings();
+    api.setTrayLabel.mockResolvedValue(snapshot);
+
+    await user.click(
+      screen.getByRole("checkbox", { name: /also show how long the timer has been running/i }),
+    );
+
+    expect(api.setTrayLabel).toHaveBeenCalledWith({
+      prefix: "none",
+      fallback: "task",
+      showElapsed: true,
+    });
+  });
+
+  // The new once-a-minute tray refresh in main.ts deliberately updates only the native
+  // tray, not a snapshot broadcast — without its own clock here, this preview would freeze
+  // at whatever it read on the first render until some unrelated state change happened by.
+  it("keeps the running preview's elapsed time moving on its own", async () => {
+    vi.useFakeTimers();
+    try {
+      const startedAtMs = Date.now();
+      api.getSnapshot.mockResolvedValue({
+        ...snapshot,
+        trayShowElapsed: true,
+        timer: {
+          status: "running",
+          pair: snapshot.catalog[0]!,
+          entryId: "te_1",
+          startedAtMs,
+          note: "Sprint planning",
+        },
+      } satisfies Snapshot);
+
+      render(<ReviewWindow />);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+
+      expect(screen.getByTestId("tray-preview").textContent).toBe("Sprint planning 0:00");
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60_000);
+      });
+
+      expect(screen.getByTestId("tray-preview").textContent).toBe("Sprint planning 0:01");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // The re-entry guard other API-backed controls in this app use (AsyncButton /
+  // useAsyncAction) — a bare onChange calling the API directly is what this test exists to
+  // catch, the same rule the picker and every AsyncButton in the app already follow.
+  it("disables every control here until a write settles, so a second pick cannot race the first", async () => {
+    const user = await openSettings();
+    const { promise, resolve } = deferred<Snapshot>();
+    api.setTrayLabel.mockReturnValue(promise);
+
+    const checkbox = screen.getByRole("checkbox", {
+      name: /also show how long the timer has been running/i,
+    }) as HTMLInputElement;
+    await user.click(checkbox);
+
+    expect(api.setTrayLabel).toHaveBeenCalledTimes(1);
+    expect(checkbox.disabled).toBe(true);
+    expect((screen.getByRole("radio", { name: /just the note/i }) as HTMLInputElement).disabled).toBe(
+      true,
+    );
+
+    await act(async () => {
+      resolve(snapshot);
+      await promise;
+    });
+
+    expect(checkbox.disabled).toBe(false);
   });
 });
 

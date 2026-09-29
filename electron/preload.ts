@@ -37,6 +37,7 @@ const api = {
   setTrayLabel: (options: {
     fallback: "task" | "project";
     prefix: "none" | "project" | "task";
+    showElapsed: boolean;
   }): Promise<Snapshot> => ipcRenderer.invoke("set-tray-label", options),
   listEntries: (from: string, to: string): Promise<TimeEntry[]> =>
     ipcRenderer.invoke("list-entries", from, to),
