@@ -268,7 +268,7 @@ describe("the start form", () => {
     expect(lines).toEqual(["Sprint planning", "Development", "Acme Rebuild"]);
   });
 
-  it("says so when the running timer has no note", async () => {
+  it("collapses to the task bold and drops the note line when the running timer has no note", async () => {
     api.getSnapshot.mockResolvedValue({
       ...snapshot,
       timer: {
@@ -280,9 +280,15 @@ describe("the start form", () => {
       },
     } satisfies Snapshot);
 
-    render(<Popover />);
+    const { container } = render(<Popover />);
 
-    expect(await screen.findByText("No note")).toBeDefined();
+    await screen.findByText("Development");
+    const header = container.querySelector<HTMLElement>("header.running")!;
+    const lines = Array.from(
+      within(header).getByText("Development").parentElement!.children,
+      (el) => el.textContent,
+    );
+    expect(lines).toEqual(["Development", "Acme Rebuild"]);
   });
 
   it("starts the selected category with the typed note", async () => {
@@ -1654,7 +1660,7 @@ describe("which note is shown", () => {
     }
   });
 
-  it("says No note in the header when a running timer has neither", async () => {
+  it("shows the task bold in the header, with no note line, when a running timer has neither", async () => {
     api.getSnapshot.mockResolvedValue({
       ...snapshot,
       timer: {
@@ -1665,9 +1671,12 @@ describe("which note is shown", () => {
         note: null,
       },
     } satisfies Snapshot);
-    render(<Popover />);
+    const { container } = render(<Popover />);
 
-    expect(await screen.findByText("No note")).toBeDefined();
+    await screen.findByText("Development");
+    const header = container.querySelector<HTMLElement>("header.running")!;
+    expect(within(header).getByText("Development").tagName).toBe("STRONG");
+    expect(within(header).queryByText("No note")).toBeNull();
   });
 });
 

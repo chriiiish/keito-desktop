@@ -5,6 +5,7 @@ import { formatDuration } from "../core/time/elapsed.js";
 import { dayTotalSeconds, totalsByTaskAndNote } from "../core/time/totals.js";
 import { visibleNote, visibleNoteField, type NoteVisibility } from "../core/keito/notes.js";
 import { AsyncButton } from "./AsyncButton.js";
+import { CategoryLines } from "./CategoryLines.js";
 import { keito } from "./keito-api.js";
 import { useNow } from "./useNow.js";
 
@@ -101,10 +102,12 @@ export function RecentEntries({
             .map(({ total, entry, pair, taskName, projectName }) => (
             <li key={total.key} className={total.isRunning ? "running-row" : ""}>
               <div className="entry-text">
-                <strong>{visibleNote(entry) || taskName}</strong>
-                <span>
-                  {projectName} — {taskName}
-                </span>
+                <CategoryLines
+                  note={visibleNote(entry)}
+                  task={taskName}
+                  project={projectName}
+                  clientName={pair?.clientName}
+                />
               </div>
               <span className={`entry-hours${total.isRunning ? " ticking" : ""}`}>
                 {formatDuration(total.seconds)}

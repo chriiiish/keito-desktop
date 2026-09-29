@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { buildPicker } from "../core/catalog/picker.js";
 import { AsyncButton } from "./AsyncButton.js";
+import { CategoryLines } from "./CategoryLines.js";
 import type { Pair } from "../core/keito/types.js";
 
 interface CategoryPickerProps {
@@ -225,10 +226,11 @@ export function CategoryPicker({
       >
         <span className="picker-value">
           {selected ? (
-            <>
-              <strong>{selected.taskName}</strong>
-              <span>{selected.projectName}</span>
-            </>
+            <CategoryLines
+              task={selected.taskName}
+              project={selected.projectName}
+              clientName={selected.clientName}
+            />
           ) : (
             <span className="muted">Choose a category…</span>
           )}
