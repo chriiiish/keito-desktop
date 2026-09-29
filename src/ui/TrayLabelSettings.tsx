@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatTrayLabel, type TrayFallback, type TrayPrefix } from "../core/tray/label.js";
 import type { Snapshot } from "../../electron/service.js";
+import { useAsyncAction } from "./AsyncButton.js";
 import { keito } from "./keito-api.js";
+import { useNow } from "./useNow.js";
 
 /** Stand-in used for the preview when no timer is running. */
 const SAMPLE = { note: "Sprint planning", projectName: "Acme Rebuild", taskName: "Development" };
@@ -44,20 +46,43 @@ export function TrayLabelSettings({
   const inTooltip = snapshot.platform !== "darwin";
 
   const running = snapshot.timer.status === "running" ? snapshot.timer : null;
+
+  // The new once-a-minute tray refresh in main.ts deliberately updates only the native
+  // tray, not a snapshot broadcast — without its own clock, this preview would freeze
+  // between whatever unrelated state change last happened to re-render the window.
+  const now = useNow(60_000, running !== null);
+
   const subject = running
     ? {
         note: running.note,
         projectName: running.pair.projectName,
         taskName: running.pair.taskName,
-        elapsedSeconds: Math.max(0, Math.floor((Date.now() - running.startedAtMs) / 1000)),
+        elapsedSeconds: Math.max(0, Math.floor((now - running.startedAtMs) / 1000)),
       }
     : { ...SAMPLE, elapsedSeconds: SAMPLE_ELAPSED_SECONDS };
+
+  /**
+   * A ref, not state: two options picked in the same tick (a radio, then the checkbox,
+   * before the first write settles) would both read a stale `pending` from `useAsyncAction`
+   * otherwise, and both fire. `apply` always writes the ref immediately before triggering
+   * the guarded action, so the in-flight request is always the most recent choice.
+   */
+  const pendingOptions = useRef<{
+    prefix: TrayPrefix;
+    fallback: TrayFallback;
+    showElapsed: boolean;
+  } | null>(null);
+  const [saving, save] = useAsyncAction(async () => {
+    if (!pendingOptions.current) return;
+    onChange(await keito.setTrayLabel(pendingOptions.current));
+  });
 
   const apply = (next: { prefix: TrayPrefix; fallback: TrayFallback; showElapsed: boolean }) => {
     setPrefix(next.prefix);
     setFallback(next.fallback);
     setShowElapsed(next.showElapsed);
-    void keito.setTrayLabel(next).then(onChange);
+    pendingOptions.current = next;
+    save();
   };
 
   return (
@@ -84,6 +109,7 @@ export function TrayLabelSettings({
               name="tray-prefix"
               value={value}
               checked={prefix === value}
+              disabled={saving}
               onChange={() => apply({ prefix: value, fallback, showElapsed })}
             />
             <span className="tray-choice-label">{label}</span>
@@ -106,6 +132,7 @@ export function TrayLabelSettings({
               name="tray-fallback"
               value={value}
               checked={fallback === value}
+              disabled={saving}
               onChange={() => apply({ prefix, fallback: value, showElapsed })}
             />
             <span className="tray-choice-label">{label}</span>
@@ -122,6 +149,7 @@ export function TrayLabelSettings({
           <input
             type="checkbox"
             checked={showElapsed}
+            disabled={saving}
             onChange={(event) => apply({ prefix, fallback, showElapsed: event.target.checked })}
           />
           <span className="tray-choice-label">Also show how long the timer has been running</span>
