@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AsyncButton, Spinner, useAsyncAction } from "./AsyncButton.js";
+import { CategoryLines } from "./CategoryLines.js";
 import { CategoryPicker } from "./CategoryPicker.js";
 import { Elapsed } from "./Elapsed.js";
 import { RecentEntries } from "./RecentEntries.js";
@@ -156,19 +157,12 @@ export function Popover(): JSX.Element {
         {running ? (
           <>
             <div className="running-what">
-              {running.note?.trim() ? (
-                <strong className="running-note" title={running.note}>
-                  {running.note}
-                </strong>
-              ) : (
-                <strong className="running-note none">No note</strong>
-              )}
-              <span>{running.pair.taskName}</span>
-              <span>
-                {running.pair.clientName
-                  ? `${running.pair.clientName}: ${running.pair.projectName}`
-                  : running.pair.projectName}
-              </span>
+              <CategoryLines
+                note={running.note}
+                task={running.pair.taskName}
+                project={running.pair.projectName}
+                clientName={running.pair.clientName}
+              />
             </div>
             <div className="running-right">
               <Elapsed

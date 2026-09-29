@@ -429,9 +429,13 @@ describe("the client, project and task columns", () => {
 
     render(<ReviewWindow />);
 
-    expect(await screen.findByText("Acme Corp")).toBeDefined();
-    expect(screen.getByText("Acme Rebuild")).toBeDefined();
-    expect(screen.getByText("Development")).toBeDefined();
+    const trigger = await screen.findByRole("button", {
+      name: "Category for Development — Acme Rebuild",
+    });
+    const lines = Array.from(within(trigger).getByText("Development").parentElement!.children, (el) =>
+      el.textContent,
+    );
+    expect(lines).toEqual(["Development", "Acme Corp: Acme Rebuild"]);
   });
 
   // The catalog only lists what a project embeds today; a row can still name a pair the
@@ -442,9 +446,14 @@ describe("the client, project and task columns", () => {
 
     render(<ReviewWindow />);
 
-    expect(await screen.findByText("Unknown project")).toBeDefined();
-    expect(screen.getByText("Unknown task")).toBeDefined();
-    expect(screen.getByText("—")).toBeDefined();
+    const trigger = await screen.findByRole("button", {
+      name: "Category for Unknown task — Unknown project",
+    });
+    const lines = Array.from(
+      within(trigger).getByText("Unknown task").parentElement!.children,
+      (el) => el.textContent,
+    );
+    expect(lines).toEqual(["Unknown task", "Unknown project"]);
   });
 
   // Issue #36: date, start, end and note were already editable; project and task were not.

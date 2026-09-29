@@ -218,15 +218,6 @@ function Entries({
   useEffect(() => void load(), [load, snapshot.revision]);
 
   /**
-   * The client name isn't on a time entry, only on a project — `pairId` joins back to the
-   * catalog's Pair for it, the same key `ProjectsTab` and the picker use for a project/task.
-   * Purely derived: Keito has no client resource of its own to edit, so reassigning the
-   * project (below) is the only way this column ever changes.
-   */
-  const clientName = (entry: TimeEntry): string =>
-    catalog.find((pair) => pair.id === pairId(entry.project_id, entry.task_id))?.clientName ?? "—";
-
-  /**
    * The Pair each row's picker should show as selected, plus the catalog to show it
    * against — one lookup per entry, not recomputed on every render. `CategoryPicker` keys
    * its own memoization off the `catalog` array's identity, and a fresh `[...catalog, x]`
@@ -342,8 +333,7 @@ function Entries({
         <thead>
           <tr>
             {range === "week" && <th>Date</th>}
-            <th>Client</th>
-            <th colSpan={2}>Project / Task</th>
+            <th colSpan={2}>Project</th>
             <th>Start</th>
             <th>End</th>
             <th>Hours</th>
@@ -358,7 +348,6 @@ function Entries({
             return (
             <tr key={entry.id} className={entry.is_running ? "running-row" : ""}>
               {range === "week" && <td>{entry.spent_date}</td>}
-              <td>{clientName(entry)}</td>
               {/*
                 One cell spanning both columns rather than one picker per column: Keito has
                 no notion of a project without a task, so "change the project" and "change
