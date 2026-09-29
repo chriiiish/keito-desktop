@@ -800,8 +800,7 @@ select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 
 /* ── Visible categories ──────────────────────────────────── */
 .visibility { max-width: 560px; }
-.visibility-search { display: flex; gap: 8px; margin-bottom: 10px; }
-.visibility-search input { flex: 1; }
+.visibility > input { margin-bottom: 10px; }
 .client-section { margin-bottom: 16px; }
 /* A label above its projects, not a card of its own — same row layout and the same
    10px right padding as every other row (so its toggle lines up with the ones on the
@@ -828,6 +827,7 @@ select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 /* The whole project name is the hit target, so opening one is not a game of darts
    against a 10px chevron. */
 .visibility-actions { display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-bottom: 6px; }
+.visibility-actions-separator { color: var(--line); }
 .disclosure {
   flex: 1;
   min-width: 0;

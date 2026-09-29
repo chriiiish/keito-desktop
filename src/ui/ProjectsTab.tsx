@@ -157,30 +157,27 @@ export function ProjectsTab({ snapshot, onChange }: ProjectsTabProps): JSX.Eleme
       </p>
 
       <div className="visibility">
-        <div className="visibility-search">
-          <input
-            placeholder="Filter projects and tasks…"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-          {/*
-            A plain bordered button, not `.link` like Expand all: that one only ever
-            changes what is on screen, this one changes a real preference — the two
-            should not look like the same kind of action.
-          */}
-          <AsyncButton
-            disabled={!someShown}
-            title={someShown ? undefined : "Nothing shown to deselect"}
-            onClick={() => setVisible(visiblePairs.map((pair) => pair.id), false)}
-          >
-            Deselect all
-          </AsyncButton>
-        </div>
+        <input
+          placeholder="Filter projects and tasks…"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+        />
 
         {groups.length === 0 && <p className="hint">Nothing matches “{query}”.</p>}
 
         {groups.length > 0 && (
           <div className="visibility-actions">
+            <AsyncButton
+              className="link"
+              disabled={!someShown}
+              title={someShown ? undefined : "Nothing shown to deselect"}
+              onClick={() => setVisible(visiblePairs.map((pair) => pair.id), false)}
+            >
+              Deselect all
+            </AsyncButton>
+            <span className="visibility-actions-separator" aria-hidden="true">
+              |
+            </span>
             <button
               type="button"
               className="link"
