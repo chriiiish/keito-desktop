@@ -92,6 +92,16 @@ beforeEach(() => {
   api.listEntries.mockResolvedValue([]);
 });
 
+describe("before the first snapshot arrives", () => {
+  it("shows a spinner rather than sitting on plain text", async () => {
+    api.getSnapshot.mockReturnValue(new Promise(() => {}));
+
+    render(<ReviewWindow />);
+
+    expect(await screen.findByRole("status", { name: "Working" })).toBeDefined();
+  });
+});
+
 describe("the review window", () => {
   it("has three tabs", async () => {
     render(<ReviewWindow />);

@@ -118,7 +118,14 @@ export function Popover(): JSX.Element {
     if (!next.error) void keito.closePopover();
   };
 
-  if (!snapshot) return <div className="popover loading">Loading…</div>;
+  if (!snapshot) {
+    return (
+      <div className="popover loading">
+        <Spinner />
+        Loading…
+      </div>
+    );
+  }
 
   if (snapshot.keyStatus !== "ready") {
     // A rejected key is not a first run: someone who set this up once does not need

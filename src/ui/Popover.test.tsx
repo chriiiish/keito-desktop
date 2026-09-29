@@ -110,6 +110,16 @@ const entry = (id: string, projectId: string, taskId: string, over: Partial<Time
   ...over,
 });
 
+describe("before the first snapshot arrives", () => {
+  it("shows a spinner rather than sitting on plain text", async () => {
+    api.getSnapshot.mockReturnValue(new Promise(() => {}));
+
+    render(<Popover />);
+
+    expect(await screen.findByRole("status", { name: "Working" })).toBeDefined();
+  });
+});
+
 describe("the start form", () => {
   it("preselects the first favourite, so Enter alone starts something sensible", async () => {
     render(<Popover />);

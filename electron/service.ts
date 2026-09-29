@@ -767,9 +767,20 @@ export class AppService {
         ttlMs: CATALOG_TTL_MS,
       });
 
-      if (reload) {
+      // Neither request needs the other's result — loadEntries doesn't read the catalog,
+      // only #timer.adopt() below does — so both fire together rather than one after the
+      // other. Both promises start here, before either is awaited, which is what makes
+      // them overlap on the wire instead of running back-to-back.
+      const catalogPromise = reload ? loadCatalog(this.#client!, now) : null;
+      const entriesPromise = loadEntries(this.#client!, now, this.#prefs.get().workspaceTimezone);
+      // Marks it handled immediately: if the catalog branch below throws before
+      // entriesPromise is awaited, a simultaneous entries failure must not surface as an
+      // unhandled rejection. The real error, if any, still surfaces at the `await` below.
+      entriesPromise.catch(() => {});
+
+      if (catalogPromise) {
         try {
-          this.#catalog = await loadCatalog(this.#client!, now);
+          this.#catalog = await catalogPromise;
           this.#catalogLoadedAt = now.getTime();
           this.#catalogAccountId = accountId;
         } catch (error) {
@@ -791,11 +802,7 @@ export class AppService {
         }
       }
 
-      const { recents, today, yesterday, running } = await loadEntries(
-        this.#client!,
-        now,
-        this.#prefs.get().workspaceTimezone,
-      );
+      const { recents, today, yesterday, running } = await entriesPromise;
       this.#recents = recents;
       this.#today = today;
       this.#yesterday = yesterday;
