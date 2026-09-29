@@ -800,7 +800,8 @@ select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 
 /* ── Visible categories ──────────────────────────────────── */
 .visibility { max-width: 560px; }
-.visibility > input { margin-bottom: 10px; }
+.visibility-search { display: flex; gap: 8px; margin-bottom: 10px; }
+.visibility-search input { flex: 1; }
 .client-section { margin-bottom: 16px; }
 /* A label above its projects, not a card of its own — same row layout and the same
    10px right padding as every other row (so its toggle lines up with the ones on the
