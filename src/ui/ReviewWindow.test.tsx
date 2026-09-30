@@ -10,6 +10,7 @@ const api = {
   listEntries: vi.fn(),
   setHidden: vi.fn(),
   toggleFavourite: vi.fn(),
+  reorderFavourites: vi.fn(),
   setTrayLabel: vi.fn(),
   setHotkey: vi.fn(),
   setOpenAtLogin: vi.fn(),
@@ -182,6 +183,118 @@ describe("the review window", () => {
     await user.click(await screen.findByRole("button", { name: "Projects" }));
 
     expect(screen.getByText("Acme Rebuild — Development")).toBeDefined();
+  });
+});
+
+describe("reordering favourites", () => {
+  const threeFavourites = async () => {
+    const user = userEvent.setup();
+    api.reorderFavourites.mockResolvedValue(snapshot);
+    api.getSnapshot.mockResolvedValue({
+      ...snapshot,
+      catalog: [...snapshot.catalog, pair("p_zebra:t_a", "Zebra Project", "Audit")],
+      favourites: ["p_acme:t_dev", "p_bank:t_ops", "p_zebra:t_a"],
+    } satisfies Snapshot);
+    render(<ReviewWindow />);
+    await user.click(await screen.findByRole("button", { name: "Projects" }));
+    return screen.getByText("Acme Rebuild — Development").closest("li")!.parentElement as HTMLUListElement;
+  };
+
+  /** Native HTML5 drag-and-drop, driven the way jsdom actually supports: no DataTransfer. */
+  const drag = (from: Element, to: Element) => {
+    fireEvent.dragStart(from);
+    fireEvent.dragOver(to);
+    fireEvent.drop(to);
+    fireEvent.dragEnd(from);
+  };
+
+  it("reorders favourites by dragging one to another's position", async () => {
+    const list = await threeFavourites();
+    const rows = within(list).getAllByRole("listitem");
+
+    drag(rows[0]!, rows[2]!);
+
+    expect(api.reorderFavourites).toHaveBeenCalledWith(["p_bank:t_ops", "p_zebra:t_a", "p_acme:t_dev"]);
+  });
+
+  it("does nothing when dropped back on its own row", async () => {
+    const list = await threeFavourites();
+    const rows = within(list).getAllByRole("listitem");
+
+    drag(rows[0]!, rows[0]!);
+
+    expect(api.reorderFavourites).not.toHaveBeenCalled();
+  });
+
+  it("is not draggable with only one favourite — there is nothing to reorder it against", async () => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue({ ...snapshot, favourites: ["p_acme:t_dev"] } satisfies Snapshot);
+    render(<ReviewWindow />);
+    await user.click(await screen.findByRole("button", { name: "Projects" }));
+
+    const row = screen.getByText("Acme Rebuild — Development").closest("li")!;
+    expect(row.getAttribute("draggable")).not.toBe("true");
+  });
+
+  // Drag-and-drop has no keyboard equivalent of its own — these buttons are the only way
+  // a keyboard or screen-reader user can reorder favourites at all.
+  it("moves a favourite up or down with keyboard-focusable buttons", async () => {
+    const user = userEvent.setup();
+    api.reorderFavourites.mockResolvedValue(snapshot);
+    api.getSnapshot.mockResolvedValue({
+      ...snapshot,
+      catalog: [...snapshot.catalog, pair("p_zebra:t_a", "Zebra Project", "Audit")],
+      favourites: ["p_acme:t_dev", "p_bank:t_ops", "p_zebra:t_a"],
+    } satisfies Snapshot);
+    render(<ReviewWindow />);
+    await user.click(await screen.findByRole("button", { name: "Projects" }));
+
+    await user.click(screen.getByRole("button", { name: "Move Bank Portal Ops up" }));
+
+    expect(api.reorderFavourites).toHaveBeenCalledWith(["p_bank:t_ops", "p_acme:t_dev", "p_zebra:t_a"]);
+  });
+
+  it("disables Move up on the first row and Move down on the last", async () => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue({
+      ...snapshot,
+      catalog: [...snapshot.catalog, pair("p_zebra:t_a", "Zebra Project", "Audit")],
+      favourites: ["p_acme:t_dev", "p_bank:t_ops", "p_zebra:t_a"],
+    } satisfies Snapshot);
+    render(<ReviewWindow />);
+    await user.click(await screen.findByRole("button", { name: "Projects" }));
+
+    expect(
+      (screen.getByRole("button", { name: "Move Acme Rebuild Development up" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    expect(
+      (screen.getByRole("button", { name: "Move Zebra Project Audit down" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+  });
+
+  // The re-entry guard every other API-backed control in this app carries: a drop that
+  // lands while an earlier drag-triggered reorder is still in flight must not fire a
+  // second, overlapping write.
+  it("cannot drag again while a reorder is still in flight", async () => {
+    const list = await threeFavourites();
+    const rows = within(list).getAllByRole("listitem");
+    const { promise, resolve } = deferred<Snapshot>();
+    api.reorderFavourites.mockReturnValue(promise);
+
+    drag(rows[0]!, rows[2]!);
+
+    expect(api.reorderFavourites).toHaveBeenCalledTimes(1);
+    expect(rows[0]!.getAttribute("draggable")).not.toBe("true");
+
+    drag(rows[0]!, rows[1]!);
+    expect(api.reorderFavourites).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolve(snapshot);
+      await promise;
+    });
   });
 });
 

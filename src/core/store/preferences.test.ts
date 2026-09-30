@@ -86,6 +86,48 @@ describe("PreferencesStore", () => {
     expect((await PreferencesStore.open(file)).get().favourites).toEqual(["p_bank:t_qa"]);
   });
 
+  it("reorders favourites to the order given, and remembers it across a restart", async () => {
+    const store = await PreferencesStore.open(file);
+    await store.addFavourite("p_acme:t_dev");
+    await store.addFavourite("p_bank:t_qa");
+    await store.addFavourite("p_zebra:t_a");
+
+    await store.reorderFavourites(["p_zebra:t_a", "p_acme:t_dev", "p_bank:t_qa"]);
+
+    expect((await PreferencesStore.open(file)).get().favourites).toEqual([
+      "p_zebra:t_a",
+      "p_acme:t_dev",
+      "p_bank:t_qa",
+    ]);
+  });
+
+  // A drag that started before an unstar elsewhere landed must not bring the unstarred
+  // pair back — the write it is racing against is the one that matters.
+  it("drops an id from the new order that is no longer a favourite", async () => {
+    const store = await PreferencesStore.open(file);
+    await store.addFavourite("p_acme:t_dev");
+    await store.addFavourite("p_bank:t_qa");
+
+    await store.reorderFavourites(["p_bank:t_qa", "p_acme:t_dev", "p_stale:t_gone"]);
+
+    expect(store.get().favourites).toEqual(["p_bank:t_qa", "p_acme:t_dev"]);
+  });
+
+  // The drag started before the addition, so it has no opinion on where the new one
+  // belongs — but dropping a favourite because a reorder raced its addition would be a
+  // stranger bug than the newcomer landing at the end instead of somewhere considered.
+  it("keeps a favourite added after the drag began, appended rather than lost", async () => {
+    const store = await PreferencesStore.open(file);
+    await store.addFavourite("p_acme:t_dev");
+    await store.addFavourite("p_bank:t_qa");
+    // Added to the live store after the drag's own snapshot of favourites was taken.
+    await store.addFavourite("p_new:t_added");
+
+    await store.reorderFavourites(["p_bank:t_qa", "p_acme:t_dev"]);
+
+    expect(store.get().favourites).toEqual(["p_bank:t_qa", "p_acme:t_dev", "p_new:t_added"]);
+  });
+
   it("falls back to defaults rather than crashing on a corrupt preferences file", async () => {
     await writeFile(file, "{ not json");
 
