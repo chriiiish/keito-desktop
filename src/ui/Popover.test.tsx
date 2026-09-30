@@ -152,6 +152,49 @@ describe("the start form", () => {
     expect(within(list).getByText("Bank Portal")).toBeDefined();
   });
 
+  it("leads the project heading with its client, when it has one", async () => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue({
+      ...snapshot,
+      catalog: [
+        { ...pair("p_acme:t_dev", "Acme Rebuild", "Development"), clientName: "Acme Corp" },
+        { ...pair("p_acme:t_qa", "Acme Rebuild", "QA"), clientName: "Acme Corp" },
+        pair("p_bank:t_dev", "Bank Portal", "Development"),
+        pair("p_bank:t_ops", "Bank Portal", "Ops"),
+      ],
+    } satisfies Snapshot);
+    render(<Popover />);
+    await user.click(await screen.findByRole("button", { name: "Category" }));
+
+    const list = screen.getByRole("listbox");
+
+    expect(within(list).getByText("Acme Corp: Acme Rebuild")).toBeDefined();
+    // No client on Bank Portal — the heading falls back to the bare project name.
+    expect(within(list).getByText("Bank Portal")).toBeDefined();
+  });
+
+  // buildPicker itself is unit-tested for preserving this order; this confirms the
+  // dropdown actually renders what it is handed rather than resorting it somewhere.
+  it("renders favourites in the order they were favourited, not alphabetically", async () => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue({
+      ...snapshot,
+      favourites: ["p_bank:t_ops", "p_acme:t_dev"],
+    } satisfies Snapshot);
+    render(<Popover />);
+    await user.click(await screen.findByRole("button", { name: "Category" }));
+
+    const list = screen.getByRole("listbox");
+    // Favourites render first in the dropdown, ahead of Recent and All projects — the
+    // first two options are the whole answer to "in what order."
+    const options = within(list).getAllByRole("option");
+
+    expect(options.slice(0, 2).map((option) => option.textContent)).toEqual([
+      "Bank Portal — Ops★",
+      "Acme Rebuild — Development★",
+    ]);
+  });
+
   it("filters by a string across project and task", async () => {
     const user = userEvent.setup();
     render(<Popover />);
