@@ -70,9 +70,11 @@ function broadcast(snapshot: Snapshot): void {
 }
 
 /**
- * macOS shows the running task as text beside the menu bar icon. Windows has no such
- * thing — `setTitle` is a no-op there — so the configured label leads the tooltip
- * instead, which is the only place a Windows user can read it.
+ * macOS shows the running task as text beside the menu bar icon, so its tooltip gives the
+ * full context the short title had to drop. Windows has no title at all — `setTitle` is a
+ * no-op there — so the configured label *is* what a Windows user reads, in the tooltip,
+ * and nothing more: showing the label and then the same information again underneath it
+ * read as the tooltip repeating itself.
  */
 function updateTrayTitle(snapshot: Snapshot): void {
   if (!tray) return;
@@ -83,12 +85,16 @@ function updateTrayTitle(snapshot: Snapshot): void {
       { note, projectName: pair.projectName, taskName: pair.taskName, elapsedSeconds },
       { fallback: snapshot.trayFallback, prefix: snapshot.trayPrefix, showElapsed: snapshot.trayShowElapsed },
     );
-    // The tooltip has room for the full context the short label had to drop.
-    const context = [`${pair.projectName} — ${pair.taskName}`, note?.trim()]
-      .filter(Boolean)
-      .join("\n");
-    tray.setToolTip(process.platform === "darwin" ? context : `${label}\n${context}`);
-    if (process.platform === "darwin") tray.setTitle(` ${label}`);
+    if (process.platform === "darwin") {
+      // The tooltip has room for the full context the short label had to drop.
+      const context = [`${pair.projectName} — ${pair.taskName}`, note?.trim()]
+        .filter(Boolean)
+        .join("\n");
+      tray.setToolTip(context);
+      tray.setTitle(` ${label}`);
+    } else {
+      tray.setToolTip(label);
+    }
   } else {
     tray.setToolTip("Keito Timer — nothing running");
     if (process.platform === "darwin") tray.setTitle("");
