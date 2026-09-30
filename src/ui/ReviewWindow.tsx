@@ -341,10 +341,10 @@ function Entries({
           <tr>
             {range === "week" && <th>Date</th>}
             <th colSpan={2}>Project</th>
+            <th>Notes</th>
             <th>Start</th>
             <th>End</th>
             <th>Hours</th>
-            <th>Notes</th>
             <th />
           </tr>
         </thead>
@@ -396,6 +396,20 @@ function Entries({
                 />
               </td>
               <td>
+                <input
+                  defaultValue={visibleNote(entry)}
+                  placeholder="—"
+                  onBlur={(event) => {
+                    if (event.target.value !== visibleNote(entry)) {
+                      void edit(entry.id, {
+                        notes: event.target.value,
+                        noteField: visibleNoteField(entry),
+                      });
+                    }
+                  }}
+                />
+              </td>
+              <td>
                 <TimeCell
                   value={entry.started_time}
                   onCommit={(value) => void edit(entry.id, { startedTime: value })}
@@ -413,20 +427,6 @@ function Entries({
               </td>
               <td className={entry.is_running ? "ticking" : ""}>
                 {formatDecimalHours(entrySeconds(entry, now, timeZone))}
-              </td>
-              <td>
-                <input
-                  defaultValue={visibleNote(entry)}
-                  placeholder="—"
-                  onBlur={(event) => {
-                    if (event.target.value !== visibleNote(entry)) {
-                      void edit(entry.id, {
-                        notes: event.target.value,
-                        noteField: visibleNoteField(entry),
-                      });
-                    }
-                  }}
-                />
               </td>
               <td>
                 <AsyncButton

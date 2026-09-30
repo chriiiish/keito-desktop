@@ -460,6 +460,22 @@ describe("the client, project and task columns", () => {
     ...over,
   });
 
+  it("puts the Notes column directly after Project, ahead of the time columns", async () => {
+    api.listEntries.mockResolvedValue([row()]);
+
+    render(<ReviewWindow />);
+
+    const headers = await screen.findAllByRole("columnheader");
+    expect(headers.map((header) => header.textContent)).toEqual([
+      "Project",
+      "Notes",
+      "Start",
+      "End",
+      "Hours",
+      "",
+    ]);
+  });
+
   it("reads the project and task off the entry, and the client from the matching catalog pair", async () => {
     api.getSnapshot.mockResolvedValue({
       ...snapshot,
