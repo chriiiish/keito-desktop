@@ -90,6 +90,9 @@ export function CategoryPicker({
     const projectGroups = result.projects.map((group) => ({
       projectId: group.projectId,
       projectName: group.projectName,
+      // A project's client never varies within itself, so the first pair's clientName
+      // names the whole group — same rule the Projects tab's own client heading uses.
+      clientName: group.pairs[0]?.clientName,
       rows: group.pairs.map((pair) => take(pair, pair.taskName)),
     }));
     return { flat, favouriteRows, recentRows, projectGroups };
@@ -271,7 +274,9 @@ export function CategoryPicker({
             {projectGroups.length > 0 && <li className="group-heading">All projects</li>}
             {projectGroups.map((group) => (
               <li key={group.projectId} className="project-group">
-                <div className="project-heading">{group.projectName}</div>
+                <div className="project-heading">
+                  {group.clientName ? `${group.clientName}: ${group.projectName}` : group.projectName}
+                </div>
                 <ul>{group.rows.map(row)}</ul>
               </li>
             ))}
