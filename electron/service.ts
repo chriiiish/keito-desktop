@@ -481,6 +481,12 @@ export class AppService {
     return this.snapshot();
   }
 
+  async reorderFavourites(pairIds: readonly string[]): Promise<Snapshot> {
+    await this.#prefs.reorderFavourites(pairIds);
+    this.#revision++;
+    return this.snapshot();
+  }
+
   /** Switches categories on or off in the dropdown. Takes a list so a whole project is one call. */
   async setHidden(pairIds: readonly string[], hidden: boolean): Promise<Snapshot> {
     for (const pairId of pairIds) await this.#prefs.setHidden(pairId, hidden);

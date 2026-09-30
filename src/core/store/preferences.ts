@@ -145,6 +145,18 @@ export class PreferencesStore {
   }
 
   /**
+   * Replaces the favourites order outright, the way the popover and the Projects tab both
+   * read it back. The caller (a drag-and-drop reorder) already has the full, correct
+   * order in hand, so there is nothing here to merge — an id this list does not currently
+   * carry is dropped rather than silently adopted, so a stale drag from a moment ago can
+   * never reintroduce a favourite that was unstarred while it was in flight.
+   */
+  async reorderFavourites(pairIds: readonly string[]): Promise<void> {
+    const current = new Set(this.#value.favourites);
+    await this.update({ favourites: pairIds.filter((id) => current.has(id)) });
+  }
+
+  /**
    * Back to a fresh install. Whole-value, not a patch, so a preference added later is
    * cleared by having been forgotten rather than by someone remembering to list it here.
    * The file is rewritten rather than deleted: `open()` tolerates a missing file, but

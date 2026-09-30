@@ -486,6 +486,10 @@ button.link.muted { color: var(--muted); }
 button.link.muted:hover { color: var(--danger); }
 .favourites { list-style: none; padding: 0; margin: 0; max-width: 460px; }
 .favourites li { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.favourites li[draggable="true"] { cursor: grab; }
+.favourites li.dragging { opacity: 0.4; }
+.favourites li.drag-over { border-top: 2px solid var(--accent); }
+.favourites .drag-handle { color: var(--muted); cursor: grab; }
 .favourites .star { border: none; background: none; font-size: 15px; color: var(--star); padding: 0 4px; }
 
 .settings form.connect { flex-direction: column; align-items: flex-start; gap: 10px; }

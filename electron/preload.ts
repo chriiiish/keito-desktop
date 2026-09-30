@@ -17,6 +17,8 @@ const api = {
   stopTimer: (): Promise<Snapshot> => ipcRenderer.invoke("stop-timer"),
   resumeEntry: (entryId: string): Promise<Snapshot> => ipcRenderer.invoke("resume-entry", entryId),
   toggleFavourite: (pairId: string): Promise<Snapshot> => ipcRenderer.invoke("toggle-favourite", pairId),
+  reorderFavourites: (pairIds: string[]): Promise<Snapshot> =>
+    ipcRenderer.invoke("reorder-favourites", pairIds),
   setHidden: (pairIds: string[], hidden: boolean): Promise<Snapshot> =>
     ipcRenderer.invoke("set-hidden", pairIds, hidden),
   setHotkey: (hotkey: string): Promise<Snapshot> => ipcRenderer.invoke("set-hotkey", hotkey),

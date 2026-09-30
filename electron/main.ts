@@ -303,6 +303,7 @@ function registerIpc(): void {
   handle("stop-timer", async () => service.stopTimer());
   handle("resume-entry", async (entryId: string) => service.resumeEntry(entryId));
   handle("toggle-favourite", async (pairId: string) => service.toggleFavourite(pairId));
+  handle("reorder-favourites", async (pairIds: string[]) => service.reorderFavourites(pairIds));
   handle("set-hidden", async (pairIds: string[], hidden: boolean) => service.setHidden(pairIds, hidden));
   handle("list-entries", async (from: string, to: string) => service.listEntries(from, to));
   handle("update-entry", async (id: string, patch: EntryPatch) => service.updateEntry(id, patch));

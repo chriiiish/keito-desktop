@@ -120,6 +120,28 @@ export function ProjectsTab({ snapshot, onChange }: ProjectsTabProps): JSX.Eleme
   const setVisible = (pairIds: string[], visible: boolean) =>
     keito.setHidden(pairIds, !visible).then(onChange);
 
+  /**
+   * Native HTML5 drag-and-drop rather than a library: this is the app's only reorderable
+   * list, and the whole interaction is "drop somewhere in this one list" — nothing a
+   * library's cross-container or virtualised-list machinery would earn its dependency
+   * weight on. `dataTransfer` carries nothing; which pair is being dragged lives in state
+   * instead, since this never needs to leave the list it started in.
+   */
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+
+  const reorderFavourite = (draggedId: string, targetId: string) => {
+    if (draggedId === targetId) return;
+    const ids = favouritePairs.map((pair) => pair.id);
+    const from = ids.indexOf(draggedId);
+    const to = ids.indexOf(targetId);
+    if (from === -1 || to === -1) return;
+    const next = [...ids];
+    next.splice(from, 1);
+    next.splice(to, 0, draggedId);
+    void keito.reorderFavourites(next).then(onChange);
+  };
+
   const star = (pair: Pair) => (
     <AsyncButton
       className={`star${favourites.has(pair.id) ? " on" : ""}`}
@@ -139,7 +161,37 @@ export function ProjectsTab({ snapshot, onChange }: ProjectsTabProps): JSX.Eleme
       ) : (
         <ul className="favourites">
           {favouritePairs.map((pair) => (
-            <li key={pair.id}>
+            <li
+              key={pair.id}
+              draggable={favouritePairs.length > 1}
+              className={[
+                draggingId === pair.id ? "dragging" : "",
+                dragOverId === pair.id && draggingId !== pair.id ? "drag-over" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              onDragStart={() => setDraggingId(pair.id)}
+              onDragEnd={() => {
+                setDraggingId(null);
+                setDragOverId(null);
+              }}
+              onDragOver={(event) => {
+                // Without this, the browser refuses the drop entirely.
+                event.preventDefault();
+                if (dragOverId !== pair.id) setDragOverId(pair.id);
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                if (draggingId) reorderFavourite(draggingId, pair.id);
+                setDraggingId(null);
+                setDragOverId(null);
+              }}
+            >
+              {favouritePairs.length > 1 && (
+                <span className="drag-handle" aria-hidden="true">
+                  ⠿
+                </span>
+              )}
               <span className="visibility-name">
                 {pair.projectName} — {pair.taskName}
               </span>
