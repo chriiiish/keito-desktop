@@ -488,9 +488,10 @@ button.link.muted:hover { color: var(--danger); }
 .favourites li { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--line); }
 .favourites li[draggable="true"] { cursor: grab; }
 .favourites li.dragging { opacity: 0.4; }
-/* The dragged row is hovering over this one; the drop would insert after it, so the
-   indicator sits on the edge it would land against, not the one it's approaching from. */
-.favourites li.drag-over { border-bottom: 2px solid var(--accent); }
+/* Which edge depends on the direction of the drag — see the comment in ProjectsTab.tsx
+   next to where these classes are chosen. */
+.favourites li.drag-over-below { border-bottom: 2px solid var(--accent); }
+.favourites li.drag-over-above { border-top: 2px solid var(--accent); }
 .favourites .drag-handle { color: var(--muted); cursor: grab; }
 .favourite-lines { display: flex; flex-direction: column; flex: 1; min-width: 0; }
 .favourite-lines span { color: var(--muted); font-size: 12px; }
