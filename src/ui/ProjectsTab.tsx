@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Pair } from "../core/keito/types.js";
 import { keito } from "./keito-api.js";
 import { AsyncButton, useAsyncAction } from "./AsyncButton.js";
+import { CategoryLines } from "./CategoryLines.js";
 import { Toggle } from "./Toggle.js";
 import type { Snapshot } from "../../electron/service.js";
 
@@ -223,9 +224,10 @@ export function ProjectsTab({ snapshot, onChange }: ProjectsTabProps): JSX.Eleme
                     ⠿
                   </span>
                 )}
-                <span className="visibility-name">
-                  {pair.projectName} — {pair.taskName}
+                <span className="favourite-lines">
+                  <CategoryLines task={pair.taskName} project={pair.projectName} clientName={pair.clientName} />
                 </span>
+                {star(pair)}
                 {canReorder && (
                   <span className="reorder-buttons">
                     <AsyncButton
@@ -252,7 +254,6 @@ export function ProjectsTab({ snapshot, onChange }: ProjectsTabProps): JSX.Eleme
                     </AsyncButton>
                   </span>
                 )}
-                {star(pair)}
               </li>
             );
           })}

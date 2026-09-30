@@ -182,7 +182,9 @@ describe("the review window", () => {
 
     await user.click(await screen.findByRole("button", { name: "Projects" }));
 
-    expect(screen.getByText("Acme Rebuild — Development")).toBeDefined();
+    const list = document.querySelector<HTMLElement>(".favourites")!;
+    expect(within(list).getByText("Development")).toBeDefined();
+    expect(within(list).getByText("Acme Rebuild")).toBeDefined();
   });
 });
 
@@ -197,7 +199,7 @@ describe("reordering favourites", () => {
     } satisfies Snapshot);
     render(<ReviewWindow />);
     await user.click(await screen.findByRole("button", { name: "Projects" }));
-    return screen.getByText("Acme Rebuild — Development").closest("li")!.parentElement as HTMLUListElement;
+    return document.querySelector(".favourites") as HTMLUListElement;
   };
 
   /** Native HTML5 drag-and-drop, driven the way jsdom actually supports: no DataTransfer. */
@@ -232,7 +234,7 @@ describe("reordering favourites", () => {
     render(<ReviewWindow />);
     await user.click(await screen.findByRole("button", { name: "Projects" }));
 
-    const row = screen.getByText("Acme Rebuild — Development").closest("li")!;
+    const row = document.querySelector(".favourites li")!;
     expect(row.getAttribute("draggable")).not.toBe("true");
   });
 
