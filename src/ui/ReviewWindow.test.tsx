@@ -182,7 +182,9 @@ describe("the review window", () => {
 
     await user.click(await screen.findByRole("button", { name: "Projects" }));
 
-    expect(screen.getByText("Acme Rebuild — Development")).toBeDefined();
+    const list = document.querySelector<HTMLElement>(".favourites")!;
+    expect(within(list).getByText("Development")).toBeDefined();
+    expect(within(list).getByText("Acme Rebuild")).toBeDefined();
   });
 });
 
@@ -197,7 +199,7 @@ describe("reordering favourites", () => {
     } satisfies Snapshot);
     render(<ReviewWindow />);
     await user.click(await screen.findByRole("button", { name: "Projects" }));
-    return screen.getByText("Acme Rebuild — Development").closest("li")!.parentElement as HTMLUListElement;
+    return document.querySelector(".favourites") as HTMLUListElement;
   };
 
   /** Native HTML5 drag-and-drop, driven the way jsdom actually supports: no DataTransfer. */
@@ -217,6 +219,31 @@ describe("reordering favourites", () => {
     expect(api.reorderFavourites).toHaveBeenCalledWith(["p_bank:t_ops", "p_zebra:t_a", "p_acme:t_dev"]);
   });
 
+  // reorderFavourite reinserts the dragged pair at the target's own index, which lands
+  // it above the target when dragging downward and below it when dragging upward — the
+  // indicator has to point at whichever edge that actually is.
+  it("shows the drop indicator below the target when dragging downward", async () => {
+    const list = await threeFavourites();
+    const rows = within(list).getAllByRole("listitem");
+
+    fireEvent.dragStart(rows[0]!);
+    fireEvent.dragOver(rows[2]!);
+
+    expect(rows[2]!.className).toContain("drag-over-below");
+    expect(rows[2]!.className).not.toContain("drag-over-above");
+  });
+
+  it("shows the drop indicator above the target when dragging upward", async () => {
+    const list = await threeFavourites();
+    const rows = within(list).getAllByRole("listitem");
+
+    fireEvent.dragStart(rows[2]!);
+    fireEvent.dragOver(rows[0]!);
+
+    expect(rows[0]!.className).toContain("drag-over-above");
+    expect(rows[0]!.className).not.toContain("drag-over-below");
+  });
+
   it("does nothing when dropped back on its own row", async () => {
     const list = await threeFavourites();
     const rows = within(list).getAllByRole("listitem");
@@ -232,7 +259,7 @@ describe("reordering favourites", () => {
     render(<ReviewWindow />);
     await user.click(await screen.findByRole("button", { name: "Projects" }));
 
-    const row = screen.getByText("Acme Rebuild — Development").closest("li")!;
+    const row = document.querySelector(".favourites li")!;
     expect(row.getAttribute("draggable")).not.toBe("true");
   });
 

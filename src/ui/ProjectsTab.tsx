@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Pair } from "../core/keito/types.js";
 import { keito } from "./keito-api.js";
 import { AsyncButton, useAsyncAction } from "./AsyncButton.js";
+import { CategoryLines } from "./CategoryLines.js";
 import { Toggle } from "./Toggle.js";
 import type { Snapshot } from "../../electron/service.js";
 
@@ -191,13 +192,24 @@ export function ProjectsTab({ snapshot, onChange }: ProjectsTabProps): JSX.Eleme
         <ul className="favourites">
           {favouritePairs.map((pair, index) => {
             const canReorder = favouritePairs.length > 1;
+            // reorderFavourite removes the dragged pair, then reinserts it at the
+            // target's own index — so dragging a *later* row onto this one lands it
+            // above (the target shifts down to make room), and dragging an *earlier*
+            // row onto this one lands it below (everything between closes the gap
+            // upward first). The indicator has to point at whichever edge that is, not
+            // always the same one.
+            const draggingIndex = draggingId ? favouritePairs.findIndex((p) => p.id === draggingId) : -1;
+            const isOver = dragOverId === pair.id && draggingId !== pair.id;
+            const dropsAbove = isOver && draggingIndex > index;
+            const dropsBelow = isOver && draggingIndex !== -1 && draggingIndex < index;
             return (
               <li
                 key={pair.id}
                 draggable={canReorder && !reordering}
                 className={[
                   draggingId === pair.id ? "dragging" : "",
-                  dragOverId === pair.id && draggingId !== pair.id ? "drag-over" : "",
+                  dropsAbove ? "drag-over-above" : "",
+                  dropsBelow ? "drag-over-below" : "",
                 ]
                   .filter(Boolean)
                   .join(" ")}
@@ -223,9 +235,10 @@ export function ProjectsTab({ snapshot, onChange }: ProjectsTabProps): JSX.Eleme
                     ⠿
                   </span>
                 )}
-                <span className="visibility-name">
-                  {pair.projectName} — {pair.taskName}
+                <span className="favourite-lines">
+                  <CategoryLines task={pair.taskName} project={pair.projectName} clientName={pair.clientName} />
                 </span>
+                {star(pair)}
                 {canReorder && (
                   <span className="reorder-buttons">
                     <AsyncButton
@@ -252,7 +265,6 @@ export function ProjectsTab({ snapshot, onChange }: ProjectsTabProps): JSX.Eleme
                     </AsyncButton>
                   </span>
                 )}
-                {star(pair)}
               </li>
             );
           })}

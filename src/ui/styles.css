@@ -488,10 +488,16 @@ button.link.muted:hover { color: var(--danger); }
 .favourites li { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--line); }
 .favourites li[draggable="true"] { cursor: grab; }
 .favourites li.dragging { opacity: 0.4; }
-.favourites li.drag-over { border-top: 2px solid var(--accent); }
+/* Which edge depends on the direction of the drag — see the comment in ProjectsTab.tsx
+   next to where these classes are chosen. */
+.favourites li.drag-over-below { border-bottom: 2px solid var(--accent); }
+.favourites li.drag-over-above { border-top: 2px solid var(--accent); }
 .favourites .drag-handle { color: var(--muted); cursor: grab; }
-.favourites .reorder-buttons { display: flex; gap: 2px; }
-.favourites .move { padding: 0 4px; font-size: 11px; color: var(--muted); }
+.favourite-lines { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.favourite-lines span { color: var(--muted); font-size: 12px; }
+.favourite-lines strong, .favourite-lines span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.favourites .reorder-buttons { display: flex; flex-direction: column; gap: 0; }
+.favourites .move { padding: 0 4px; font-size: 11px; line-height: 1; color: var(--muted); }
 .favourites .move:disabled { opacity: 0.3; cursor: default; }
 .favourites .star { border: none; background: none; font-size: 15px; color: var(--star); padding: 0 4px; }
 
