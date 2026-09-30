@@ -1021,6 +1021,14 @@ describe("the menu bar label settings", () => {
     expect(screen.getByText("Acme Rebuild: Sprint planning")).toBeDefined();
   });
 
+  // The preview is always illustrative, whether or not a timer happens to be running —
+  // it's the running timer's own data used to fill it in, not a claim about the caption.
+  it("captions the preview EXAMPLE, not a claim about where it's running or shown", async () => {
+    await openSettings();
+
+    expect(screen.getByText("example")).toBeDefined();
+  });
+
   it("updates the preview as soon as a radio changes, not when the write returns", async () => {
     const user = await openSettings();
     // Never resolves: the preview must not be waiting on it.

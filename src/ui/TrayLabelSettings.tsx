@@ -41,10 +41,6 @@ export function TrayLabelSettings({
   useEffect(() => setFallback(snapshot.trayFallback), [snapshot.trayFallback]);
   useEffect(() => setShowElapsed(snapshot.trayShowElapsed), [snapshot.trayShowElapsed]);
 
-  // macOS draws the label beside the menu bar icon. Windows has no equivalent, so the
-  // same text leads the tray tooltip instead — same setting, different place to look.
-  const inTooltip = snapshot.platform !== "darwin";
-
   const running = snapshot.timer.status === "running" ? snapshot.timer : null;
 
   // The new once-a-minute tray refresh in main.ts deliberately updates only the native
@@ -94,10 +90,7 @@ export function TrayLabelSettings({
         <span className="tray-preview-text" data-testid="tray-preview">
           {formatTrayLabel(subject, { fallback, prefix, showElapsed })}
         </span>
-        <span className="tray-preview-caption">
-          {running ? "your running timer" : "example"}
-          {inTooltip ? " · shown in the tray tooltip" : ""}
-        </span>
+        <span className="tray-preview-caption">example</span>
       </div>
 
       <fieldset className="tray-choice">
