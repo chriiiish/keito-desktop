@@ -490,6 +490,9 @@ button.link.muted:hover { color: var(--danger); }
 .favourites li.dragging { opacity: 0.4; }
 .favourites li.drag-over { border-top: 2px solid var(--accent); }
 .favourites .drag-handle { color: var(--muted); cursor: grab; }
+.favourites .reorder-buttons { display: flex; gap: 2px; }
+.favourites .move { padding: 0 4px; font-size: 11px; color: var(--muted); }
+.favourites .move:disabled { opacity: 0.3; cursor: default; }
 .favourites .star { border: none; background: none; font-size: 15px; color: var(--star); padding: 0 4px; }
 
 .settings form.connect { flex-direction: column; align-items: flex-start; gap: 10px; }
