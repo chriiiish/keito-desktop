@@ -69,6 +69,14 @@ const snapshot: Snapshot = {
     hasToken: false,
     workItems: [],
     error: null,
+    sync: {
+          enabled: false,
+          field: "Microsoft.VSTS.Scheduling.Effort",
+          unit: "hours" as const,
+          hoursPerDay: 6.2,
+          fields: [],
+          errorCount: 0,
+        },
   },
   accountId: "co_9",
   apiKeyHint: "kto_••••••••abcd",
@@ -1142,6 +1150,7 @@ describe("the note field with Azure DevOps", () => {
       hasToken: true,
       workItems,
       error: null,
+      sync: snapshot.azure.sync,
       ...over,
     },
   });
@@ -1446,6 +1455,14 @@ describe("browsing the work item list", () => {
         hasToken: true,
         workItems: items,
         error: null,
+        sync: {
+              enabled: false,
+              field: "Microsoft.VSTS.Scheduling.Effort",
+              unit: "hours" as const,
+              hoursPerDay: 6.2,
+              fields: [],
+              errorCount: 0,
+            },
       },
     }) satisfies Snapshot;
 

@@ -181,3 +181,34 @@ describe("ordering by when a work item last changed", () => {
     expect(items[0]!.project).toBe("Acme Billing");
   });
 });
+
+describe("AzureClient time sync", () => {
+  const withItems = () =>
+    new FakeAzure({ workItems: [item(1842, "Login redirect"), item(7, "Other")] });
+
+  it("writes a number to a field as a JSON Patch", async () => {
+    const azure = withItems();
+    await clientFor(azure).setWorkItemField(1842, "Microsoft.VSTS.Scheduling.Effort", 3.5);
+    expect(azure.written.get(1842)).toEqual({ "Microsoft.VSTS.Scheduling.Effort": 3.5 });
+  });
+
+  it("raises AzureAuthError for a token that cannot write", async () => {
+    // Read-only tokens get the 203 sign-in page on a PATCH, same as a bad token.
+    const azure = new FakeAzure({ workItems: [item(1842, "x")], canWrite: false });
+    await expect(
+      clientFor(azure).setWorkItemField(1842, "Microsoft.VSTS.Scheduling.Effort", 1),
+    ).rejects.toBeInstanceOf(AzureAuthError);
+  });
+
+  it("raises a request error, naming Azure's message, when the type lacks the field", async () => {
+    const azure = new FakeAzure({ workItems: [item(1842, "x")], idsWithoutFields: [1842] });
+    await expect(
+      clientFor(azure).setWorkItemField(1842, "Microsoft.VSTS.Scheduling.Effort", 1),
+    ).rejects.toThrow(/Cannot find field/);
+  });
+
+  it("lists only numeric fields, by name", async () => {
+    const fields = await clientFor(withItems()).listNumericFields();
+    expect(fields.map((field) => field.name)).toEqual(["Completed Work", "Effort"]);
+  });
+});

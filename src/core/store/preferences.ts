@@ -1,5 +1,6 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
+import { DEFAULT_HOURS_PER_DAY, DEFAULT_SYNC_FIELD, type SyncUnit } from "../azure/effort.js";
 import type { TrayFallback, TrayPrefix } from "../tray/label.js";
 
 export const DEFAULT_HOTKEY = "CommandOrControl+Shift+K";
@@ -73,6 +74,16 @@ export interface Preferences {
    * SecretStore beside the Keito key.
    */
   azureOrganisationUrl?: string | undefined;
+  /**
+   * Whether time logged against a work item is written back to it. Off by default: it
+   * overwrites a field in somebody's Azure DevOps, which nothing else here does.
+   */
+  azureSyncEnabled: boolean;
+  /** Reference name of the field the total is written to, e.g. Microsoft.VSTS.Scheduling.Effort. */
+  azureSyncField: string;
+  azureSyncUnit: SyncUnit;
+  /** Only used when the unit is days. */
+  azureHoursPerDay: number;
 }
 
 const defaults = (): Preferences => ({
@@ -87,6 +98,10 @@ const defaults = (): Preferences => ({
   noteIsInternal: false,
   internalNotesAvailable: false,
   azureEnabled: false,
+  azureSyncEnabled: false,
+  azureSyncField: DEFAULT_SYNC_FIELD,
+  azureSyncUnit: "hours",
+  azureHoursPerDay: DEFAULT_HOURS_PER_DAY,
 });
 
 /** Favourites and settings on disk. The API key is not here — that lives in the OS keychain. */

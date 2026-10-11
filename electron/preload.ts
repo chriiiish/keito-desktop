@@ -33,6 +33,12 @@ const api = {
     ipcRenderer.invoke("set-azure-enabled", enabled),
   connectAzure: (token: string, organisationUrl?: string): Promise<Snapshot> =>
     ipcRenderer.invoke("connect-azure", token, organisationUrl),
+  setAzureSync: (patch: {
+    enabled?: boolean;
+    field?: string;
+    unit?: "hours" | "days";
+    hoursPerDay?: number;
+  }): Promise<Snapshot> => ipcRenderer.invoke("set-azure-sync", patch),
   disconnectAzure: (): Promise<Snapshot> => ipcRenderer.invoke("disconnect-azure"),
   setOpenAtLogin: (openAtLogin: boolean): Promise<Snapshot> =>
     ipcRenderer.invoke("set-open-at-login", openAtLogin),

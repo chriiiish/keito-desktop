@@ -16,6 +16,12 @@ export interface FakeAzureOptions {
   workItems?: WorkItem[];
   /** Return detail rows in a deliberately different order to the ids requested. */
   shuffleDetail?: boolean;
+  /** Numeric fields the organisation defines. */
+  fields?: Array<{ referenceName: string; name: string; type?: string }>;
+  /** False answers every PATCH like a read-only token does: 203 and a sign-in page. */
+  canWrite?: boolean;
+  /** Ids whose work item type has none of the fields — a PATCH to them is a 400. */
+  idsWithoutFields?: number[];
 }
 
 export interface FakeAzureRequest {
@@ -35,9 +41,19 @@ export class FakeAzure {
       organisation: "acme",
       workItems: [],
       shuffleDetail: false,
+      fields: [
+        { referenceName: "Microsoft.VSTS.Scheduling.Effort", name: "Effort", type: "double" },
+        { referenceName: "Microsoft.VSTS.Scheduling.CompletedWork", name: "Completed Work", type: "double" },
+        { referenceName: "System.Title", name: "Title", type: "string" },
+      ],
+      canWrite: true,
+      idsWithoutFields: [],
       ...options,
     };
   }
+
+  /** What each work item's fields now hold, as written by PATCH. */
+  readonly written = new Map<number, Record<string, unknown>>();
 
   get items(): WorkItem[] {
     return this.#options.workItems;
@@ -88,6 +104,39 @@ export class FakeAzure {
           },
         }));
       return json({ count: found.length, value: this.#options.shuffleDetail ? found.reverse() : found });
+    }
+
+    if (url.pathname === `/${this.#options.organisation}/_apis/wit/fields` && method === "GET") {
+      return json({ count: this.#options.fields.length, value: this.#options.fields });
+    }
+
+    const patch = new RegExp(`^/${this.#options.organisation}/_apis/wit/workitems/(\\d+)$`).exec(
+      url.pathname,
+    );
+    if (patch && method === "PATCH") {
+      // Azure insists on this content type for a JSON Patch and answers 415 otherwise.
+      if (headers.get("Content-Type") !== "application/json-patch+json") {
+        return json({ message: "Unsupported media type" }, 415);
+      }
+      // A token without write scope is refused like any other bad token: 203, not 403.
+      if (!this.#options.canWrite) return this.#signInPage();
+
+      const id = Number(patch[1]);
+      if (!this.#options.workItems.some((item) => item.id === id)) {
+        return json({ message: `TF401232: Work item ${id} does not exist.` }, 404);
+      }
+      const ops = JSON.parse(String(init?.body)) as Array<{ op: string; path: string; value: unknown }>;
+      const fields = this.written.get(id) ?? {};
+      for (const op of ops) {
+        const name = op.path.replace(/^\/fields\//, "");
+        const known = this.#options.fields.some((field) => field.referenceName === name);
+        if (!known || this.#options.idsWithoutFields.includes(id)) {
+          return json({ message: `TF51535: Cannot find field ${name}.` }, 400);
+        }
+        fields[name] = op.value;
+      }
+      this.written.set(id, fields);
+      return json({ id, fields });
     }
 
     return json({ message: `No fake route for ${method} ${url.pathname}` }, 404);

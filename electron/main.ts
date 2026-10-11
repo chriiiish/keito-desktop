@@ -340,6 +340,7 @@ function registerIpc(): void {
   handle("connect-azure", async (token: string, organisationUrl?: string) =>
     service.connectAzure(token, organisationUrl),
   );
+  handle("set-azure-sync", async (patch) => service.setAzureSync(patch));
   handle("disconnect-azure", async () => service.disconnectAzure());
 
   handle("set-tray-label", async (options: Parameters<AppService["setTrayLabel"]>[0]) =>
@@ -489,6 +490,9 @@ async function checkForUpdates(): Promise<void> {
 
   const { includePrereleases } = prefsStore.get();
   service.setLatestRelease(await fetchLatestRelease(log, { includePrereleases }));
+  // An Azure write finishes after the handler that queued it has returned, so its outcome
+  // (the error count in Integrations) would otherwise wait for the next unrelated change.
+  service.onChange(() => broadcast(service.snapshot()));
   broadcast(service.snapshot());
 }
 

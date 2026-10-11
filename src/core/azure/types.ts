@@ -8,3 +8,11 @@ export interface WorkItem {
   /** ISO instant of the last change. What the list is ordered by. */
   changedDate: string | null;
 }
+
+/** A numeric field a work item can carry — a place time can be written to. */
+export interface WorkItemField {
+  /** e.g. "Microsoft.VSTS.Scheduling.Effort" — what the PATCH needs. */
+  referenceName: string;
+  /** e.g. "Effort" — what the picker shows. */
+  name: string;
+}

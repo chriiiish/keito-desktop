@@ -14,8 +14,10 @@ import { isNewerVersion, type ReleaseSummary } from "../src/core/version/version
 import type { NoteVisibility } from "../src/core/keito/notes.js";
 import { AzureClient, normaliseOrganisationUrl } from "../src/core/azure/client.js";
 import { AzureError } from "../src/core/azure/errors.js";
+import { effortValue, isValidHoursPerDay, ticketSeconds, type SyncUnit } from "../src/core/azure/effort.js";
+import { noteWorkItemId } from "../src/core/azure/note.js";
 import { azureStatus } from "../src/core/azure/status.js";
-import type { WorkItem } from "../src/core/azure/types.js";
+import type { WorkItem, WorkItemField } from "../src/core/azure/types.js";
 import type { SecretStore } from "./secrets.js";
 import type { Logger } from "./logger.js";
 
@@ -53,6 +55,27 @@ export interface AzureState {
   /** Open work items assigned to the token's owner, most recently changed first. */
   workItems: WorkItem[];
   error: string | null;
+  sync: AzureSyncState;
+}
+
+/**
+ * Writing logged time back to the work item. A sibling of the connection rather than part
+ * of it: the connection can be fine while every write fails.
+ */
+export interface AzureSyncState {
+  enabled: boolean;
+  /** Reference name, e.g. Microsoft.VSTS.Scheduling.Effort. */
+  field: string;
+  unit: SyncUnit;
+  hoursPerDay: number;
+  /** Numeric fields to choose from; empty until sync is on and they have loaded. */
+  fields: WorkItemField[];
+  /**
+   * Failed or skipped writes since the app launched. A count and nothing more: the reason
+   * for each is in the log, and Integrations links to it. In memory only, so a restart
+   * starts clean.
+   */
+  errorCount: number;
 }
 
 /**
@@ -214,6 +237,16 @@ export class AppService {
   #azureCheckedAtMs = 0;
   #azureConnected = false;
   #azureToken: string | null = null;
+  /** Everything from the last 30-day fetch, so the time sync never needs its own request. */
+  #windowEntries: TimeEntry[] = [];
+  #azureFields: WorkItemField[] = [];
+  #azureSyncErrors = 0;
+  /** Every work item id seen in any assigned list this session. Only these are written to. */
+  #azureKnownIds = new Set<number>();
+  /** The last value written per `id:field`, so an unchanged total is not written again. */
+  #azureWritten = new Map<string, number>();
+  #azureSyncChain: Promise<void> = Promise.resolve();
+  #changed: (() => void) | null = null;
 
   private constructor(
     prefs: PreferencesStore,
@@ -383,6 +416,7 @@ export class AppService {
     this.#recents = [];
     this.#today = [];
     this.#yesterday = [];
+    this.#windowEntries = [];
     this.#keyStatus = "missing";
     this.#error = null;
     this.#apiKeyHint = null;
@@ -414,6 +448,7 @@ export class AppService {
     const pair = this.#catalog.find((candidate) => candidate.id === pairId);
     if (!pair || !this.#timer) return this.snapshot();
     return this.#run(async () => {
+      const left = this.#runningTicket();
       await this.#timer!.switchTo(pair, { text: notes, visibility: field });
       const state = this.#timer!.current();
       this.#startedAtMs =
@@ -421,6 +456,7 @@ export class AppService {
           ? startMsOf(state.entry, () => this.#prefs.get().workspaceTimezone)
           : Date.now();
       await this.#reloadEntries();
+      this.#syncTickets(left, this.#runningTicket());
       // A new use changes the ranking, so recents are recomputed on the next refresh.
     });
   }
@@ -447,6 +483,7 @@ export class AppService {
       entrySeconds(entry, Date.now(), this.#prefs.get().workspaceTimezone) ?? 0;
 
     return this.#run(async () => {
+      const left = this.#runningTicket();
       await this.#timer!.restart(entryId, pair);
       const state = this.#timer!.current();
       this.#startedAtMs =
@@ -454,6 +491,7 @@ export class AppService {
           ? startMsOf(state.entry, () => this.#prefs.get().workspaceTimezone)
           : Date.now();
       await this.#reloadEntries();
+      this.#syncTickets(left, this.#runningTicket());
       if (priorSeconds > 0) {
         const resumed = this.#today.find((candidate) => candidate.id === entryId);
         // Assigned, not added: the reload's response is expected to bring back
@@ -468,9 +506,11 @@ export class AppService {
   async stopTimer(): Promise<Snapshot> {
     if (!this.#timer) return this.snapshot();
     return this.#run(async () => {
+      const left = this.#runningTicket();
       await this.#timer!.stop();
       this.#startedAtMs = null;
       await this.#reloadEntries();
+      this.#syncTickets(left);
     });
   }
 
@@ -594,6 +634,14 @@ export class AppService {
       // broken connection would have the note field suggesting tickets it cannot refresh.
       workItems: status === "connected" ? this.#azureItems : [],
       error: this.#azureError,
+      sync: {
+        enabled: prefs.azureSyncEnabled,
+        field: prefs.azureSyncField,
+        unit: prefs.azureSyncUnit,
+        hoursPerDay: prefs.azureHoursPerDay,
+        fields: this.#azureFields,
+        errorCount: this.#azureSyncErrors,
+      },
     };
   }
 
@@ -664,9 +712,11 @@ export class AppService {
       });
 
       this.#azureItems = items;
+      this.#rememberWorkItems(items);
       this.#azureConnected = true;
       this.#azureError = null;
       this.#azureCheckedAtMs = Date.now();
+      await this.#loadSyncFields();
       this.#log.info(`Azure DevOps connected: ${items.length} work items assigned`);
     } catch (error) {
       this.#azureConnected = false;
@@ -683,6 +733,10 @@ export class AppService {
     this.#azureToken = null;
     await this.#azureSecrets?.clear();
     await this.#prefs.update({ azureEnabled: false, azureOrganisationUrl: undefined });
+    this.#azureFields = [];
+    this.#azureKnownIds.clear();
+    this.#azureWritten.clear();
+    this.#azureSyncErrors = 0;
     this.#azureItems = [];
     this.#azureConnected = false;
     this.#azureError = null;
@@ -717,6 +771,7 @@ export class AppService {
 
     try {
       this.#azureItems = await client.listAssignedWorkItems();
+      this.#rememberWorkItems(this.#azureItems);
       this.#azureConnected = true;
       this.#azureError = null;
     } catch (error) {
@@ -730,6 +785,138 @@ export class AppService {
     }
     this.#azureCheckedAtMs = Date.now();
     this.#revision++;
+  }
+
+  // ── Azure DevOps time sync ────────────────────────────────────────────────────
+
+  /** Told by the main process what to do when something happens outside a request. */
+  onChange(listener: () => void): void {
+    this.#changed = listener;
+  }
+
+  /** Resolves when every queued Azure write has finished. For tests; nothing else waits. */
+  azureSyncIdle(): Promise<void> {
+    return this.#azureSyncChain;
+  }
+
+  /** Changes how logged time is written to a work item. Validates before keeping anything. */
+  async setAzureSync(patch: {
+    enabled?: boolean;
+    field?: string;
+    unit?: SyncUnit;
+    hoursPerDay?: number;
+  }): Promise<Snapshot> {
+    const update: Parameters<PreferencesStore["update"]>[0] = {};
+    if (patch.enabled !== undefined) update.azureSyncEnabled = patch.enabled;
+    if (patch.field !== undefined && patch.field.trim()) update.azureSyncField = patch.field.trim();
+    if (patch.unit === "hours" || patch.unit === "days") update.azureSyncUnit = patch.unit;
+    if (patch.hoursPerDay !== undefined && isValidHoursPerDay(patch.hoursPerDay)) {
+      update.azureHoursPerDay = patch.hoursPerDay;
+    }
+    await this.#prefs.update(update);
+    // A different field, unit or day length means a different number for the same time.
+    this.#azureWritten.clear();
+    if (patch.enabled) await this.#loadSyncFields();
+    this.#revision++;
+    return this.snapshot();
+  }
+
+  #rememberWorkItems(items: readonly WorkItem[]): void {
+    for (const item of items) this.#azureKnownIds.add(item.id);
+  }
+
+  async #loadSyncFields(): Promise<void> {
+    const prefs = this.#prefs.get();
+    if (!prefs.azureSyncEnabled || !this.#azureToken || !prefs.azureOrganisationUrl) return;
+    try {
+      this.#azureFields = await this.#azureClient().listNumericFields();
+    } catch (error) {
+      // The picker falls back to the current field alone; the sync itself does not need it.
+      this.#log.warn(`Azure DevOps field list failed: ${String(error)}`);
+    }
+  }
+
+  #azureClient(): AzureClient {
+    return new AzureClient({
+      personalAccessToken: this.#azureToken!,
+      fetch: globalThis.fetch,
+      organisationUrl: this.#prefs.get().azureOrganisationUrl!,
+      onRequest: (record) => {
+        const line = `${record.method} ${record.path} -> ${record.status ?? "no response"} (${record.durationMs}ms)`;
+        if (record.ok) this.#log.info(line);
+        else this.#log.warn(line, record.error ? { error: record.error } : undefined);
+      },
+    });
+  }
+
+  /** The work item the running timer's note names, or null. */
+  #runningTicket(): number | null {
+    const state = this.#timer?.current();
+    return state?.status === "running" ? noteWorkItemId(visibleNote(state.entry)) : null;
+  }
+
+  /** The work item an entry in the window names, or null. Looks in the last fetch. */
+  #ticketOfEntry(id: string): number | null {
+    const entry = this.#windowEntries.find((candidate) => candidate.id === id);
+    return entry ? noteWorkItemId(visibleNote(entry)) : null;
+  }
+
+  /**
+   * Queues a write of each named work item's two-week total.
+   *
+   * **Never awaited by the caller.** Keito is the source of truth and has already been
+   * written by now; Azure being slow, down or refusing the token must not hold up the
+   * timer or the popover's spinner. Writes run one after another on a chain, so two quick
+   * switches cannot interleave their PATCHes.
+   */
+  #syncTickets(...ids: Array<number | null>): void {
+    const prefs = this.#prefs.get();
+    if (!prefs.azureEnabled || !prefs.azureSyncEnabled) return;
+    if (!this.#azureToken || !prefs.azureOrganisationUrl) return;
+
+    const wanted = [...new Set(ids)].filter((id): id is number => id !== null);
+    if (wanted.length === 0) return;
+
+    // Captured now: by the time the chain gets to it the window may have moved on.
+    const entries = this.#windowEntries;
+    const now = new Date();
+    this.#azureSyncChain = this.#azureSyncChain
+      .then(() => this.#writeTickets(wanted, entries, now))
+      .catch((error) => this.#log.error(`Azure DevOps sync crashed: ${String(error)}`));
+  }
+
+  async #writeTickets(ids: number[], entries: readonly TimeEntry[], now: Date): Promise<void> {
+    const prefs = this.#prefs.get();
+    const client = this.#azureClient();
+
+    for (const id of ids) {
+      // Only tickets this session has seen in the assigned list. A note that merely starts
+      // with a number — "2024: planning" — must not write to a ticket nobody picked.
+      if (!this.#azureKnownIds.has(id)) {
+        this.#log.info(`Azure DevOps sync skipped ${id}: not one of your assigned work items`);
+        continue;
+      }
+
+      const value = effortValue(
+        ticketSeconds(entries, id, now, prefs.workspaceTimezone),
+        prefs.azureSyncUnit,
+        prefs.azureHoursPerDay,
+      );
+      const key = `${id}:${prefs.azureSyncField}`;
+      if (this.#azureWritten.get(key) === value) continue;
+
+      try {
+        await client.setWorkItemField(id, prefs.azureSyncField, value);
+        this.#azureWritten.set(key, value);
+        this.#log.info(`Azure DevOps sync: ${id} ${prefs.azureSyncField} = ${value} ${prefs.azureSyncUnit}`);
+      } catch (error) {
+        this.#azureSyncErrors++;
+        this.#log.warn(`Azure DevOps sync failed for ${id}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+
+    this.#revision++;
+    this.#changed?.();
   }
 
   /** Told by the main process whether the OS actually accepted the accelerator. */
@@ -808,10 +995,11 @@ export class AppService {
         }
       }
 
-      const { recents, today, yesterday, running } = await entriesPromise;
+      const { entries, recents, today, yesterday, running } = await entriesPromise;
       this.#recents = recents;
       this.#today = today;
       this.#yesterday = yesterday;
+      this.#windowEntries = entries;
 
       const before = this.#timer!.current();
       this.#timer!.adopt(running, this.#catalog);
@@ -854,6 +1042,7 @@ export class AppService {
   async updateEntry(id: string, patch: EntryPatch): Promise<Snapshot> {
     if (!this.#client) return this.snapshot();
     return this.#run(async () => {
+      const before = this.#ticketOfEntry(id);
       let { notes, noteField, ...rest } = patch;
       const body: Parameters<KeitoClient["updateTimeEntry"]>[1] = { ...rest };
 
@@ -881,16 +1070,20 @@ export class AppService {
       if (state?.status === "running" && state.entry.id === id) {
         this.#timer!.adopt(running, this.#catalog);
       }
+      // Both ends: an edit that moves the id off one ticket and onto another changes two.
+      this.#syncTickets(before, this.#ticketOfEntry(id));
     });
   }
 
   async deleteEntry(id: string): Promise<Snapshot> {
     if (!this.#client) return this.snapshot();
     return this.#run(async () => {
+      const before = this.#ticketOfEntry(id);
       await this.#client!.deleteTimeEntry(id);
       // A deleted entry may have been the running one; re-read what Keito now says.
       await this.#timer?.refresh(this.#catalog);
       await this.#reloadEntries();
+      this.#syncTickets(before);
     });
   }
 
@@ -906,6 +1099,9 @@ export class AppService {
       });
       await this.#timer!.refresh(this.#catalog);
       this.#startedAtMs = null;
+      // The trimmed entry is what the window must now hold, so it is re-read first.
+      await this.#reloadEntries();
+      this.#syncTickets(this.#ticketOfEntry(state.entry.id));
     });
   }
 
@@ -970,7 +1166,7 @@ export class AppService {
    */
   async #reloadEntries(): Promise<TimeEntry | null> {
     if (!this.#client) return null;
-    const { recents, today, yesterday, running } = await loadEntries(
+    const { entries, recents, today, yesterday, running } = await loadEntries(
       this.#client,
       new Date(),
       this.#prefs.get().workspaceTimezone,
@@ -978,6 +1174,7 @@ export class AppService {
     this.#recents = recents;
     this.#today = today;
     this.#yesterday = yesterday;
+    this.#windowEntries = entries;
     return running;
   }
 

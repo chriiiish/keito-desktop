@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { Snapshot } from "../../electron/service.js";
 import { AsyncButton, useAsyncAction } from "./AsyncButton.js";
 import { AzureLogo } from "./AzureLogo.js";
 import { Toggle } from "./Toggle.js";
+import { MAX_HOURS_PER_DAY, MIN_HOURS_PER_DAY, isValidHoursPerDay } from "../core/azure/effort.js";
 import { keito } from "./keito-api.js";
 
 /** Other services this app can read from. Azure DevOps is the only one so far. */
@@ -101,6 +102,9 @@ export function IntegrationsTab({
           </p>
 
           {azure.enabled && <AzureConnectionForm snapshot={snapshot} onChange={onChange} />}
+          {azure.enabled && azure.status === "connected" && (
+            <AzureSyncSection snapshot={snapshot} onChange={onChange} />
+          )}
         </div>
       </div>
     </section>
@@ -154,8 +158,12 @@ function AzureConnectionForm({
       <h3>What the token needs</h3>
       <ul className="scope-list">
         <li>
-          <strong>Work Items (Read)</strong> — that is the whole list. Nothing is written
-          back to Azure DevOps; this only ever reads.
+          <strong>Work Items (Read)</strong> — enough for the work item list. Nothing is
+          written back unless you switch on time sync below.
+        </li>
+        <li>
+          <strong>Work Items (Read &amp; write)</strong> — needed only for time sync, which
+          writes to a field on the work item.
         </li>
       </ul>
       <p className="hint">
@@ -216,4 +224,148 @@ function AzureConnectionForm({
       )}
     </form>
   );
+}
+
+/**
+ * Writing logged time back to the work item.
+ *
+ * Its own block under the connection, because the connection can be perfectly healthy while
+ * every write fails — a read-only token connects fine. The failure count and the log link
+ * live here for the same reason: a write that fails is logged and the app carries on, so
+ * this is the only place anyone is told there is something to look at.
+ */
+function AzureSyncSection({
+  snapshot,
+  onChange,
+}: {
+  snapshot: Snapshot;
+  onChange: (next: Snapshot) => void;
+}): JSX.Element {
+  const sync = snapshot.azure.sync;
+  const [busy, setBusy] = useState(false);
+  const inFlight = useRef(false);
+  const [hoursText, setHoursText] = useState(String(sync.hoursPerDay));
+  const hoursValid = isValidHoursPerDay(Number(hoursText));
+
+  /** One write at a time, guarded by a ref for the same reason `useAsyncAction` is. */
+  const save = async (patch: Parameters<typeof keito.setAzureSync>[0]): Promise<void> => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setBusy(true);
+    try {
+      onChange(await keito.setAzureSync(patch));
+    } finally {
+      inFlight.current = false;
+      setBusy(false);
+    }
+  };
+
+  // The configured field is always offered, even before the list has loaded or if it is not
+  // in it, so the select never shows a value that is not an option.
+  const options = sync.fields.some((field) => field.referenceName === sync.field)
+    ? sync.fields
+    : [{ referenceName: sync.field, name: fieldLabel(sync.field) }, ...sync.fields];
+
+  return (
+    <div className="azure-sync">
+      <h3>Sync time with Azure DevOps</h3>
+      <div className="sync-toggle">
+        <Toggle
+          checked={sync.enabled}
+          onChange={(next) => keito.setAzureSync({ enabled: next }).then(onChange)}
+          label="Sync time with Azure DevOps"
+        />
+        <span>Write the time logged on a work item back to it</span>
+      </div>
+      <p className="hint">
+        When a timer stops or changes, the work item in its note gets the total of your
+        entries for it over the last 14 days. It writes your own logged time, not the team's,
+        and it replaces whatever the field held. Editing the number at the start of a note
+        unlinks that entry. The token needs Work Items (Read &amp; write).
+      </p>
+
+      {sync.enabled && (
+        <>
+          <label>
+            Field to write to
+            <select
+              value={sync.field}
+              disabled={busy}
+              onChange={(event) => void save({ field: event.target.value })}
+            >
+              {options.map((field) => (
+                <option key={field.referenceName} value={field.referenceName}>
+                  {field.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            Write the time as
+            <select
+              value={sync.unit}
+              disabled={busy}
+              onChange={(event) => void save({ unit: event.target.value as "hours" | "days" })}
+            >
+              <option value="hours">Hours (decimal)</option>
+              <option value="days">Days (decimal)</option>
+            </select>
+          </label>
+
+          {sync.unit === "days" && (
+            <label>
+              Hours in a day
+              <input
+                inputMode="decimal"
+                value={hoursText}
+                disabled={busy}
+                aria-invalid={!hoursValid}
+                onChange={(event) => setHoursText(event.target.value)}
+                onBlur={() => {
+                  if (hoursValid && Number(hoursText) !== sync.hoursPerDay) {
+                    void save({ hoursPerDay: Number(hoursText) });
+                  }
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") event.currentTarget.blur();
+                }}
+              />
+              {!hoursValid && (
+                <span className="error">
+                  Enter a number from {MIN_HOURS_PER_DAY} to {MAX_HOURS_PER_DAY}.
+                </span>
+              )}
+            </label>
+          )}
+
+          <p className="hint">
+            Totals round up to the next tenth, or to a quarter or three-quarter mark.
+          </p>
+
+          {sync.errorCount > 0 && (
+            <p className="error" role="alert">
+              {sync.errorCount === 1
+                ? "1 time sync failed since the app started."
+                : `${sync.errorCount} time syncs failed since the app started.`}{" "}
+              <AsyncButton className="link" onClick={() => keito.openLog()}>
+                Open the log
+              </AsyncButton>{" "}
+              to see why.
+            </p>
+          )}
+          {sync.errorCount === 0 && (
+            <AsyncButton className="link muted" onClick={() => keito.openLog()}>
+              Open the log
+            </AsyncButton>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/** "Microsoft.VSTS.Scheduling.Effort" → "Effort", for a field the list has not named. */
+function fieldLabel(referenceName: string): string {
+  return referenceName.slice(referenceName.lastIndexOf(".") + 1);
 }

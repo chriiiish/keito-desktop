@@ -15,6 +15,12 @@ export interface EntriesSnapshot {
    * contains them, so showing them costs no extra request.
    */
   yesterday: TimeEntry[];
+  /**
+   * Every entry in the window, in the order the API gave them. Already fetched for the
+   * ranking, so handing it on is free — the Azure time sync reads two weeks of it rather
+   * than asking again.
+   */
+  entries: TimeEntry[];
   /** The one running entry, if any — no separate request needed to find it. */
   running: TimeEntry | null;
 }
@@ -81,6 +87,7 @@ export async function loadEntries(
     entries.filter((entry) => entry.spent_date === date).sort(newestFirst);
 
   return {
+    entries,
     recents: rankRecents(entries, today),
     today: on(today),
     yesterday: on(previous),
