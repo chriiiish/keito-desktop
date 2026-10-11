@@ -1,7 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { Snapshot } from "./service.js";
+import type { EntryPatch, Snapshot } from "./service.js";
 import type { TimeEntry } from "../src/core/keito/types.js";
-import type { NoteVisibility } from "../src/core/keito/notes.js";
 
 /** The only surface the renderer can reach. No node, no direct network. */
 const api = {
@@ -18,6 +17,8 @@ const api = {
   stopTimer: (): Promise<Snapshot> => ipcRenderer.invoke("stop-timer"),
   resumeEntry: (entryId: string): Promise<Snapshot> => ipcRenderer.invoke("resume-entry", entryId),
   toggleFavourite: (pairId: string): Promise<Snapshot> => ipcRenderer.invoke("toggle-favourite", pairId),
+  reorderFavourites: (pairIds: string[]): Promise<Snapshot> =>
+    ipcRenderer.invoke("reorder-favourites", pairIds),
   setHidden: (pairIds: string[], hidden: boolean): Promise<Snapshot> =>
     ipcRenderer.invoke("set-hidden", pairIds, hidden),
   setHotkey: (hotkey: string): Promise<Snapshot> => ipcRenderer.invoke("set-hotkey", hotkey),
@@ -44,13 +45,12 @@ const api = {
   setTrayLabel: (options: {
     fallback: "task" | "project";
     prefix: "none" | "project" | "task";
+    showElapsed: boolean;
   }): Promise<Snapshot> => ipcRenderer.invoke("set-tray-label", options),
   listEntries: (from: string, to: string): Promise<TimeEntry[]> =>
     ipcRenderer.invoke("list-entries", from, to),
-  updateEntry: (
-    id: string,
-    patch: { notes?: string; noteField?: NoteVisibility; startedTime?: string; endedTime?: string },
-  ): Promise<Snapshot> => ipcRenderer.invoke("update-entry", id, patch),
+  updateEntry: (id: string, patch: EntryPatch): Promise<Snapshot> =>
+    ipcRenderer.invoke("update-entry", id, patch),
   deleteEntry: (id: string): Promise<Snapshot> => ipcRenderer.invoke("delete-entry", id),
   openLog: (): Promise<void> => ipcRenderer.invoke("open-log"),
   openExternal: (url: string): Promise<void> => ipcRenderer.invoke("open-external", url),

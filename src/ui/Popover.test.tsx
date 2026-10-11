@@ -82,6 +82,7 @@ const snapshot: Snapshot = {
   apiKeyHint: "kto_••••••••abcd",
   trayFallback: "task",
   trayPrefix: "none",
+  trayShowElapsed: false,
   revision: 1,
   timer: { status: "idle" },
   error: null,
@@ -117,6 +118,16 @@ const entry = (id: string, projectId: string, taskId: string, over: Partial<Time
   ...over,
 });
 
+describe("before the first snapshot arrives", () => {
+  it("shows a spinner rather than sitting on plain text", async () => {
+    api.getSnapshot.mockReturnValue(new Promise(() => {}));
+
+    render(<Popover />);
+
+    expect(await screen.findByRole("status", { name: "Working" })).toBeDefined();
+  });
+});
+
 describe("the start form", () => {
   it("preselects the first favourite, so Enter alone starts something sensible", async () => {
     render(<Popover />);
@@ -147,6 +158,49 @@ describe("the start form", () => {
 
     expect(within(list).getByText("Acme Rebuild")).toBeDefined();
     expect(within(list).getByText("Bank Portal")).toBeDefined();
+  });
+
+  it("leads the project heading with its client, when it has one", async () => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue({
+      ...snapshot,
+      catalog: [
+        { ...pair("p_acme:t_dev", "Acme Rebuild", "Development"), clientName: "Acme Corp" },
+        { ...pair("p_acme:t_qa", "Acme Rebuild", "QA"), clientName: "Acme Corp" },
+        pair("p_bank:t_dev", "Bank Portal", "Development"),
+        pair("p_bank:t_ops", "Bank Portal", "Ops"),
+      ],
+    } satisfies Snapshot);
+    render(<Popover />);
+    await user.click(await screen.findByRole("button", { name: "Category" }));
+
+    const list = screen.getByRole("listbox");
+
+    expect(within(list).getByText("Acme Corp: Acme Rebuild")).toBeDefined();
+    // No client on Bank Portal — the heading falls back to the bare project name.
+    expect(within(list).getByText("Bank Portal")).toBeDefined();
+  });
+
+  // buildPicker itself is unit-tested for preserving this order; this confirms the
+  // dropdown actually renders what it is handed rather than resorting it somewhere.
+  it("renders favourites in the order they were favourited, not alphabetically", async () => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue({
+      ...snapshot,
+      favourites: ["p_bank:t_ops", "p_acme:t_dev"],
+    } satisfies Snapshot);
+    render(<Popover />);
+    await user.click(await screen.findByRole("button", { name: "Category" }));
+
+    const list = screen.getByRole("listbox");
+    // Favourites render first in the dropdown, ahead of Recent and All projects — the
+    // first two options are the whole answer to "in what order."
+    const options = within(list).getAllByRole("option");
+
+    expect(options.slice(0, 2).map((option) => option.textContent)).toEqual([
+      "Bank Portal — Ops★",
+      "Acme Rebuild — Development★",
+    ]);
   });
 
   it("filters by a string across project and task", async () => {
@@ -230,7 +284,53 @@ describe("the start form", () => {
     expect(await screen.findByText("Sprint planning")).toBeDefined();
   });
 
-  it("says so when the running timer has no note", async () => {
+  it("shows note, task and client: project in that order on the running timer", async () => {
+    api.getSnapshot.mockResolvedValue({
+      ...snapshot,
+      timer: {
+        status: "running",
+        pair: { ...snapshot.catalog[0]!, clientName: "Acme Corp" },
+        entryId: "te_1",
+        startedAtMs: Date.now(),
+        note: "Sprint planning",
+      },
+    } satisfies Snapshot);
+
+    const { container } = render(<Popover />);
+
+    await screen.findByText("Sprint planning");
+    const header = container.querySelector<HTMLElement>("header.running")!;
+    const lines = Array.from(
+      within(header).getByText("Sprint planning").parentElement!.children,
+      (el) => el.textContent,
+    );
+    expect(lines).toEqual(["Sprint planning", "Development", "Acme Corp: Acme Rebuild"]);
+  });
+
+  it("falls back to the project alone when the running timer's project has no client", async () => {
+    api.getSnapshot.mockResolvedValue({
+      ...snapshot,
+      timer: {
+        status: "running",
+        pair: snapshot.catalog[0]!,
+        entryId: "te_1",
+        startedAtMs: Date.now(),
+        note: "Sprint planning",
+      },
+    } satisfies Snapshot);
+
+    const { container } = render(<Popover />);
+
+    await screen.findByText("Sprint planning");
+    const header = container.querySelector<HTMLElement>("header.running")!;
+    const lines = Array.from(
+      within(header).getByText("Sprint planning").parentElement!.children,
+      (el) => el.textContent,
+    );
+    expect(lines).toEqual(["Sprint planning", "Development", "Acme Rebuild"]);
+  });
+
+  it("collapses to the task bold and drops the note line when the running timer has no note", async () => {
     api.getSnapshot.mockResolvedValue({
       ...snapshot,
       timer: {
@@ -242,9 +342,15 @@ describe("the start form", () => {
       },
     } satisfies Snapshot);
 
-    render(<Popover />);
+    const { container } = render(<Popover />);
 
-    expect(await screen.findByText("No note")).toBeDefined();
+    await screen.findByText("Development");
+    const header = container.querySelector<HTMLElement>("header.running")!;
+    const lines = Array.from(
+      within(header).getByText("Development").parentElement!.children,
+      (el) => el.textContent,
+    );
+    expect(lines).toEqual(["Development", "Acme Rebuild"]);
   });
 
   it("starts the selected category with the typed note", async () => {
@@ -681,7 +787,7 @@ describe("a running row's duration", () => {
     render(<Popover />);
     await screen.findByLabelText(/^Stop Development$/);
 
-    expect(screen.getByText("0:30")).toBeDefined();
+    expect(screen.getByText("0:30", { selector: ".entry-hours" })).toBeDefined();
     expect(screen.queryByText("0:00")).toBeNull();
   });
 
@@ -691,7 +797,7 @@ describe("a running row's duration", () => {
     render(<Popover />);
     await screen.findByLabelText(/^Stop Development$/);
 
-    expect(screen.getByText("1:35")).toBeDefined();
+    expect(screen.getByText("1:35", { selector: ".entry-hours" })).toBeDefined();
   });
 
   it("still reads a stopped entry from its recorded hours", async () => {
@@ -703,7 +809,7 @@ describe("a running row's duration", () => {
     render(<Popover />);
     await screen.findByLabelText(/^Resume Development$/);
 
-    expect(screen.getByText("2:30")).toBeDefined();
+    expect(screen.getByText("2:30", { selector: ".entry-hours" })).toBeDefined();
   });
 
   // Yesterday's list is fed by the same formatter, and a timer left running overnight is
@@ -718,6 +824,29 @@ describe("a running row's duration", () => {
     await screen.findByText("Yesterday");
 
     expect(screen.getByText("0:45")).toBeDefined();
+  });
+});
+
+describe("the Today heading's total", () => {
+  it("reads 0:00 rather than nothing on an empty day", async () => {
+    api.getSnapshot.mockResolvedValue({ ...snapshot, today: [] } satisfies Snapshot);
+
+    render(<Popover />);
+
+    expect(await screen.findByText("0:00", { selector: ".day-total" })).toBeDefined();
+  });
+
+  it("does not show a total beside Yesterday", async () => {
+    api.getSnapshot.mockResolvedValue({
+      ...snapshot,
+      today: [entry("te_t", "p_acme", "t_dev", { hours: 1 })],
+      yesterday: [entry("te_y", "p_bank", "t_ops", { spent_date: "2026-09-01" })],
+    } satisfies Snapshot);
+
+    render(<Popover />);
+    await screen.findByText("Yesterday");
+
+    expect(document.querySelectorAll(".day-total")).toHaveLength(1);
   });
 });
 
@@ -931,7 +1060,9 @@ describe("a task worked on more than once in a day", () => {
     render(<Popover />);
 
     // 30 minutes logged plus 10 running, on one row rather than two rows of a fraction.
-    expect(await screen.findByText("0:40")).toBeDefined();
+    // The row and the Today heading's total both read 0:40, since the day has one task.
+    expect(await screen.findByText("0:40", { selector: ".entry-hours" })).toBeDefined();
+    expect(screen.getByText("0:40", { selector: ".day-total" })).toBeDefined();
     expect(screen.queryByText("0:30")).toBeNull();
     expect(screen.getAllByText("Sprint planning")).toHaveLength(1);
   });
@@ -1600,7 +1731,7 @@ describe("which note is shown", () => {
     }
   });
 
-  it("says No note in the header when a running timer has neither", async () => {
+  it("shows the task bold in the header, with no note line, when a running timer has neither", async () => {
     api.getSnapshot.mockResolvedValue({
       ...snapshot,
       timer: {
@@ -1611,9 +1742,12 @@ describe("which note is shown", () => {
         note: null,
       },
     } satisfies Snapshot);
-    render(<Popover />);
+    const { container } = render(<Popover />);
 
-    expect(await screen.findByText("No note")).toBeDefined();
+    await screen.findByText("Development");
+    const header = container.querySelector<HTMLElement>("header.running")!;
+    expect(within(header).getByText("Development").tagName).toBe("STRONG");
+    expect(within(header).queryByText("No note")).toBeNull();
   });
 });
 

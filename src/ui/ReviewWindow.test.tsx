@@ -10,6 +10,7 @@ const api = {
   listEntries: vi.fn(),
   setHidden: vi.fn(),
   toggleFavourite: vi.fn(),
+  reorderFavourites: vi.fn(),
   setTrayLabel: vi.fn(),
   setHotkey: vi.fn(),
   setOpenAtLogin: vi.fn(),
@@ -89,6 +90,7 @@ const snapshot: Snapshot = {
   apiKeyHint: "kto_••••••••abcd",
   trayFallback: "task",
   trayPrefix: "none",
+  trayShowElapsed: false,
   revision: 1,
   timer: { status: "idle" },
   error: null,
@@ -98,6 +100,16 @@ beforeEach(() => {
   vi.clearAllMocks();
   api.getSnapshot.mockResolvedValue(snapshot);
   api.listEntries.mockResolvedValue([]);
+});
+
+describe("before the first snapshot arrives", () => {
+  it("shows a spinner rather than sitting on plain text", async () => {
+    api.getSnapshot.mockReturnValue(new Promise(() => {}));
+
+    render(<ReviewWindow />);
+
+    expect(await screen.findByRole("status", { name: "Working" })).toBeDefined();
+  });
 });
 
 describe("the review window", () => {
@@ -179,7 +191,146 @@ describe("the review window", () => {
 
     await user.click(await screen.findByRole("button", { name: "Projects" }));
 
-    expect(screen.getByText("Acme Rebuild — Development")).toBeDefined();
+    const list = document.querySelector<HTMLElement>(".favourites")!;
+    expect(within(list).getByText("Development")).toBeDefined();
+    expect(within(list).getByText("Acme Rebuild")).toBeDefined();
+  });
+});
+
+describe("reordering favourites", () => {
+  const threeFavourites = async () => {
+    const user = userEvent.setup();
+    api.reorderFavourites.mockResolvedValue(snapshot);
+    api.getSnapshot.mockResolvedValue({
+      ...snapshot,
+      catalog: [...snapshot.catalog, pair("p_zebra:t_a", "Zebra Project", "Audit")],
+      favourites: ["p_acme:t_dev", "p_bank:t_ops", "p_zebra:t_a"],
+    } satisfies Snapshot);
+    render(<ReviewWindow />);
+    await user.click(await screen.findByRole("button", { name: "Projects" }));
+    return document.querySelector(".favourites") as HTMLUListElement;
+  };
+
+  /** Native HTML5 drag-and-drop, driven the way jsdom actually supports: no DataTransfer. */
+  const drag = (from: Element, to: Element) => {
+    fireEvent.dragStart(from);
+    fireEvent.dragOver(to);
+    fireEvent.drop(to);
+    fireEvent.dragEnd(from);
+  };
+
+  it("reorders favourites by dragging one to another's position", async () => {
+    const list = await threeFavourites();
+    const rows = within(list).getAllByRole("listitem");
+
+    drag(rows[0]!, rows[2]!);
+
+    expect(api.reorderFavourites).toHaveBeenCalledWith(["p_bank:t_ops", "p_zebra:t_a", "p_acme:t_dev"]);
+  });
+
+  // reorderFavourite reinserts the dragged pair at the target's own index, which lands
+  // it above the target when dragging downward and below it when dragging upward — the
+  // indicator has to point at whichever edge that actually is.
+  it("shows the drop indicator below the target when dragging downward", async () => {
+    const list = await threeFavourites();
+    const rows = within(list).getAllByRole("listitem");
+
+    fireEvent.dragStart(rows[0]!);
+    fireEvent.dragOver(rows[2]!);
+
+    expect(rows[2]!.className).toContain("drag-over-below");
+    expect(rows[2]!.className).not.toContain("drag-over-above");
+  });
+
+  it("shows the drop indicator above the target when dragging upward", async () => {
+    const list = await threeFavourites();
+    const rows = within(list).getAllByRole("listitem");
+
+    fireEvent.dragStart(rows[2]!);
+    fireEvent.dragOver(rows[0]!);
+
+    expect(rows[0]!.className).toContain("drag-over-above");
+    expect(rows[0]!.className).not.toContain("drag-over-below");
+  });
+
+  it("does nothing when dropped back on its own row", async () => {
+    const list = await threeFavourites();
+    const rows = within(list).getAllByRole("listitem");
+
+    drag(rows[0]!, rows[0]!);
+
+    expect(api.reorderFavourites).not.toHaveBeenCalled();
+  });
+
+  it("is not draggable with only one favourite — there is nothing to reorder it against", async () => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue({ ...snapshot, favourites: ["p_acme:t_dev"] } satisfies Snapshot);
+    render(<ReviewWindow />);
+    await user.click(await screen.findByRole("button", { name: "Projects" }));
+
+    const row = document.querySelector(".favourites li")!;
+    expect(row.getAttribute("draggable")).not.toBe("true");
+  });
+
+  // Drag-and-drop has no keyboard equivalent of its own — these buttons are the only way
+  // a keyboard or screen-reader user can reorder favourites at all.
+  it("moves a favourite up or down with keyboard-focusable buttons", async () => {
+    const user = userEvent.setup();
+    api.reorderFavourites.mockResolvedValue(snapshot);
+    api.getSnapshot.mockResolvedValue({
+      ...snapshot,
+      catalog: [...snapshot.catalog, pair("p_zebra:t_a", "Zebra Project", "Audit")],
+      favourites: ["p_acme:t_dev", "p_bank:t_ops", "p_zebra:t_a"],
+    } satisfies Snapshot);
+    render(<ReviewWindow />);
+    await user.click(await screen.findByRole("button", { name: "Projects" }));
+
+    await user.click(screen.getByRole("button", { name: "Move Bank Portal Ops up" }));
+
+    expect(api.reorderFavourites).toHaveBeenCalledWith(["p_bank:t_ops", "p_acme:t_dev", "p_zebra:t_a"]);
+  });
+
+  it("disables Move up on the first row and Move down on the last", async () => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue({
+      ...snapshot,
+      catalog: [...snapshot.catalog, pair("p_zebra:t_a", "Zebra Project", "Audit")],
+      favourites: ["p_acme:t_dev", "p_bank:t_ops", "p_zebra:t_a"],
+    } satisfies Snapshot);
+    render(<ReviewWindow />);
+    await user.click(await screen.findByRole("button", { name: "Projects" }));
+
+    expect(
+      (screen.getByRole("button", { name: "Move Acme Rebuild Development up" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    expect(
+      (screen.getByRole("button", { name: "Move Zebra Project Audit down" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+  });
+
+  // The re-entry guard every other API-backed control in this app carries: a drop that
+  // lands while an earlier drag-triggered reorder is still in flight must not fire a
+  // second, overlapping write.
+  it("cannot drag again while a reorder is still in flight", async () => {
+    const list = await threeFavourites();
+    const rows = within(list).getAllByRole("listitem");
+    const { promise, resolve } = deferred<Snapshot>();
+    api.reorderFavourites.mockReturnValue(promise);
+
+    drag(rows[0]!, rows[2]!);
+
+    expect(api.reorderFavourites).toHaveBeenCalledTimes(1);
+    expect(rows[0]!.getAttribute("draggable")).not.toBe("true");
+
+    drag(rows[0]!, rows[1]!);
+    expect(api.reorderFavourites).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolve(snapshot);
+      await promise;
+    });
   });
 });
 
@@ -366,6 +517,35 @@ describe("collapsing projects", () => {
 
     expect(screen.getByLabelText("All tasks for Multi Client")).toBeDefined();
   });
+
+  it("hides every shown project and task when Deselect all is clicked", async () => {
+    const user = await openProjects({ hidden: ["p_bank:t_ops"] });
+
+    const button = screen.getByRole("button", { name: "Deselect all" });
+    await user.click(button);
+
+    expect(api.setHidden).toHaveBeenCalledWith(["p_acme:t_dev", "p_bank:t_ops"], true);
+  });
+
+  it("disables Deselect all once nothing is left shown", async () => {
+    const user = await openProjects({ hidden: ["p_acme:t_dev", "p_bank:t_ops"] });
+
+    expect(screen.getByRole("button", { name: "Deselect all" }).hasAttribute("disabled")).toBe(true);
+    // Nothing to click through to, but confirms it truly is inert.
+    await user.click(screen.getByRole("button", { name: "Deselect all" }));
+    expect(api.setHidden).not.toHaveBeenCalled();
+  });
+
+  // Unlike Expand/Collapse all, which is inert while filtering, Deselect all is a real
+  // preference change — it must act on what the filter narrowed to, never reach past it.
+  it("scopes Deselect all to what the filter currently matches", async () => {
+    const user = await openProjects();
+
+    await user.type(screen.getByPlaceholderText("Filter projects and tasks…"), "Ops");
+    await user.click(screen.getByRole("button", { name: "Deselect all" }));
+
+    expect(api.setHidden).toHaveBeenCalledWith(["p_bank:t_ops"], true);
+  });
 });
 
 describe("the hours column while a timer runs", () => {
@@ -429,6 +609,22 @@ describe("the client, project and task columns", () => {
     ...over,
   });
 
+  it("puts the Notes column directly after Project, ahead of the time columns", async () => {
+    api.listEntries.mockResolvedValue([row()]);
+
+    render(<ReviewWindow />);
+
+    const headers = await screen.findAllByRole("columnheader");
+    expect(headers.map((header) => header.textContent)).toEqual([
+      "Project",
+      "Notes",
+      "Start",
+      "End",
+      "Hours",
+      "",
+    ]);
+  });
+
   it("reads the project and task off the entry, and the client from the matching catalog pair", async () => {
     api.getSnapshot.mockResolvedValue({
       ...snapshot,
@@ -438,9 +634,13 @@ describe("the client, project and task columns", () => {
 
     render(<ReviewWindow />);
 
-    expect(await screen.findByText("Acme Corp")).toBeDefined();
-    expect(screen.getByText("Acme Rebuild")).toBeDefined();
-    expect(screen.getByText("Development")).toBeDefined();
+    const trigger = await screen.findByRole("button", {
+      name: "Category for Development — Acme Corp: Acme Rebuild",
+    });
+    const lines = Array.from(within(trigger).getByText("Development").parentElement!.children, (el) =>
+      el.textContent,
+    );
+    expect(lines).toEqual(["Development", "Acme Corp: Acme Rebuild"]);
   });
 
   // The catalog only lists what a project embeds today; a row can still name a pair the
@@ -451,9 +651,155 @@ describe("the client, project and task columns", () => {
 
     render(<ReviewWindow />);
 
-    expect(await screen.findByText("Unknown project")).toBeDefined();
-    expect(screen.getByText("Unknown task")).toBeDefined();
-    expect(screen.getByText("—")).toBeDefined();
+    const trigger = await screen.findByRole("button", {
+      name: "Category for Unknown task — Unknown project",
+    });
+    const lines = Array.from(
+      within(trigger).getByText("Unknown task").parentElement!.children,
+      (el) => el.textContent,
+    );
+    expect(lines).toEqual(["Unknown task", "Unknown project"]);
+  });
+
+  // Issue #36: date, start, end and note were already editable; project and task were not.
+  it("reassigns the entry when a different category is picked", async () => {
+    const user = userEvent.setup();
+    api.listEntries.mockResolvedValue([row()]);
+    api.updateEntry.mockResolvedValue(snapshot);
+
+    render(<ReviewWindow />);
+    // Names the row rather than reusing the popover's plain "Category" — with one picker
+    // per row, every trigger sharing that name would announce identically to a screen
+    // reader.
+    await user.click(
+      await screen.findByRole("button", { name: "Category for Development — Acme Rebuild" }),
+    );
+    await user.click(within(screen.getByRole("listbox")).getByText("Ops"));
+
+    // project_id and task_id always travel together — there is no state in Keito where a
+    // time entry names one without the other.
+    expect(api.updateEntry).toHaveBeenCalledWith("te_1", { projectId: "p_bank", taskId: "t_ops" });
+  });
+
+  // The category picker is a whole combobox, not a single AsyncButton click, so it needs
+  // its own re-entry guard. Without it, reopening the dropdown and picking again before the
+  // first PATCH resolves risks the earlier, slower request's response landing last and
+  // leaving the entry assigned to whatever was picked first rather than whatever was picked
+  // most recently.
+  it("disables the picker until a reassignment settles, so a second pick cannot race the first", async () => {
+    const user = userEvent.setup();
+    api.listEntries.mockResolvedValue([row()]);
+    const { promise, resolve } = deferred<Snapshot>();
+    api.updateEntry.mockReturnValue(promise);
+
+    render(<ReviewWindow />);
+    const trigger = await screen.findByRole("button", {
+      name: "Category for Development — Acme Rebuild",
+    });
+    await user.click(trigger);
+    await user.click(within(screen.getByRole("listbox")).getByText("Ops"));
+
+    expect(api.updateEntry).toHaveBeenCalledTimes(1);
+    expect((trigger as HTMLButtonElement).disabled).toBe(true);
+
+    await act(async () => {
+      resolve(snapshot);
+      await promise;
+    });
+
+    expect((trigger as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  // The bug a single shared "which row is saving" flag had: row A finishing cleared the
+  // guard for every row, so row B's trigger re-enabled — and could fire a second PATCH —
+  // while row B's own first request was still in flight.
+  it("keeps a second row's picker disabled while only the first row's save has settled", async () => {
+    const user = userEvent.setup();
+    const rowB = row({
+      id: "te_2",
+      project_id: "p_bank",
+      task_id: "t_ops",
+      project: { id: "p_bank", name: "Bank Portal" },
+      task: { id: "t_ops", name: "Ops" },
+    });
+    api.listEntries.mockResolvedValue([row(), rowB]);
+    const first = deferred<Snapshot>();
+    const second = deferred<Snapshot>();
+    api.updateEntry.mockImplementation((id: string) => (id === "te_1" ? first.promise : second.promise));
+
+    render(<ReviewWindow />);
+    const triggerA = await screen.findByRole("button", {
+      name: "Category for Development — Acme Rebuild",
+    });
+    const triggerB = screen.getByRole("button", { name: "Category for Ops — Bank Portal" });
+
+    await user.click(triggerA);
+    await user.click(within(screen.getByRole("listbox")).getByText("Ops"));
+    await user.click(triggerB);
+    await user.click(within(screen.getByRole("listbox")).getByText("Development"));
+
+    expect(api.updateEntry).toHaveBeenCalledTimes(2);
+    expect((triggerA as HTMLButtonElement).disabled).toBe(true);
+    expect((triggerB as HTMLButtonElement).disabled).toBe(true);
+
+    // Row A settles first.
+    await act(async () => {
+      first.resolve(snapshot);
+      await first.promise;
+    });
+
+    expect((triggerA as HTMLButtonElement).disabled).toBe(false);
+    // Row B's own request is still pending — its trigger must stay disabled regardless.
+    expect((triggerB as HTMLButtonElement).disabled).toBe(true);
+
+    await act(async () => {
+      second.resolve(snapshot);
+      await second.promise;
+    });
+
+    expect((triggerB as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  // A timer can be running against a project archived, or otherwise dropped, from the
+  // catalog since — CLAUDE.md's rule for the running-entry label applies here too: the
+  // entry's own embedded names must still be what the picker shows as selected, not a
+  // "Choose a category…" placeholder that reads as the row having lost its assignment.
+  it("shows an archived pair's own name as selected, and still lets it be reassigned", async () => {
+    const user = userEvent.setup();
+    api.getSnapshot.mockResolvedValue({ ...snapshot, catalog: [] });
+    api.listEntries.mockResolvedValue([row()]);
+    api.updateEntry.mockResolvedValue(snapshot);
+
+    render(<ReviewWindow />);
+
+    // The archived pair's own embedded name resolves the row-specific aria-label too, not
+    // just what the trigger displays — both read from the same synthetic Pair.
+    const trigger = await screen.findByRole("button", {
+      name: "Category for Development — Acme Rebuild",
+    });
+    expect(trigger.textContent).toContain("Development");
+
+    await user.click(trigger);
+    await user.click(within(screen.getByRole("listbox")).getByText("Development"));
+
+    // Choosing the row's own (already-selected) pair from the list is a no-op re-pick,
+    // not a state nothing can recover from — it still resolves to a real project/task id
+    // rather than silently doing nothing.
+    expect(api.updateEntry).toHaveBeenCalledWith("te_1", { projectId: "p_acme", taskId: "t_dev" });
+  });
+
+  it("lets a category be favourited from inside the entries table", async () => {
+    const user = userEvent.setup();
+    api.listEntries.mockResolvedValue([row()]);
+    api.toggleFavourite.mockResolvedValue({ ...snapshot, favourites: ["p_bank:t_ops"] });
+
+    render(<ReviewWindow />);
+    await user.click(
+      await screen.findByRole("button", { name: "Category for Development — Acme Rebuild" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Favourite Bank Portal Ops" }));
+
+    expect(api.toggleFavourite).toHaveBeenCalledWith("p_bank:t_ops");
   });
 
   it("hides the Date column in Today and shows it in This week", async () => {
@@ -684,6 +1030,14 @@ describe("the menu bar label settings", () => {
     expect(screen.getByText("Acme Rebuild: Sprint planning")).toBeDefined();
   });
 
+  // The preview is always illustrative, whether or not a timer happens to be running —
+  // it's the running timer's own data used to fill it in, not a claim about the caption.
+  it("captions the preview EXAMPLE, not a claim about where it's running or shown", async () => {
+    await openSettings();
+
+    expect(screen.getByText("example")).toBeDefined();
+  });
+
   it("updates the preview as soon as a radio changes, not when the write returns", async () => {
     const user = await openSettings();
     // Never resolves: the preview must not be waiting on it.
@@ -694,13 +1048,129 @@ describe("the menu bar label settings", () => {
     expect(screen.getByTestId("tray-preview").textContent).toBe("Development: Sprint planning");
   });
 
-  it("saves both settings together so one cannot clobber the other", async () => {
+  it("saves all three settings together so one cannot clobber another", async () => {
     const user = await openSettings();
     api.setTrayLabel.mockResolvedValue(snapshot);
 
     await user.click(screen.getByRole("radio", { name: /show the project/i }));
 
-    expect(api.setTrayLabel).toHaveBeenCalledWith({ prefix: "none", fallback: "project" });
+    expect(api.setTrayLabel).toHaveBeenCalledWith({
+      prefix: "none",
+      fallback: "project",
+      showElapsed: false,
+    });
+  });
+
+  it("offers a checkbox for elapsed time, unchecked by default", async () => {
+    await openSettings();
+
+    const checkbox = screen.getByRole("checkbox", {
+      name: /also show how long the timer has been running/i,
+    }) as HTMLInputElement;
+    expect(checkbox.checked).toBe(false);
+  });
+
+  it("checks the elapsed-time box when it is already on", async () => {
+    api.getSnapshot.mockResolvedValue({ ...snapshot, trayShowElapsed: true } satisfies Snapshot);
+    await openSettings();
+
+    const checkbox = screen.getByRole("checkbox", {
+      name: /also show how long the timer has been running/i,
+    }) as HTMLInputElement;
+    expect(checkbox.checked).toBe(true);
+  });
+
+  it("appends elapsed time to the preview as soon as the checkbox is ticked", async () => {
+    const user = await openSettings();
+    api.setTrayLabel.mockReturnValue(new Promise(() => {}));
+
+    await user.click(
+      screen.getByRole("checkbox", { name: /also show how long the timer has been running/i }),
+    );
+
+    expect(screen.getByTestId("tray-preview").textContent).toBe("Sprint planning 1:23");
+  });
+
+  it("saves the elapsed-time preference alongside the other two, unchanged", async () => {
+    const user = await openSettings();
+    api.setTrayLabel.mockResolvedValue(snapshot);
+
+    await user.click(
+      screen.getByRole("checkbox", { name: /also show how long the timer has been running/i }),
+    );
+
+    expect(api.setTrayLabel).toHaveBeenCalledWith({
+      prefix: "none",
+      fallback: "task",
+      showElapsed: true,
+    });
+  });
+
+  // The new once-a-minute tray refresh in main.ts deliberately updates only the native
+  // tray, not a snapshot broadcast — without its own clock here, this preview would freeze
+  // at whatever it read on the first render until some unrelated state change happened by.
+  it("keeps the running preview's elapsed time moving on its own", async () => {
+    vi.useFakeTimers();
+    try {
+      const startedAtMs = Date.now();
+      api.getSnapshot.mockResolvedValue({
+        ...snapshot,
+        trayShowElapsed: true,
+        timer: {
+          status: "running",
+          pair: snapshot.catalog[0]!,
+          entryId: "te_1",
+          startedAtMs,
+          note: "Sprint planning",
+        },
+      } satisfies Snapshot);
+
+      render(<ReviewWindow />);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+
+      expect(screen.getByTestId("tray-preview").textContent).toBe("Sprint planning 0:00");
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60_000);
+      });
+
+      expect(screen.getByTestId("tray-preview").textContent).toBe("Sprint planning 0:01");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // The re-entry guard other API-backed controls in this app use (AsyncButton /
+  // useAsyncAction) — a bare onChange calling the API directly is what this test exists to
+  // catch, the same rule the picker and every AsyncButton in the app already follow.
+  it("disables every control here until a write settles, so a second pick cannot race the first", async () => {
+    const user = await openSettings();
+    const { promise, resolve } = deferred<Snapshot>();
+    api.setTrayLabel.mockReturnValue(promise);
+
+    const checkbox = screen.getByRole("checkbox", {
+      name: /also show how long the timer has been running/i,
+    }) as HTMLInputElement;
+    await user.click(checkbox);
+
+    expect(api.setTrayLabel).toHaveBeenCalledTimes(1);
+    expect(checkbox.disabled).toBe(true);
+    expect((screen.getByRole("radio", { name: /just the note/i }) as HTMLInputElement).disabled).toBe(
+      true,
+    );
+
+    await act(async () => {
+      resolve(snapshot);
+      await promise;
+    });
+
+    expect(checkbox.disabled).toBe(false);
   });
 });
 

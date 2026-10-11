@@ -25,6 +25,8 @@ export interface Preferences {
   trayFallback: TrayFallback;
   /** What, if anything, precedes the note in the tray. */
   trayPrefix: TrayPrefix;
+  /** Appends the running entry's own elapsed time to the end of the tray label. */
+  trayShowElapsed: boolean;
   /**
    * The version of an update notice the user has dismissed, e.g. "0.3.0".
    *
@@ -91,6 +93,7 @@ const defaults = (): Preferences => ({
   hotkey: DEFAULT_HOTKEY,
   trayFallback: "task",
   trayPrefix: "none",
+  trayShowElapsed: false,
   includePrereleases: false,
   noteIsInternal: false,
   internalNotesAvailable: false,
@@ -154,6 +157,27 @@ export class PreferencesStore {
 
   async removeFavourite(pairId: string): Promise<void> {
     await this.update({ favourites: this.#value.favourites.filter((id) => id !== pairId) });
+  }
+
+  /**
+   * Applies a new order for the favourites the caller (a drag-and-drop reorder) knew
+   * about, rather than replacing the list outright — `pairIds` is a snapshot from
+   * whenever the drag began, and this can land after something else changed favourites
+   * in the meantime.
+   *
+   * An id `pairIds` carries that is no longer a favourite (unstarred mid-drag) is
+   * dropped: reordering must never resurrect something that was deliberately removed.
+   * An id that *is* still a favourite but is missing from `pairIds` (starred by another
+   * window after the drag began) is appended rather than lost — silently dropping a
+   * favourite because a reorder raced its addition would be a stranger bug than the
+   * newcomer landing at the end instead of wherever the drag would have put it.
+   */
+  async reorderFavourites(pairIds: readonly string[]): Promise<void> {
+    const current = this.#value.favourites;
+    const known = new Set(current);
+    const reordered = pairIds.filter((id) => known.has(id));
+    const addedSinceTheDragBegan = current.filter((id) => !reordered.includes(id));
+    await this.update({ favourites: [...reordered, ...addedSinceTheDragBegan] });
   }
 
   /**

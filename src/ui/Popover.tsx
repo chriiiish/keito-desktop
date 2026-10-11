@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AsyncButton, Spinner, useAsyncAction } from "./AsyncButton.js";
+import { CategoryLines } from "./CategoryLines.js";
 import { CategoryPicker } from "./CategoryPicker.js";
-import { formatPairLine } from "../core/catalog/catalog.js";
 import { Elapsed } from "./Elapsed.js";
 import { RecentEntries } from "./RecentEntries.js";
 import { NoteField, type NoteFieldHandle } from "./NoteField.js";
@@ -118,7 +118,14 @@ export function Popover(): JSX.Element {
     if (!next.error) void keito.closePopover();
   };
 
-  if (!snapshot) return <div className="popover loading">Loading…</div>;
+  if (!snapshot) {
+    return (
+      <div className="popover loading">
+        <Spinner />
+        Loading…
+      </div>
+    );
+  }
 
   if (snapshot.keyStatus !== "ready") {
     // A rejected key is not a first run: someone who set this up once does not need
@@ -157,14 +164,12 @@ export function Popover(): JSX.Element {
         {running ? (
           <>
             <div className="running-what">
-              {running.note?.trim() ? (
-                <strong className="running-note" title={running.note}>
-                  {running.note}
-                </strong>
-              ) : (
-                <strong className="running-note none">No note</strong>
-              )}
-              <span>{formatPairLine(running.pair)}</span>
+              <CategoryLines
+                note={running.note}
+                task={running.pair.taskName}
+                project={running.pair.projectName}
+                clientName={running.pair.clientName}
+              />
             </div>
             <div className="running-right">
               <Elapsed

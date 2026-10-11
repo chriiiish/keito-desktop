@@ -14,8 +14,7 @@ import { join } from "node:path";
 import { PreferencesStore } from "../src/core/store/preferences.js";
 import { IdleWatcher, shouldAutoStop } from "../src/core/timer/idle.js";
 import { formatTrayLabel } from "../src/core/tray/label.js";
-import type { NoteVisibility } from "../src/core/keito/notes.js";
-import { AppService, type Snapshot } from "./service.js";
+import { AppService, type EntryPatch, type Snapshot } from "./service.js";
 import { SecretStore } from "./secrets.js";
 import { Logger } from "./logger.js";
 import { fetchLatestRelease, UPDATE_CHECK_INTERVAL_MS } from "./updates.js";
@@ -28,11 +27,24 @@ const IDLE_POLL_MS = 30_000;
 const REFRESH_MS = 5 * 60_000;
 /** How often the Azure DevOps work item list is reloaded while the app is running. */
 const AZURE_REFRESH_MS = 10 * 60_000;
+/**
+ * How often the tray title is refreshed on its own while a timer runs, so elapsed time
+ * moves without waiting for the next snapshot broadcast. Matches the minute granularity
+ * `formatTrayLabel` actually displays — no reason to tick faster than the label can show.
+ */
+const TRAY_ELAPSED_REFRESH_MS = 60_000;
 
 let tray: Tray | null = null;
 let popover: BrowserWindow | null = null;
 let mainWindow: BrowserWindow | null = null;
 let service: AppService;
+/**
+ * Lets the "snapshot" IPC handler wait for `AppService.create()` rather than reading
+ * `service` before it exists. The popover window is now created concurrently with that
+ * call (see `start()`) instead of lazily on first click, so its own first `getSnapshot()`
+ * request can genuinely land before `service` is assigned.
+ */
+let serviceReady: Promise<AppService>;
 /** Held so the update check can read the channel the user chose. */
 let prefsStore: PreferencesStore;
 let registeredHotkey: string | null = null;
@@ -58,24 +70,31 @@ function broadcast(snapshot: Snapshot): void {
 }
 
 /**
- * macOS shows the running task as text beside the menu bar icon. Windows has no such
- * thing — `setTitle` is a no-op there — so the configured label leads the tooltip
- * instead, which is the only place a Windows user can read it.
+ * macOS shows the running task as text beside the menu bar icon, so its tooltip gives the
+ * full context the short title had to drop. Windows has no title at all — `setTitle` is a
+ * no-op there — so the configured label *is* what a Windows user reads, in the tooltip,
+ * and nothing more: showing the label and then the same information again underneath it
+ * read as the tooltip repeating itself.
  */
 function updateTrayTitle(snapshot: Snapshot): void {
   if (!tray) return;
   if (snapshot.timer.status === "running") {
-    const { pair, note } = snapshot.timer;
+    const { pair, note, startedAtMs } = snapshot.timer;
+    const elapsedSeconds = Math.max(0, Math.floor((Date.now() - startedAtMs) / 1000));
     const label = formatTrayLabel(
-      { note, projectName: pair.projectName, taskName: pair.taskName },
-      { fallback: snapshot.trayFallback, prefix: snapshot.trayPrefix },
+      { note, projectName: pair.projectName, taskName: pair.taskName, elapsedSeconds },
+      { fallback: snapshot.trayFallback, prefix: snapshot.trayPrefix, showElapsed: snapshot.trayShowElapsed },
     );
-    // The tooltip has room for the full context the short label had to drop.
-    const context = [`${pair.projectName} — ${pair.taskName}`, note?.trim()]
-      .filter(Boolean)
-      .join("\n");
-    tray.setToolTip(process.platform === "darwin" ? context : `${label}\n${context}`);
-    if (process.platform === "darwin") tray.setTitle(` ${label}`);
+    if (process.platform === "darwin") {
+      // The tooltip has room for the full context the short label had to drop.
+      const context = [`${pair.projectName} — ${pair.taskName}`, note?.trim()]
+        .filter(Boolean)
+        .join("\n");
+      tray.setToolTip(context);
+      tray.setTitle(` ${label}`);
+    } else {
+      tray.setToolTip(label);
+    }
   } else {
     tray.setToolTip("Keito Timer — nothing running");
     if (process.platform === "darwin") tray.setTitle("");
@@ -273,7 +292,13 @@ function registerIpc(): void {
       return result;
     });
 
-  handle("snapshot", async () => service.snapshot());
+  // The one handler that can be invoked before `service` exists — the popover is now
+  // created concurrently with AppService.create(), and its first request for a snapshot
+  // can land before that call resolves.
+  handle("snapshot", async () => {
+    await serviceReady;
+    return service.snapshot();
+  });
   handle("set-api-key", async (key: string, accountId?: string) => service.setApiKey(key, accountId));
   handle("set-company-id", async (accountId: string) => service.setCompanyId(accountId));
   handle("sign-out", async () => service.signOut());
@@ -284,15 +309,10 @@ function registerIpc(): void {
   handle("stop-timer", async () => service.stopTimer());
   handle("resume-entry", async (entryId: string) => service.resumeEntry(entryId));
   handle("toggle-favourite", async (pairId: string) => service.toggleFavourite(pairId));
+  handle("reorder-favourites", async (pairIds: string[]) => service.reorderFavourites(pairIds));
   handle("set-hidden", async (pairIds: string[], hidden: boolean) => service.setHidden(pairIds, hidden));
   handle("list-entries", async (from: string, to: string) => service.listEntries(from, to));
-  handle(
-    "update-entry",
-    async (
-      id: string,
-      patch: { notes?: string; noteField?: NoteVisibility; startedTime?: string; endedTime?: string },
-    ) => service.updateEntry(id, patch),
-  );
+  handle("update-entry", async (id: string, patch: EntryPatch) => service.updateEntry(id, patch));
   handle("delete-entry", async (id: string) => service.deleteEntry(id));
   handle("resolve-idle", async (keep: boolean, awaySinceMs: number) =>
     keep ? service.snapshot() : service.discardIdleSince(new Date(awaySinceMs)),
@@ -429,6 +449,13 @@ function startMonitors(): void {
     () => void service.refreshWorkItems({ force: true }).then(broadcast),
     AZURE_REFRESH_MS,
   );
+
+  // Nothing else changed, so a full broadcast (and its snapshot IPC to both windows)
+  // would be wasted work — the tray is the only thing elapsed time moves on its own.
+  setInterval(() => {
+    const snapshot = service.snapshot();
+    if (snapshot.timer.status === "running") updateTrayTitle(snapshot);
+  }, TRAY_ELAPSED_REFRESH_MS);
 }
 
 /**
@@ -520,10 +547,26 @@ async function start(): Promise<void> {
   // A second store rather than a second field: SecretStore is one encrypted value at one
   // path, and the Azure token has a different lifetime to the Keito key.
   const azureSecrets = new SecretStore(join(app.getPath("userData"), "azure.bin"));
-  service = await AppService.create(prefs, secrets, log, app.getVersion(), azureSecrets);
+
+  // IPC handlers are safe to register before `service` exists — every handler but
+  // "snapshot" reads the module-level `service` only when actually invoked, by which
+  // point some user action has already happened, and by then AppService.create() below
+  // has long since resolved. "snapshot" is the exception: it's what the popover calls the
+  // instant its renderer mounts, which can now genuinely race AppService.create() — see
+  // registerIpc()'s own handler for how it waits on `serviceReady` instead.
+  registerIpc();
+
+  // Created here, concurrently with AppService.create()'s network calls below, rather
+  // than lazily on the first tray click. Building the BrowserWindow and loading its
+  // renderer bundle is CPU/IO-bound and doesn't depend on the service existing, so
+  // overlapping the two instead of paying for them back-to-back is what makes that first
+  // click feel as instant as every later one.
+  popover = createPopover();
+
+  serviceReady = AppService.create(prefs, secrets, log, app.getVersion(), azureSecrets);
+  service = await serviceReady;
 
   createTray();
-  registerIpc();
   service.setHotkeyRegistered(registerHotkey(prefs.get().hotkey));
   service.setOpenAtLogin(readOpenAtLogin(), app.isPackaged);
   startMonitors();

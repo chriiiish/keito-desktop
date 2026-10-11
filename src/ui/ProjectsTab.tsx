@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Pair } from "../core/keito/types.js";
 import { keito } from "./keito-api.js";
-import { AsyncButton } from "./AsyncButton.js";
+import { AsyncButton, useAsyncAction } from "./AsyncButton.js";
+import { CategoryLines } from "./CategoryLines.js";
 import { Toggle } from "./Toggle.js";
 import type { Snapshot } from "../../electron/service.js";
 
@@ -103,6 +104,13 @@ export function ProjectsTab({ snapshot, onChange }: ProjectsTabProps): JSX.Eleme
 
   const allExpanded = projectIds.length > 0 && projectIds.every((id) => expanded.has(id));
 
+  // Scoped to whatever the filter currently matches, not the whole catalog — unlike
+  // Expand/Collapse (a view-only convenience, useless once filtering already forces
+  // everything open), Deselect all changes a real preference. Filtering down to one
+  // client and clicking it must not reach outside what is on screen.
+  const visiblePairs = useMemo(() => groups.flatMap((group) => group.pairs), [groups]);
+  const someShown = visiblePairs.some((pair) => !hidden.has(pair.id));
+
   const toggleProject = (projectId: string) =>
     setExpanded((current) => {
       const next = new Set(current);
@@ -112,6 +120,57 @@ export function ProjectsTab({ snapshot, onChange }: ProjectsTabProps): JSX.Eleme
 
   const setVisible = (pairIds: string[], visible: boolean) =>
     keito.setHidden(pairIds, !visible).then(onChange);
+
+  /**
+   * Native HTML5 drag-and-drop rather than a library: this is the app's only reorderable
+   * list, and the whole interaction is "drop somewhere in this one list" — nothing a
+   * library's cross-container or virtualised-list machinery would earn its dependency
+   * weight on. `dataTransfer` carries nothing; which pair is being dragged lives in state
+   * instead, since this never needs to leave the list it started in.
+   *
+   * Drag-and-drop has no keyboard equivalent of its own, so each row also carries
+   * focusable Move up / Move down buttons — the only way a keyboard or screen-reader user
+   * can reorder favourites at all, not a fallback for when dragging is unavailable.
+   */
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+
+  // A ref, not state: `runReorder` closes over whatever this held at the moment it was
+  // called, same reason `useAsyncAction`'s own in-flight guard is a ref. Dragging has no
+  // button of its own to wrap in `AsyncButton`, so it gets this guard directly — a drop
+  // that lands while an earlier drag-triggered reorder is still in flight must not fire a
+  // second, overlapping write. The keyboard Move buttons below don't share it: each is
+  // its own `AsyncButton` with its own guard, the same as every other button here.
+  const pendingOrder = useRef<string[] | null>(null);
+  const [reordering, runReorder] = useAsyncAction(async () => {
+    if (!pendingOrder.current) return;
+    onChange(await keito.reorderFavourites(pendingOrder.current));
+  });
+
+  const reorderFavourite = (draggedId: string, targetId: string) => {
+    if (draggedId === targetId) return;
+    const ids = favouritePairs.map((pair) => pair.id);
+    const from = ids.indexOf(draggedId);
+    const to = ids.indexOf(targetId);
+    if (from === -1 || to === -1) return;
+    const next = [...ids];
+    next.splice(from, 1);
+    next.splice(to, 0, draggedId);
+    pendingOrder.current = next;
+    runReorder();
+  };
+
+  /** The reordered id list a Move up/down click on `pairId` would produce, or null at a boundary. */
+  const movedOrder = (pairId: string, direction: -1 | 1): string[] | null => {
+    const ids = favouritePairs.map((pair) => pair.id);
+    const from = ids.indexOf(pairId);
+    const to = from + direction;
+    if (from === -1 || to < 0 || to >= ids.length) return null;
+    const next = [...ids];
+    next.splice(from, 1);
+    next.splice(to, 0, pairId);
+    return next;
+  };
 
   const star = (pair: Pair) => (
     <AsyncButton
@@ -131,14 +190,84 @@ export function ProjectsTab({ snapshot, onChange }: ProjectsTabProps): JSX.Eleme
         <p className="hint">Star a task below to pin it to the top of the timer.</p>
       ) : (
         <ul className="favourites">
-          {favouritePairs.map((pair) => (
-            <li key={pair.id}>
-              <span className="visibility-name">
-                {pair.projectName} — {pair.taskName}
-              </span>
-              {star(pair)}
-            </li>
-          ))}
+          {favouritePairs.map((pair, index) => {
+            const canReorder = favouritePairs.length > 1;
+            // reorderFavourite removes the dragged pair, then reinserts it at the
+            // target's own index — so dragging a *later* row onto this one lands it
+            // above (the target shifts down to make room), and dragging an *earlier*
+            // row onto this one lands it below (everything between closes the gap
+            // upward first). The indicator has to point at whichever edge that is, not
+            // always the same one.
+            const draggingIndex = draggingId ? favouritePairs.findIndex((p) => p.id === draggingId) : -1;
+            const isOver = dragOverId === pair.id && draggingId !== pair.id;
+            const dropsAbove = isOver && draggingIndex > index;
+            const dropsBelow = isOver && draggingIndex !== -1 && draggingIndex < index;
+            return (
+              <li
+                key={pair.id}
+                draggable={canReorder && !reordering}
+                className={[
+                  draggingId === pair.id ? "dragging" : "",
+                  dropsAbove ? "drag-over-above" : "",
+                  dropsBelow ? "drag-over-below" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                onDragStart={() => setDraggingId(pair.id)}
+                onDragEnd={() => {
+                  setDraggingId(null);
+                  setDragOverId(null);
+                }}
+                onDragOver={(event) => {
+                  // Without this, the browser refuses the drop entirely.
+                  event.preventDefault();
+                  if (dragOverId !== pair.id) setDragOverId(pair.id);
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  if (draggingId) reorderFavourite(draggingId, pair.id);
+                  setDraggingId(null);
+                  setDragOverId(null);
+                }}
+              >
+                {canReorder && (
+                  <span className="drag-handle" aria-hidden="true">
+                    ⠿
+                  </span>
+                )}
+                <span className="favourite-lines">
+                  <CategoryLines task={pair.taskName} project={pair.projectName} clientName={pair.clientName} />
+                </span>
+                {star(pair)}
+                {canReorder && (
+                  <span className="reorder-buttons">
+                    <AsyncButton
+                      className="link move"
+                      aria-label={`Move ${pair.projectName} ${pair.taskName} up`}
+                      disabled={index === 0}
+                      onClick={() => {
+                        const next = movedOrder(pair.id, -1);
+                        return next ? keito.reorderFavourites(next).then(onChange) : Promise.resolve();
+                      }}
+                    >
+                      ▲
+                    </AsyncButton>
+                    <AsyncButton
+                      className="link move"
+                      aria-label={`Move ${pair.projectName} ${pair.taskName} down`}
+                      disabled={index === favouritePairs.length - 1}
+                      onClick={() => {
+                        const next = movedOrder(pair.id, 1);
+                        return next ? keito.reorderFavourites(next).then(onChange) : Promise.resolve();
+                      }}
+                    >
+                      ▼
+                    </AsyncButton>
+                  </span>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
 
@@ -160,6 +289,17 @@ export function ProjectsTab({ snapshot, onChange }: ProjectsTabProps): JSX.Eleme
 
         {groups.length > 0 && (
           <div className="visibility-actions">
+            <AsyncButton
+              className="link"
+              disabled={!someShown}
+              title={someShown ? undefined : "Nothing shown to deselect"}
+              onClick={() => setVisible(visiblePairs.map((pair) => pair.id), false)}
+            >
+              Deselect all
+            </AsyncButton>
+            <span className="visibility-actions-separator" aria-hidden="true">
+              |
+            </span>
             <button
               type="button"
               className="link"

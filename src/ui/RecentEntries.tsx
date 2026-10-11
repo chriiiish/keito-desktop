@@ -1,11 +1,11 @@
 import { useEffect, useRef } from "react";
 import type { Pair, TimeEntry } from "../core/keito/types.js";
 import type { EntryTotal } from "../core/time/totals.js";
-import { formatPairLine } from "../core/catalog/catalog.js";
 import { formatDuration } from "../core/time/elapsed.js";
-import { totalsByTaskAndNote } from "../core/time/totals.js";
+import { dayTotalSeconds, totalsByTaskAndNote } from "../core/time/totals.js";
 import { visibleNote, visibleNoteField, type NoteVisibility } from "../core/keito/notes.js";
 import { AsyncButton } from "./AsyncButton.js";
+import { CategoryLines } from "./CategoryLines.js";
 import { keito } from "./keito-api.js";
 import { useNow } from "./useNow.js";
 
@@ -67,15 +67,12 @@ export function RecentEntries({
     const pair = catalog.find(
       (candidate) => candidate.projectId === entry.project_id && candidate.taskId === entry.task_id,
     );
-    const taskName = pair?.taskName ?? "Unknown task";
-    const projectName = pair?.projectName ?? "Unknown project";
     return {
       total,
       entry,
       pair,
-      taskName,
-      projectName,
-      pairLine: formatPairLine({ projectName, taskName, ...(pair?.clientName ? { clientName: pair.clientName } : {}) }),
+      taskName: pair?.taskName ?? "Unknown task",
+      projectName: pair?.projectName ?? "Unknown project",
     };
   };
 
@@ -84,9 +81,13 @@ export function RecentEntries({
     entries: readonly TimeEntry[],
     empty: string,
     startAgain: boolean,
+    total?: number | null,
   ) => (
     <section className="day">
-      <h2 className="day-heading">{heading}</h2>
+      <h2 className="day-heading">
+        {heading}
+        {total !== undefined && <span className="day-total">{formatDuration(total)}</span>}
+      </h2>
       {entries.length === 0 ? (
         <p className="empty">{empty}</p>
       ) : (
@@ -98,11 +99,15 @@ export function RecentEntries({
           */}
           {totalsByTaskAndNote(entries, now, timeZone)
             .map(describe)
-            .map(({ total, entry, pair, taskName, pairLine }) => (
+            .map(({ total, entry, pair, taskName, projectName }) => (
             <li key={total.key} className={total.isRunning ? "running-row" : ""}>
               <div className="entry-text">
-                <strong>{visibleNote(entry) || taskName}</strong>
-                <span>{pairLine}</span>
+                <CategoryLines
+                  note={visibleNote(entry)}
+                  task={taskName}
+                  project={projectName}
+                  clientName={pair?.clientName}
+                />
               </div>
               <span className={`entry-hours${total.isRunning ? " ticking" : ""}`}>
                 {formatDuration(total.seconds)}
@@ -173,7 +178,7 @@ export function RecentEntries({
      * scrolling to the bottom of a box that ended halfway up the popover.
      */
     <div className="recent" ref={scrollerRef}>
-      {day("Today", today, "Nothing logged yet today.", false)}
+      {day("Today", today, "Nothing logged yet today.", false, dayTotalSeconds(today, now, timeZone))}
       {/* Left out entirely on a day with no history behind it, rather than showing an
           empty heading that says nothing. */}
       {yesterday.length > 0 && day("Yesterday", yesterday, "", true)}

@@ -110,6 +110,31 @@ suite("Keito API contract", () => {
     const stopped = await client.stopTimeEntry(entry.id);
     expect(stopped.is_running).toBe(false);
   });
+
+  // Whether PATCH /time_entries/:id accepts project_id and task_id is not documented
+  // anywhere — every other field it's known to take is a note, a time or a date. This is
+  // what the editable Client/Project/Task columns in the entries table depend on.
+  it("reassigns an entry's project and task through the same PATCH used for notes and times", async () => {
+    const catalog = await loadCatalog(client, new Date());
+    const [from, to] = catalog;
+    if (!from || !to || from.id === to.id) return;
+
+    const entry = await client.createTimeEntry({
+      projectId: from.projectId,
+      taskId: from.taskId,
+      spentDate: new Date().toISOString().slice(0, 10),
+      notes: "keito-timer contract test — safe to delete",
+    });
+    created.push(entry.id);
+
+    const updated = await client.updateTimeEntry(entry.id, {
+      projectId: to.projectId,
+      taskId: to.taskId,
+    });
+
+    expect(updated.project_id).toBe(to.projectId);
+    expect(updated.task_id).toBe(to.taskId);
+  });
 });
 
 /**

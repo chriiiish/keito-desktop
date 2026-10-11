@@ -1,14 +1,14 @@
 import { buildPicker } from "../src/core/catalog/picker.js";
 import { loadCatalog, loadEntries } from "../src/core/catalog/workspace.js";
 import { shouldReloadCatalog } from "../src/core/catalog/staleness.js";
-import { KeitoClient, type RequestRecord } from "../src/core/keito/client.js";
+import { KeitoClient, type CategoryReassignment, type RequestRecord } from "../src/core/keito/client.js";
 import { KeitoAuthError, KeitoError, KeitoReadOnlyError } from "../src/core/keito/errors.js";
 import type { Identity, Pair, TimeEntry } from "../src/core/keito/types.js";
 import { PreferencesStore } from "../src/core/store/preferences.js";
 import type { TrayFallback, TrayPrefix } from "../src/core/tray/label.js";
 import { Timer, type TimerState } from "../src/core/timer/timer.js";
 import { formatWorkspaceTime } from "../src/core/time/workspace-time.js";
-import { entryStartMs } from "../src/core/time/elapsed.js";
+import { entrySeconds, entryStartMs } from "../src/core/time/elapsed.js";
 import { visibleNote, visibleNoteField } from "../src/core/keito/notes.js";
 import { isNewerVersion, type ReleaseSummary } from "../src/core/version/version.js";
 import type { NoteVisibility } from "../src/core/keito/notes.js";
@@ -77,6 +77,18 @@ export interface AzureSyncState {
    */
   errorCount: number;
 }
+
+/**
+ * A correction from the entries table. Shared between `main.ts`'s IPC handler and
+ * `preload.ts`'s renderer-facing type, so the three copies this call passes through cannot
+ * drift out of shape from one another.
+ */
+export type EntryPatch = {
+  notes?: string;
+  noteField?: NoteVisibility;
+  startedTime?: string;
+  endedTime?: string;
+} & CategoryReassignment;
 
 /** Everything the renderer needs to draw either window. */
 export interface Snapshot {
@@ -150,6 +162,7 @@ export interface Snapshot {
     | { status: "needs-auth" };
   trayFallback: TrayFallback;
   trayPrefix: TrayPrefix;
+  trayShowElapsed: boolean;
   error: string | null;
 }
 
@@ -306,6 +319,7 @@ export class AppService {
       apiKeyHint: this.#apiKeyHint,
       trayFallback: prefs.trayFallback,
       trayPrefix: prefs.trayPrefix,
+      trayShowElapsed: prefs.trayShowElapsed,
       revision: this.#revision,
       timer:
         state.status === "running"
@@ -461,6 +475,13 @@ export class AppService {
       : undefined;
     if (!entry || !pair || !this.#timer) return this.snapshot();
 
+    // Keito's restart endpoint hands the entry back with hours reset to null, the same
+    // shape as any freshly running entry — it "reappears in hours once the timer stops".
+    // Read before the call, while the entry is still the stopped one #today has, so the
+    // stretch already logged does not vanish from the header and the row until then.
+    const priorSeconds =
+      entrySeconds(entry, Date.now(), this.#prefs.get().workspaceTimezone) ?? 0;
+
     return this.#run(async () => {
       const left = this.#runningTicket();
       await this.#timer!.restart(entryId, pair);
@@ -471,6 +492,14 @@ export class AppService {
           : Date.now();
       await this.#reloadEntries();
       this.#syncTickets(left, this.#runningTicket());
+      if (priorSeconds > 0) {
+        const resumed = this.#today.find((candidate) => candidate.id === entryId);
+        // Assigned, not added: the reload's response is expected to bring back
+        // duration_seconds: null, per the restart endpoint's documented shape. Adding to
+        // whatever it actually contains would double the stretch if a future API version
+        // ever does preserve it across a restart.
+        if (resumed && resumed.duration_seconds == null) resumed.duration_seconds = priorSeconds;
+      }
     });
   }
 
@@ -492,6 +521,12 @@ export class AppService {
     return this.snapshot();
   }
 
+  async reorderFavourites(pairIds: readonly string[]): Promise<Snapshot> {
+    await this.#prefs.reorderFavourites(pairIds);
+    this.#revision++;
+    return this.snapshot();
+  }
+
   /** Switches categories on or off in the dropdown. Takes a list so a whole project is one call. */
   async setHidden(pairIds: readonly string[], hidden: boolean): Promise<Snapshot> {
     for (const pairId of pairIds) await this.#prefs.setHidden(pairId, hidden);
@@ -499,8 +534,16 @@ export class AppService {
     return this.snapshot();
   }
 
-  async setTrayLabel(options: { fallback: TrayFallback; prefix: TrayPrefix }): Promise<Snapshot> {
-    await this.#prefs.update({ trayFallback: options.fallback, trayPrefix: options.prefix });
+  async setTrayLabel(options: {
+    fallback: TrayFallback;
+    prefix: TrayPrefix;
+    showElapsed: boolean;
+  }): Promise<Snapshot> {
+    await this.#prefs.update({
+      trayFallback: options.fallback,
+      trayPrefix: options.prefix,
+      trayShowElapsed: options.showElapsed,
+    });
     return this.snapshot();
   }
 
@@ -917,9 +960,20 @@ export class AppService {
         ttlMs: CATALOG_TTL_MS,
       });
 
-      if (reload) {
+      // Neither request needs the other's result — loadEntries doesn't read the catalog,
+      // only #timer.adopt() below does — so both fire together rather than one after the
+      // other. Both promises start here, before either is awaited, which is what makes
+      // them overlap on the wire instead of running back-to-back.
+      const catalogPromise = reload ? loadCatalog(this.#client!, now) : null;
+      const entriesPromise = loadEntries(this.#client!, now, this.#prefs.get().workspaceTimezone);
+      // Marks it handled immediately: if the catalog branch below throws before
+      // entriesPromise is awaited, a simultaneous entries failure must not surface as an
+      // unhandled rejection. The real error, if any, still surfaces at the `await` below.
+      entriesPromise.catch(() => {});
+
+      if (catalogPromise) {
         try {
-          this.#catalog = await loadCatalog(this.#client!, now);
+          this.#catalog = await catalogPromise;
           this.#catalogLoadedAt = now.getTime();
           this.#catalogAccountId = accountId;
         } catch (error) {
@@ -941,11 +995,7 @@ export class AppService {
         }
       }
 
-      const { entries, recents, today, yesterday, running } = await loadEntries(
-        this.#client!,
-        now,
-        this.#prefs.get().workspaceTimezone,
-      );
+      const { entries, recents, today, yesterday, running } = await entriesPromise;
       this.#recents = recents;
       this.#today = today;
       this.#yesterday = yesterday;
@@ -983,11 +1033,13 @@ export class AppService {
    * The local lookup stays as a fallback for a caller that sends no field, and only then
    * does an unrecognised entry default to client — what typing into an untouched row is
    * meant to produce.
+   *
+   * `projectId`/`taskId` reassign which (project, task) pair the entry counts against —
+   * Keito issue #36. The two are always sent together: the renderer resolves them from a
+   * single category picker, the same widget the popover starts a new entry from, so there
+   * is no state where one changed without the other.
    */
-  async updateEntry(
-    id: string,
-    patch: { notes?: string; noteField?: NoteVisibility; startedTime?: string; endedTime?: string },
-  ): Promise<Snapshot> {
+  async updateEntry(id: string, patch: EntryPatch): Promise<Snapshot> {
     if (!this.#client) return this.snapshot();
     return this.#run(async () => {
       const before = this.#ticketOfEntry(id);
@@ -1002,7 +1054,22 @@ export class AppService {
       }
 
       await this.#client!.updateTimeEntry(id, body);
-      await this.#reloadEntries();
+      const running = await this.#reloadEntries();
+
+      // The timer holds its own cached copy of the running entry, separate from #today, so
+      // that the tray and popover render it without a round trip. Reassigning the running
+      // row's project or task left that copy naming the old pair until the next refresh —
+      // most visibly wrong for a category change, since the tray label is built from it.
+      // #reloadEntries() has already fetched the corrected entry, so this costs no request.
+      //
+      // Taken from the reload's own `running` result rather than searched for in `#today`:
+      // an entry that started before midnight and is still going lands in `#yesterday` once
+      // the workspace date rolls over, and `#today.find` would find nothing and clear the
+      // timer to idle even though Keito is still running it.
+      const state = this.#timer?.current();
+      if (state?.status === "running" && state.entry.id === id) {
+        this.#timer!.adopt(running, this.#catalog);
+      }
       // Both ends: an edit that moves the id off one ticket and onto another changes two.
       this.#syncTickets(before, this.#ticketOfEntry(id));
     });
@@ -1090,9 +1157,16 @@ export class AppService {
    * Deliberately does not touch the timer state: the mutation's own response is
    * authoritative, and re-deriving it here would race with it.
    */
-  async #reloadEntries(): Promise<void> {
-    if (!this.#client) return;
-    const { entries, recents, today, yesterday } = await loadEntries(
+  /**
+   * Returns the running entry the reload found, if any — so a caller that needs it (only
+   * `updateEntry` currently does) is not left searching `#today` for something that, having
+   * crossed the workspace-date boundary since it started, is sitting in `#yesterday`
+   * instead. Every other caller already ignores the return value; a `void` no-return would
+   * have made that lookup wrong in exactly the same way.
+   */
+  async #reloadEntries(): Promise<TimeEntry | null> {
+    if (!this.#client) return null;
+    const { entries, recents, today, yesterday, running } = await loadEntries(
       this.#client,
       new Date(),
       this.#prefs.get().workspaceTimezone,
@@ -1101,6 +1175,7 @@ export class AppService {
     this.#today = today;
     this.#yesterday = yesterday;
     this.#windowEntries = entries;
+    return running;
   }
 
   readonly #logRequest = (record: RequestRecord): void => {

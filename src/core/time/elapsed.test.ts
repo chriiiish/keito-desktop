@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { TimeEntry } from "../keito/types.js";
-import { entrySeconds, entryStartMs, formatDecimalHours, formatDuration } from "./elapsed.js";
+import { entrySeconds, entryStartMs, formatDecimalHours, formatDuration, recordedSeconds } from "./elapsed.js";
 
 const NOW = Date.parse("2026-09-02T11:30:00Z");
 
@@ -110,6 +110,37 @@ describe("entrySeconds", () => {
 
   it("nor for a stopped entry that recorded nothing", () => {
     expect(entrySeconds(entry({ hours: null }), NOW, "UTC")).toBeNull();
+  });
+
+  // The bug this exists for: Keito's restart endpoint hands a resumed entry back with
+  // hours reset to null, same as any running entry, so the stretch worked before pausing
+  // used to vanish until the timer stopped again. AppService.resumeEntry writes what had
+  // already been logged onto duration_seconds before the reload replaces the entry, so a
+  // *running* entry can carry a recorded length too.
+  it("adds a running entry's own recorded length to the stretch since it restarted", () => {
+    const resumed = entry({
+      is_running: true,
+      hours: null,
+      duration_seconds: 1800, // 30 minutes logged before the pause.
+      ended_time: null,
+      timer_started_at: "2026-09-02T11:00:00Z", // Resumed 30 minutes before NOW.
+    });
+
+    expect(entrySeconds(resumed, NOW, "UTC")).toBe(1800 + 1800);
+  });
+});
+
+describe("recordedSeconds", () => {
+  it("is zero for a freshly running entry, not unknown", () => {
+    expect(recordedSeconds(entry({ is_running: true, hours: null, duration_seconds: null }))).toBe(0);
+  });
+
+  it("prefers duration_seconds over hours", () => {
+    expect(recordedSeconds(entry({ duration_seconds: 100, hours: 1.5 }))).toBe(100);
+  });
+
+  it("falls back to hours converted to seconds", () => {
+    expect(recordedSeconds(entry({ duration_seconds: null, hours: 1.5 }))).toBe(5400);
   });
 });
 

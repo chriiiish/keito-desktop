@@ -37,6 +37,17 @@ describe("reviewing and correcting entries", () => {
     });
   });
 
+  it("reassigns an entry to a different project and task", async () => {
+    const seeded = keito.seedRunning({ project_id: "p_a", task_id: "t_a" });
+
+    const updated = await client.updateTimeEntry(seeded.id, {
+      projectId: "p_b",
+      taskId: "t_b",
+    });
+
+    expect(updated).toMatchObject({ project_id: "p_b", task_id: "t_b" });
+  });
+
   it("edits without a prior read, because there is no single-entry GET endpoint", async () => {
     const seeded = keito.seedRunning({ project_id: "p_a", task_id: "t_a" });
 
