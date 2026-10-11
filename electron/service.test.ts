@@ -161,7 +161,9 @@ describe("Azure DevOps time sync", () => {
     const service = await serviceFor(keito);
     // Keito and Azure are told apart by host, as the real network would.
     vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) =>
-      String(input).includes("dev.azure.com") ? azure.fetch(input, init) : keito.fetch(input, init),
+      new URL(String(input)).hostname === "dev.azure.com"
+        ? azure.fetch(input, init)
+        : keito.fetch(input, init),
     );
     await service.setApiKey("kto_acme", "co_acme");
     await service.connectAzure("pat_good", ORG);
