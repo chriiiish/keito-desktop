@@ -477,7 +477,8 @@ can be `1842: Login redirect drops the return URL` without typing it.
   work items it was made to read — so the lookup failed for most real tokens, said
   something misleading about the token being refused, and then asked for the URL anyway.
   Two round trips to reach the one field that always works. The URL and the token are now
-  asked for together, and **Work Items (Read) is the only scope this needs.**
+  asked for together, and **Work Items (Read) is all the list needs** — time sync, below,
+  is the one feature that needs Read & write.
 
 **A URL, not an organisation name.** `azureOrganisationUrl` holds
 `https://dev.azure.com/acme` rather than `acme`, which costs nothing and is what lets an
@@ -512,6 +513,35 @@ out. Edit the note afterwards and the link is gone.
 **The mark beside the note field is a plain infinity loop in Azure's blue, not Microsoft's
 logo** — the same position taken over the Keito name. It is always shown next to the words
 "Azure DevOps", never alone.
+
+### Time sync
+
+Optional, off by default (`Preferences.azureSyncEnabled`). When a timer stops or switches,
+or an entry is edited or deleted, the work item named by the note's `1842:` prefix gets the
+total of **your own entries for it over the last 14 days** written to a numeric field
+(default `Microsoft.VSTS.Scheduling.Effort`), as decimal hours or days (`azureHoursPerDay`,
+default 6.2). Rules worth knowing before changing it:
+
+- **Keito is written first and never waits on Azure.** `#syncTickets` queues onto a chain
+  and returns; a slow, refusing or offline Azure cannot hold up the timer or the popover
+  spinner. Failures are logged and counted (`Snapshot.azure.sync.errorCount`, in memory,
+  reset on launch). Integrations shows the count and a link to the log; nothing else is
+  shown and nothing is retried. `onChange` lets `main.ts` broadcast when a write finishes
+  after its handler has returned.
+- **Only ids seen in an assigned-to-me list this session are written to.** A note such as
+  `2024: planning` must not write to a ticket nobody picked. Ids are remembered after they
+  leave the list, so a ticket closed mid-day still gets its final sync.
+- **The window is 14 workspace days including today** (`syncWindowStart`), read from the
+  30-day entries `loadEntries` already fetches — `EntriesSnapshot.entries` — so the sync
+  costs no Keito request. The value therefore shrinks as old days fall out of the window.
+- **Rounding is always up**, to the next multiple of 0.1 or x.25 / x.75 (`roundUpEffort`).
+- **An unchanged total is not written again** (`#azureWritten`), since every PATCH adds a
+  history entry on the work item. Changing field, unit or day length clears that memory.
+- **The PATCH is `application/json-patch+json`** with op `add`. A read-only token answers
+  with the same 203 as any bad token. A work item type without the chosen field answers
+  400; that is counted and logged, not special-cased.
+- It overwrites the field, and only knows about your time, not the team's. Both are said in
+  Integrations.
 
 ## Platform rules
 

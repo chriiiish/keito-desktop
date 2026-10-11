@@ -408,6 +408,9 @@ button.primary:hover { filter: brightness(1.08); }
 .scope-list li { padding: 1px 0; }
 .scope-list strong { color: var(--fg); }
 .azure-connect { max-width: 460px; }
+.azure-sync { max-width: 460px; margin-top: 14px; }
+.azure-sync label { display: block; margin: 8px 0; }
+.azure-sync .sync-toggle { display: flex; align-items: center; gap: 10px; }
 .integrations kbd {
   font: inherit;
   font-size: 11px;

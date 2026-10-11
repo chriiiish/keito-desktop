@@ -25,6 +25,7 @@ const api = {
   disconnectAzure: vi.fn(),
   connectAzure: vi.fn(),
   setAzureEnabled: vi.fn(),
+  setAzureSync: vi.fn(),
   openWindow: vi.fn(),
   dismissUpdate: vi.fn(),
   onShowTab: vi.fn((_handler: (tab: string) => void) => () => {}),
@@ -75,6 +76,14 @@ const snapshot: Snapshot = {
     hasToken: false,
     workItems: [],
     error: null,
+    sync: {
+          enabled: false,
+          field: "Microsoft.VSTS.Scheduling.Effort",
+          unit: "hours" as const,
+          hoursPerDay: 6.2,
+          fields: [],
+          errorCount: 0,
+        },
   },
   accountId: "co",
   apiKeyHint: "kto_••••••••abcd",
@@ -1455,6 +1464,14 @@ describe("the integrations tab", () => {
       hasToken: false,
       workItems: [],
       error: null,
+      sync: {
+            enabled: false,
+            field: "Microsoft.VSTS.Scheduling.Effort",
+            unit: "hours" as const,
+            hoursPerDay: 6.2,
+            fields: [],
+            errorCount: 0,
+          },
       ...over,
     },
   });
@@ -1534,21 +1551,23 @@ describe("the integrations tab", () => {
     expect(screen.queryByLabelText(/Azure DevOps is not/)).toBeNull();
   });
 
-  it("names the one scope the token needs", async () => {
+  it("names the scopes the token needs", async () => {
     // One scope, and the list says so rather than leaving the reader wondering what else
     // might be required.
     api.getSnapshot.mockResolvedValue(azure({ enabled: true, status: "needs-token" }));
     await openIntegrations();
 
     expect(screen.getByText("Work Items (Read)")).toBeDefined();
-    expect(screen.getByText(/that is the whole list/i)).toBeDefined();
+    // Write access is asked for too, but only as the price of time sync.
+    expect(screen.getByText("Work Items (Read & write)")).toBeDefined();
+    expect(screen.getByText(/enough for the work item list/i)).toBeDefined();
   });
 
-  it("says plainly that it only ever reads", async () => {
+  it("says plainly that nothing is written unless time sync is on", async () => {
     api.getSnapshot.mockResolvedValue(azure({ enabled: true, status: "needs-token" }));
     await openIntegrations();
 
-    expect(screen.getByText(/only ever reads/i)).toBeDefined();
+    expect(screen.getByText(/nothing is\s+written back unless you switch on time sync/i)).toBeDefined();
   });
 
   it("asks for the URL and the token together", async () => {
@@ -1962,5 +1981,96 @@ describe("the settings page layout", () => {
 
     expect(screen.getByText(/Electron binary rather than Keito Timer/)).toBeDefined();
     expect(screen.queryByRole("tooltip")).toBeNull();
+  });
+});
+
+describe("azure time sync settings", () => {
+  const withSync = (sync: Partial<Snapshot["azure"]["sync"]> = {}): Snapshot => ({
+    ...snapshot,
+    azure: {
+      ...snapshot.azure,
+      enabled: true,
+      status: "connected",
+      hasToken: true,
+      organisationUrl: "https://dev.azure.com/acme",
+      sync: {
+        ...snapshot.azure.sync,
+        enabled: true,
+        fields: [
+          { referenceName: "Microsoft.VSTS.Scheduling.CompletedWork", name: "Completed Work" },
+          { referenceName: "Microsoft.VSTS.Scheduling.Effort", name: "Effort" },
+        ],
+        ...sync,
+      },
+    },
+  });
+
+  const open = async (next: Snapshot) => {
+    api.getSnapshot.mockResolvedValue(next);
+    api.setAzureSync.mockResolvedValue(next);
+    const user = userEvent.setup();
+    render(<ReviewWindow />);
+    await user.click(await screen.findByRole("button", { name: "Integrations" }));
+    await user.click(screen.getByRole("button", { expanded: false }));
+    return user;
+  };
+
+  it("offers the field and unit only once sync is on", async () => {
+    await open(withSync({ enabled: false }));
+    expect(screen.queryByLabelText("Field to write to")).toBeNull();
+    expect(screen.queryByLabelText("Write the time as")).toBeNull();
+  });
+
+  it("defaults to Effort in decimal hours, and asks for no day length", async () => {
+    await open(withSync());
+    expect((screen.getByLabelText("Field to write to") as HTMLSelectElement).value).toBe(
+      "Microsoft.VSTS.Scheduling.Effort",
+    );
+    expect((screen.getByLabelText("Write the time as") as HTMLSelectElement).value).toBe("hours");
+    expect(screen.queryByLabelText("Hours in a day")).toBeNull();
+  });
+
+  it("asks how long a day is only when the unit is days", async () => {
+    await open(withSync({ unit: "days" }));
+    expect((screen.getByLabelText("Hours in a day") as HTMLInputElement).value).toBe("6.2");
+  });
+
+  it("saves a changed field", async () => {
+    const user = await open(withSync());
+    await user.selectOptions(screen.getByLabelText("Field to write to"), "Completed Work");
+    expect(api.setAzureSync).toHaveBeenCalledWith({
+      field: "Microsoft.VSTS.Scheduling.CompletedWork",
+    });
+  });
+
+  it("does not send a day length outside the allowed range", async () => {
+    const user = await open(withSync({ unit: "days" }));
+    const input = screen.getByLabelText("Hours in a day");
+    await user.clear(input);
+    await user.type(input, "30");
+    await user.tab();
+    expect(api.setAzureSync).not.toHaveBeenCalled();
+    expect(screen.getByText(/Enter a number from 0.5 to 24/)).toBeDefined();
+  });
+
+  it("sends a valid day length when the box is left", async () => {
+    const user = await open(withSync({ unit: "days" }));
+    const input = screen.getByLabelText("Hours in a day");
+    await user.clear(input);
+    await user.type(input, "7.5");
+    await user.tab();
+    expect(api.setAzureSync).toHaveBeenCalledWith({ hoursPerDay: 7.5 });
+  });
+
+  it("says nothing is wrong when no write has failed", async () => {
+    await open(withSync({ errorCount: 0 }));
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("counts failed writes and links to the log", async () => {
+    const user = await open(withSync({ errorCount: 3 }));
+    expect(screen.getByRole("alert").textContent).toMatch(/3 time syncs failed/);
+    await user.click(screen.getByRole("button", { name: "Open the log" }));
+    expect(api.openLog).toHaveBeenCalled();
   });
 });
