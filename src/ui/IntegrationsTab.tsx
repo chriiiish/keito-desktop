@@ -269,14 +269,14 @@ function AzureSyncSection({
   return (
     <div className="azure-sync">
       <h3>Sync time with Azure DevOps</h3>
-      <label className="sync-toggle">
+      <div className="sync-toggle">
         <Toggle
           checked={sync.enabled}
           onChange={(next) => keito.setAzureSync({ enabled: next }).then(onChange)}
           label="Sync time with Azure DevOps"
         />
         <span>Write the time logged on a work item back to it</span>
-      </label>
+      </div>
       <p className="hint">
         When a timer stops or changes, the work item in its note gets the total of your
         entries for it over the last 14 days. It writes your own logged time, not the team's,
