@@ -5,7 +5,7 @@ import {
   AzureOrganisationUnknownError,
   AzureRequestError,
 } from "./errors.js";
-import type { WorkItem } from "./types.js";
+import type { WorkItem, WorkItemField } from "./types.js";
 
 const API_VERSION = "7.1";
 
@@ -67,7 +67,8 @@ export function normaliseOrganisationUrl(raw: string): string {
  *
  * Pure of Electron and of I/O it isn't handed, like `KeitoClient` — `fetch` is a
  * constructor argument, so the whole thing runs under Vitest against a fake with no
- * network. Read-only: this never writes to Azure DevOps.
+ * network. Reads work items; the one write is `setWorkItemField`, used only when the user
+ * has switched on time sync.
  */
 export class AzureClient {
   #pat: string;
@@ -134,6 +135,50 @@ export class AzureClient {
     return items.sort((a, b) => changedAt(b) - changedAt(a));
   }
 
+  /**
+   * Sets one numeric field on one work item.
+   *
+   * The only write this client makes. `application/json-patch+json` is not optional: Azure
+   * answers a plain `application/json` PATCH with 415. `add` rather than `replace` because
+   * `add` sets the field whether or not it already holds a value, where `replace` on an
+   * empty field is an error.
+   *
+   * A work item type without the field answers 400 — surfaced as an `AzureRequestError`
+   * naming Azure's own message, which is what ends up in the log.
+   */
+  async setWorkItemField(id: number, field: string, value: number): Promise<void> {
+    const base = this.#requireOrganisation();
+    await this.#json(
+      "PATCH",
+      `${base}/_apis/wit/workitems/${id}?api-version=${API_VERSION}`,
+      [{ op: "add", path: `/fields/${field}`, value }],
+      "application/json-patch+json",
+    );
+  }
+
+  /**
+   * Numeric fields the organisation defines, for the field picker.
+   *
+   * `double` and `integer` only — effort, hours and size are all numbers, and offering
+   * "Title" as somewhere to write 3.5 would be an invitation to a 400.
+   */
+  async listNumericFields(): Promise<WorkItemField[]> {
+    const base = this.#requireOrganisation();
+    const response = await this.#json<{ value?: AzureFieldResponse[] }>(
+      "GET",
+      `${base}/_apis/wit/fields?api-version=${API_VERSION}`,
+    );
+    return (response.value ?? [])
+      .filter(
+        (field): field is AzureFieldResponse & { referenceName: string; name: string } =>
+          typeof field.referenceName === "string" &&
+          typeof field.name === "string" &&
+          (field.type === "double" || field.type === "integer"),
+      )
+      .map((field) => ({ referenceName: field.referenceName, name: field.name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
   /** Round-trips the credentials, so Connect fails at setup rather than silently later. */
   async verify(): Promise<WorkItem[]> {
     return this.listAssignedWorkItems();
@@ -148,7 +193,12 @@ export class AzureClient {
     return this.#organisationUrl;
   }
 
-  async #json<T>(method: string, url: string, body?: unknown): Promise<T> {
+  async #json<T>(
+    method: string,
+    url: string,
+    body?: unknown,
+    contentType = "application/json",
+  ): Promise<T> {
     const startedAt = Date.now();
     const path = safePath(url);
     let response: Response;
@@ -160,7 +210,7 @@ export class AzureClient {
           // Basic auth with an empty username is how Azure DevOps takes a PAT.
           Authorization: `Basic ${base64(`:${this.#pat}`)}`,
           Accept: "application/json",
-          ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+          ...(body === undefined ? {} : { "Content-Type": contentType }),
         },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       });
@@ -184,7 +234,7 @@ export class AzureClient {
       this.#record({ method, path, status, durationMs, ok: false });
       throw new AzureAuthError(
         status === 203
-          ? "Azure DevOps did not accept the personal access token. It may have expired, or it may be missing the Work Items (Read) scope."
+          ? "Azure DevOps did not accept the personal access token. It may have expired, or it may be missing the Work Items (Read) scope, or Read & write if time sync is on."
           : "Azure DevOps refused the personal access token.",
         { status, path },
       );
@@ -224,6 +274,12 @@ export class AzureClient {
 function changedAt(item: WorkItem): number {
   const parsed = item.changedDate ? Date.parse(item.changedDate) : NaN;
   return Number.isNaN(parsed) ? -Infinity : parsed;
+}
+
+interface AzureFieldResponse {
+  referenceName?: string;
+  name?: string;
+  type?: string;
 }
 
 interface AzureWorkItemResponse {
