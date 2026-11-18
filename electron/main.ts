@@ -153,7 +153,14 @@ function showPopover(): void {
   x = Math.min(Math.max(x, area.x + 8), area.x + area.width - POPOVER_SIZE.width - 8);
   y = Math.min(Math.max(y, area.y + 8), area.y + area.height - POPOVER_SIZE.height - 8);
 
-  popover.setPosition(x, y, false);
+  // Size is restated on every open, not just position. The window is created once and
+  // kept hidden, so after a move between displays of different scale (home vs work) it
+  // keeps whatever size the old display's scale factor left it with — issue #67. Twice,
+  // because the first call lands the window on the new display and the second sizes it
+  // in that display's units (Electron applies the scale of the display it started on).
+  const bounds = { x, y, ...POPOVER_SIZE };
+  popover.setBounds(bounds, false);
+  popover.setBounds(bounds, false);
   popover.show();
   popover.focus();
   // The popover is hidden and shown rather than recreated, so the renderer never
