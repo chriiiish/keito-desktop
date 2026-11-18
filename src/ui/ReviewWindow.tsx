@@ -207,13 +207,18 @@ function Entries({
   const [range, setRange] = useState<"today" | "week">("today");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // Which range the rows on screen belong to. The table is replaced by the loading line
+  // only when there is nothing for the current range to keep showing; every later reload
+  // (an edit, a revision bump, Reload) swaps rows in place so a save touches its own cells.
+  const loadedRange = useRef<string | null>(null);
 
   const load = useCallback(async () => {
     const today = workspaceDate(new Date(), timeZone);
     const from = range === "today" ? today : weekStart(today);
-    setLoading(true);
+    if (loadedRange.current !== range) setLoading(true);
     try {
       setEntries(await keito.listEntries(from, today));
+      loadedRange.current = range;
       setError(null);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
@@ -263,35 +268,18 @@ function Entries({
   const now = useNow(1000, entries.some((entry) => entry.is_running));
 
   /**
-   * `noteField` travels with a note edit because only this table knows which of the two
-   * notes it put on screen. The main process caches today and yesterday alone, so for a
-   * row from earlier in the week it would have to guess — and its guess is the client
-   * note, which would publish an internal one the table was merely falling back to.
-   */
-  const edit = async (id: string, patch: EntryPatch) => {
-    try {
-      const next = await keito.updateEntry(id, patch);
-      setError(next.error);
-      await load();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    }
-  };
-
-  /**
-   * The category picker isn't wrapped in `AsyncButton`/`useAsyncAction` like the rest of
-   * this table's controls — it's a whole combobox, not a single click — so it needs its own
-   * re-entry guard. Tracks a *set* of in-flight ids, not one flag: a single slot meant one
-   * row's save completing cleared the guard for every row, so editing two rows at once let
-   * the second row's trigger re-enable while its own PATCH was still in flight, reopening
-   * the exact race this exists to prevent.
+   * Which (row, field) saves are in flight. A *set*, not one flag: a single slot meant one
+   * save completing cleared the guard for every row, reopening the race this exists to
+   * prevent. The field is the other half of the key so only the cell being saved locks and
+   * shows a spinner; the rest of the row stays usable.
    *
    * Membership is checked against the ref, not the state, the same reason
-   * `useAsyncAction`'s guard is a ref: two picks on the same row in one tick would both read
-   * a stale membership from state and both fire before either update lands.
+   * `useAsyncAction`'s guard is a ref: two events in one tick would both read a stale
+   * `saving` and both fire.
    */
-  const savingCategoryRef = useRef<Set<string>>(new Set());
-  const [savingCategoryIds, setSavingCategoryIds] = useState<ReadonlySet<string>>(new Set());
+  const savingRef = useRef<Set<string>>(new Set());
+  const [saving, setSaving] = useState<ReadonlySet<string>>(new Set());
+  const isSaving = (id: string, field: string) => saving.has(`${id}:${field}`);
   const mountedRef = useRef(true);
   useEffect(() => {
     mountedRef.current = true;
@@ -300,17 +288,31 @@ function Entries({
     };
   }, []);
 
-  const editCategory = async (id: string, projectId: string, taskId: string) => {
-    if (savingCategoryRef.current.has(id)) return;
-    savingCategoryRef.current.add(id);
-    setSavingCategoryIds(new Set(savingCategoryRef.current));
+  /**
+   * `noteField` travels with a note edit because only this table knows which of the two
+   * notes it put on screen. The main process caches today and yesterday alone, so for a
+   * row from earlier in the week it would have to guess, and its guess is the client
+   * note, which would publish an internal one the table was merely falling back to.
+   *
+   * The reload after the save is silent (see `loadedRange`), and the cell stays locked
+   * until it lands, so the fields the edit moves (hours, end time) change in place.
+   */
+  const edit = async (id: string, field: string, patch: EntryPatch) => {
+    const key = `${id}:${field}`;
+    if (savingRef.current.has(key)) return;
+    savingRef.current.add(key);
+    setSaving(new Set(savingRef.current));
     try {
-      await edit(id, { projectId, taskId });
+      const next = await keito.updateEntry(id, patch);
+      setError(next.error);
+      await load();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
-      savingCategoryRef.current.delete(id);
+      savingRef.current.delete(key);
       // The entries tab unmounts when another tab is selected; a save that outlives that
       // must not set state into the void, the same rule useAsyncAction follows.
-      if (mountedRef.current) setSavingCategoryIds(new Set(savingCategoryRef.current));
+      if (mountedRef.current) setSaving(new Set(savingRef.current));
     }
   };
 
@@ -362,7 +364,7 @@ function Entries({
                 own CategoryPicker starts a new entry from. Two separate triggers editing
                 the same identity would need to stay in lock-step by hand.
               */}
-              <td colSpan={2} className="category-cell">
+              <td colSpan={2} className="category-cell saving-cell">
                 <CategoryPicker
                   catalog={category.catalog}
                   favourites={snapshot.favourites}
@@ -387,42 +389,54 @@ function Entries({
                         }`
                       : "Category"
                   }
-                  disabled={savingCategoryIds.has(entry.id)}
+                  disabled={isSaving(entry.id, "category")}
                   onSelect={(nextId) => {
                     const pair = category.catalog.find((candidate) => candidate.id === nextId);
-                    if (pair) void editCategory(entry.id, pair.projectId, pair.taskId);
+                    if (pair) void edit(entry.id, "category", { projectId: pair.projectId, taskId: pair.taskId });
                   }}
                   onToggleFavourite={(id) => keito.toggleFavourite(id).then(onChange)}
                 />
+                {isSaving(entry.id, "category") && <Spinner />}
               </td>
-              <td>
+              <td className="saving-cell">
+                {/* Keyed on the value so the uncontrolled input picks up what the reload
+                    returns instead of keeping whatever was typed. */}
                 <input
+                  key={visibleNote(entry)}
                   defaultValue={visibleNote(entry)}
                   placeholder="—"
+                  disabled={isSaving(entry.id, "notes")}
                   onBlur={(event) => {
                     if (event.target.value !== visibleNote(entry)) {
-                      void edit(entry.id, {
+                      void edit(entry.id, "notes", {
                         notes: event.target.value,
                         noteField: visibleNoteField(entry),
                       });
                     }
                   }}
                 />
+                {isSaving(entry.id, "notes") && <Spinner />}
               </td>
-              <td>
+              <td className="saving-cell">
                 <TimeCell
                   value={entry.started_time}
-                  onCommit={(value) => void edit(entry.id, { startedTime: value })}
+                  disabled={isSaving(entry.id, "started")}
+                  onCommit={(value) => void edit(entry.id, "started", { startedTime: value })}
                 />
+                {isSaving(entry.id, "started") && <Spinner />}
               </td>
-              <td>
+              <td className="saving-cell">
                 {entry.is_running ? (
                   <em>running</em>
                 ) : (
-                  <TimeCell
-                    value={entry.ended_time}
-                    onCommit={(value) => void edit(entry.id, { endedTime: value })}
-                  />
+                  <>
+                    <TimeCell
+                      value={entry.ended_time}
+                      disabled={isSaving(entry.id, "ended")}
+                      onCommit={(value) => void edit(entry.id, "ended", { endedTime: value })}
+                    />
+                    {isSaving(entry.id, "ended") && <Spinner />}
+                  </>
                 )}
               </td>
               <td className={entry.is_running ? "ticking" : ""}>
@@ -465,16 +479,20 @@ function Entries({
 /** An HH:mm cell that only commits a well-formed time. */
 function TimeCell({
   value,
+  disabled,
   onCommit,
 }: {
   value: string | null;
+  disabled?: boolean;
   onCommit: (value: string) => void;
 }): JSX.Element {
   return (
     <input
+      key={value ?? ""}
       className="time"
       defaultValue={value ?? ""}
       placeholder="HH:mm"
+      disabled={disabled}
       onBlur={(event) => {
         const next = event.target.value.trim();
         if (next === (value ?? "")) return;
