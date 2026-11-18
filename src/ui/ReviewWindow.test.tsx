@@ -661,6 +661,40 @@ describe("the client, project and task columns", () => {
     expect(lines).toEqual(["Unknown task", "Unknown project"]);
   });
 
+  // A save used to swap the whole table for the loading line. Now only the edited cell
+  // locks and spins, the rest of the table stays, and the corrected values land in place.
+  it("locks just the edited note with a spinner and updates it in place when the save lands", async () => {
+    const user = userEvent.setup();
+    api.listEntries.mockResolvedValue([row({ notes: "old" })]);
+    const { promise, resolve } = deferred<Snapshot>();
+    api.updateEntry.mockReturnValue(promise);
+
+    render(<ReviewWindow />);
+    const note = (await screen.findByDisplayValue("old")) as HTMLInputElement;
+    const start = screen.getByDisplayValue("09:00") as HTMLInputElement;
+
+    api.listEntries.mockResolvedValue([row({ notes: "new", hours: 1 })]);
+    await user.clear(note);
+    await user.type(note, "new");
+    await user.tab();
+
+    expect(note.disabled).toBe(true);
+    expect(within(note.closest("td")!).getByRole("status")).toBeDefined();
+    // Neighbouring cells stay editable and the table was not replaced.
+    expect(start.disabled).toBe(false);
+    expect(screen.queryByText("Oh my gosh, look at the time")).toBeNull();
+
+    await act(async () => {
+      resolve(snapshot);
+      await promise;
+    });
+
+    const updated = (await screen.findByDisplayValue("new")) as HTMLInputElement;
+    expect(updated.disabled).toBe(false);
+    expect(screen.queryByText("Oh my gosh, look at the time")).toBeNull();
+    expect(within(updated.closest("td")!).queryByRole("status")).toBeNull();
+  });
+
   // Issue #36: date, start, end and note were already editable; project and task were not.
   it("reassigns the entry when a different category is picked", async () => {
     const user = userEvent.setup();

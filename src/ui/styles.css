@@ -939,6 +939,10 @@ button[aria-busy="true"] { cursor: default; }
 /* Keep the button from resizing as its label becomes a spinner. */
 .play, .stop, .star, .connect-actions button { min-width: 2.2em; }
 
+/* A cell whose save is in flight: the control locks and a spinner sits beside it. */
+.saving-cell { white-space: nowrap; }
+.saving-cell .spinner { margin-left: 6px; color: var(--accent); }
+
 .loading-entries {
   display: flex;
   align-items: center;
